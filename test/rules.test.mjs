@@ -260,10 +260,10 @@ test('when rolling again can’t do better than the dice already there, an oppon
 });
 
 test('the opponents get better as the tour goes on, each one on classic rules', () => {
-  // Each opponent's average over the same 600 games' worth of dice (game g rolls from its own seed). Over 4,600 games
-  // on the same dice the closest neighbours are Sol and Jules, about 3 points apart (Jules's slips are as many as
-  // that allows), and Wren and the Dealer, about 4; the other steps are 7 to 35 points. From these seeds the closest
-  // step is 4.9, enough to stay in order without the test taking long (about 50 seconds).
+  // Each opponent's average over the same 600 games' worth of dice (game g rolls from its own seed). Over 3,000 other
+  // games on the same dice the steps from Pip up are about 37, 16, 5, 3, 18, 5 and 4 points: the closest neighbours
+  // are Sol and Jules (Jules's slips are as many as that allows), then the Dealer, Wren and Otto, and Bea and Sol.
+  // From these seeds the closest step is 4.9, enough to stay in order without the test taking long (about 50 seconds).
   const avg = play => {
     const opp = new Opponent(play);
     let sum = 0;
