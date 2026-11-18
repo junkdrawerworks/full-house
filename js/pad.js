@@ -68,7 +68,9 @@ export class Pad {
 
   // board, both cards, the opponent's name, and on your turn: what each allowed box would score ({ id: score }),
   // which box is picked, and which boxes were just written in (to pencil them in as you watch).
-  render({ board, you, them, name, offers = null, picked = null, fresh = {}, hints = true, theirPick = null }) {
+  // Once the game is over, `winner` ('you', 'them' or 'both' on a tie) has its Total ringed, drawn in when fresh.ring says
+  // the game has only just ended, and simply there on any redraw after.
+  render({ board, you, them, name, offers = null, picked = null, fresh = {}, hints = true, theirPick = null, winner = null }) {
     // Redrawing replaces the rows, so note the one with the keyboard focus to give it back afterwards.
     // Only the keyboard's: a box picked with a tap or a click would keep it too, and the next Space would score it.
     const a = document.activeElement;
@@ -104,7 +106,8 @@ export class Pad {
       ? `<td class="${who}${t.bonus && fresh.bonus === who ? ' fresh' : ''}"><span>${t.bonus}</span></td>`
       : `<td class="${who}"><small>${t.upper}/${board.bonus.at}</small></td>`);
     // A column with nothing written in it yet has no total, as on a fresh sheet of paper.
-    const total = (t, card) => (board.boxes.some(b => card[b.id] !== null) ? t.total : '');
+    const total = (t, card, who) => (winner === who || winner === 'both' ? `<span class="ringed">${t.total}${ring(!fresh.ring)}</span>`
+      : board.boxes.some(b => card[b.id] !== null) ? t.total : '');
     const anyExtras = you.extras || them.extras;
     this.el.classList.toggle('long', name.length > 6); // the Dealer: see css/app.css
     this.el.innerHTML = `
@@ -116,10 +119,14 @@ export class Pad {
       <tbody>${lower.map(row).join('')}
         ${anyExtras ? `<tr class="sub"><th scope="row"><b>Extra fives</b><small>${board.extra} each</small></th><td class="you">${ty.extras || ''}</td><td class="them">${tt.extras || ''}</td></tr>` : ''}
       </tbody>
-      <tfoot><tr class="total"><th scope="row">Total</th><td class="you">${total(ty, you)}</td><td class="them">${total(tt, them)}</td></tr></tfoot>`;
+      <tfoot><tr class="total"><th scope="row">Total</th><td class="you">${total(ty, you, 'you')}</td><td class="them">${total(tt, them, 'them')}</td></tr></tfoot>`;
     if (focused) this.el.querySelector(`tr.can[data-box="${focused}"]`)?.focus({ preventScroll: true });
   }
 }
+
+// A ring pencilled round a winning score, by hand: a loop a little out of true that runs past where it started. In the
+// colour of the score it rings. Drawn in as it appears (see css/app.css), unless `still`.
+export const ring = (still = false) => `<svg class="ring${still ? ' still' : ''}" viewBox="0 0 60 38" aria-hidden="true" focusable="false"><path pathLength="1" d="M50 7.5C40 2.5 16 2 7 10C0 16.5 3 30 20 34C36 37.5 55 33 57.5 22C59.5 12.5 48 4.5 30 5.5C25 5.8 21 6.6 18 7.6"/></svg>`;
 
 const escape = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 // Whether the focus came from the keyboard, the way a browser decides to draw a focus ring. Browsers too old to say count as no.

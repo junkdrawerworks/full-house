@@ -4,7 +4,7 @@ import { blankCard, options, jokerState, mark, totals, filled, turnsLeft, boxLab
 import { TABLES, boardFor, CLASSIC } from './tour.js';
 import { Opponent } from './ai.js';
 import { Tray } from './dice.js';
-import { Pad } from './pad.js';
+import { Pad, ring } from './pad.js';
 import { mulberry32 } from './rng.js';
 
 const KEY = 'full-house.v1';
@@ -244,6 +244,7 @@ function finish(lead = '') {
   g.over = true;
   g.held = [false, false, false, false, false]; // the opponent's last keep
   resultSeen = false;
+  fresh.ring = true; // the winning total ringed as you watch, after the last score goes in
   const you = totals(b, g.you).total, them = totals(b, g.them).total, name = who(g).name;
   const won = you > them, tie = you === them;
   let before = false, best = ''; // you'd beaten this table already; a new best there, over one you had
@@ -274,7 +275,8 @@ function finish(lead = '') {
       : before ? (onward ? `You’ve beaten ${mid(name)} before; table ${g.table + 2} is still open.` : `You’ve beaten ${mid(name)} before.`)
       : `Table ${g.table + 2} is open: ${TABLES[g.table + 1].board.name}, against ${mid(TABLES[g.table + 1].who.name)}.`
     : tie ? 'Play it again to settle it.' : 'The dice owe you one.';
-  $('result-scores').innerHTML = `<div><span>You</span><b>${you}</b></div><div class="them"><span>${escape(name)}</span><b>${them}</b></div>`;
+  const tile = (n, ringed) => (ringed ? `<b class="ringed">${n}${ring()}</b>` : `<b>${n}</b>`);
+  $('result-scores').innerHTML = `<div><span>You</span>${tile(you, you >= them)}</div><div class="them"><span>${escape(name)}</span>${tile(them, them >= you)}</div>`;
   $('result-best').textContent = best;
   $('result-best').hidden = !best;
   const next = $('b-next');
@@ -341,7 +343,9 @@ function render() {
 
   const opts = mine && g.rolls > 0 && !busy ? options(b, g.you, g.dice) : null;
   const offers = opts && Object.fromEntries(opts.map(o => [o.box.id, o.score]));
-  pad.render({ board: b, you: g.you, them: g.them, name: opp.name, offers, picked, fresh, hints: settings.hints, theirPick });
+  const you = totals(b, g.you).total, them = totals(b, g.them).total;
+  const winner = g.over ? (you > them ? 'you' : them > you ? 'them' : 'both') : null;
+  pad.render({ board: b, you: g.you, them: g.them, name: opp.name, offers, picked, fresh, hints: settings.hints, theirPick, winner });
   fresh = {};
 
   const left = b.rolls - g.rolls;

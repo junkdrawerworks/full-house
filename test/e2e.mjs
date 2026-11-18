@@ -881,6 +881,61 @@ try {
     assert.equal(await status(), 'Your turn. Pip scored 5 in Ones, plus 100 extra.');
   });
 
+  await step('the winning total is ringed in pencil on the pad and the result, both on a tie, drawn in unless less motion is asked for', async t => {
+    const { page } = t;
+    // Where the rings are, what colour, and whether they're drawn in: on the pad's Totals, then the result's tiles.
+    const rings = () => page.evaluate(() => [...document.querySelectorAll('#pad tfoot td'), ...document.querySelectorAll('#result-scores b')].map(el => {
+      const svg = el.querySelector('svg.ring');
+      if (!svg) return null;
+      const path = getComputedStyle(svg.querySelector('path'));
+      return { same: getComputedStyle(svg).stroke === getComputedStyle(el).color, drawn: path.animationName === 'none' ? 0 : parseFloat(path.animationDuration), hidden: svg.getAttribute('aria-hidden') };
+    }));
+    const ring = (drawn = 0.6) => ({ same: true, drawn, hidden: 'true' });
+    // A win: your Total and your tile.
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    await t.myTurn();
+    assert.deepEqual(await rings(), [null, null], 'a total is ringed before the game is over');
+    await win(t);
+    assert.deepEqual(await rings(), [ring(), null, ring(), null]);
+    assert.equal(await page.textContent('#result-scores div:first-child b'), (await page.textContent('#pad tfoot td.you')), 'the ring has text of its own');
+    // Looked over again later, the pad's ring is simply there.
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('#sheet-result', { state: 'hidden' });
+    await page.click('#b-menu');
+    await page.click('#o-hints');
+    await page.keyboard.press('Escape');
+    assert.deepEqual((await rings()).slice(0, 2), [ring(0), null], 'the ring is drawn in again on a redraw');
+    // A loss: theirs, in red pencil.
+    await page.evaluate(() => {
+      window.fullHouse.start(0);
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) { g.you[b.id] = b.id === 'chance' ? null : 0; g.them[b.id] = b.id === 'chance' ? null : 10; }
+      Object.assign(g, { number: 13, rolls: 1, turn: 'you' });
+      window.fullHouse.set(g);
+    });
+    await page.click('tr[data-box="chance"]');
+    await page.click('tr[data-box="chance"]');
+    await page.click('#tray');
+    await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
+    assert.deepEqual(await rings(), [null, ring(), null, ring()]);
+    // A tie: both, and with less motion asked for, simply there.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.evaluate(async () => {
+      const [{ Opponent, playTurn }, { TABLES }, R, { mulberry32 }] = await Promise.all(['./js/ai.js', './js/tour.js', './js/rules.js', './js/rng.js'].map(u => import(u)));
+      window.fullHouse.start(0);
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) { g.them[b.id] = b.id === 'chance' ? null : b.id === 'five' ? 0 : 5; g.you[b.id] = 0; }
+      Object.assign(g, { number: 13, rolls: 0, turn: 'them' });
+      const { option } = playTurn(new Opponent(TABLES[0].play), g.board, g.them, mulberry32((g.seed ^ Math.imul(13, 0x9E3779B1)) >>> 0));
+      g.you.chance = R.totals(g.board, R.mark(g.them, option)).total;
+      window.fullHouse.set(g);
+    });
+    await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
+    assert.equal(await page.textContent('#result-title'), 'A tie');
+    assert.deepEqual(await rings(), [ring(0), ring(0), ring(0), ring(0)]);
+  });
+
   await step('the result says when you’ve beaten your best at a table, and doesn’t open a table twice', async t => {
     const { page } = t;
     // A game at a table (null for a quick game) with every box but Chance worth `each` to you, played to its result.

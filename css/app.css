@@ -436,6 +436,30 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 .pad td.fresh span { display: inline-block; animation: write 0.55s ease-out; }
 @keyframes write { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 .pad .hot th[scope='row'] { background: rgba(184, 67, 47, 0.07); }
+/* A pencilled ring round the winning total, on the pad and the result, in the colour of the score it rings: drawn in once
+   the last score has gone in, or as the result opens. */
+.ringed { position: relative; display: inline-block; }
+.ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 66px;
+  height: 40px;
+  translate: -50% -52%;
+  rotate: -4deg;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.85;
+  pointer-events: none;
+}
+.ring path { stroke-dasharray: 1 2; animation: ring 0.6s ease-in-out 0.5s backwards; } /* a gap longer than the ring, so nothing shows before it starts */
+.ring.still path { animation: none; }
+@keyframes ring { from { stroke-dashoffset: 1.02; } }
+.pad td.them .ring { translate: calc(-50% - 2px) -52%; } /* a little wider than its column, so kept clear of the pad's edge */
 .mult {
   display: inline-block;
   margin: -2px 0 -2px 6px; /* taller than the label's line, without making its row any taller */
@@ -599,6 +623,8 @@ body[data-screen='home'] .toast { top: auto; bottom: calc(16px + env(safe-area-i
 .scores b { font: 700 46px/1 var(--hand); }
 .panel .best { margin: 8px 0 0; text-align: center; font: 700 24px/1.1 var(--hand); }
 .scores .them b { color: var(--red-score); }
+.scores .ring { width: 92px; height: 56px; translate: -50% -46%; }
+.scores .ring path { animation-delay: 0.25s; }
 .toggle { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0; font-size: 14.5px; line-height: 1.4; color: var(--muted); cursor: pointer; }
 .toggle b { display: block; color: var(--ink); font-size: 15.5px; font-weight: 600; }
 .toggle input {
@@ -626,7 +652,7 @@ body[data-screen='home'] .toast { top: auto; bottom: calc(16px + env(safe-area-i
 
 @media (prefers-reduced-motion: reduce) {
   .cube, .die { transition-duration: 0.01s; }
-  .die .hop.go, .pad td.fresh span, .toast, .scrim, .panel { animation: none; }
+  .die .hop.go, .pad td.fresh span, .toast, .scrim, .panel, .ring path { animation: none; }
 }
 
 /* A contrast theme (Windows' High Contrast, say) replaces the colours with the theme's few, and drops backgrounds and
