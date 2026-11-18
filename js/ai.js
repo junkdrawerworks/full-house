@@ -11,7 +11,7 @@ import { options, isUpper, totals, turnsLeft } from './rules.js';
 
 // ---- every roll, and every handful you might keep ----
 
-const STATES = [], KEEPS = [];
+export const STATES = [], KEEPS = [];
 const STATE_AT = new Map(), KEEP_AT = new Map();
 const keyOf = c => c.slice(1).join('');
 
@@ -36,7 +36,7 @@ for (let size = 0; size <= 5; size++) {
 
 const FACT = [1, 1, 2, 6, 24, 120];
 // For each handful kept: the rolls you could end up with after rolling the rest, and how likely each is.
-const OUTCOMES = KEEPS.map(k => {
+export const OUTCOMES = KEEPS.map(k => {
   const m = 5 - k.size, out = [];
   for (const c of multisets(m)) {
     let p = FACT[m] / 6 ** m;
@@ -102,9 +102,9 @@ function valuer(board, card, p) {
 
 // ---- planning a turn ----
 
-
 // Best box value for every possible roll, then, working back, what each handful is worth with r rolls to come.
-function plan(board, card, rolls, p) {
+// (Exported, with the tables above and ranked() below, for the exact check of the endgame in test/exact.mjs.)
+export function plan(board, card, rolls, p) {
   const value = valuer(board, card, p);
   const v0 = STATES.map(s => {
     const opts = options(board, card, s.dice);
@@ -121,6 +121,9 @@ function plan(board, card, rolls, p) {
   }
   return keepValues;
 }
+
+// Every handful that could be kept from roll s, best first by what plan() says each is worth (k).
+export const ranked = (k, s) => [...new Set(SUBSETS[s])].sort((a, b) => k[b] - k[a]);
 
 // ---- the opponents ----
 
@@ -141,8 +144,8 @@ export class Opponent {
     if (rollsLeft <= 0) return null;
     if (!this.p.look) return this.greedyKeep(board, card, dice);
     const k = plan(board, card, rollsLeft, this.p)[rollsLeft];
-    const ranked = [...new Set(SUBSETS[stateOf(dice)])].sort((a, b) => k[b] - k[a]);
-    const pick = ranked.length > 1 && rand() < this.p.slip ? ranked[1] : ranked[0];
+    const keeps = ranked(k, stateOf(dice));
+    const pick = keeps.length > 1 && rand() < this.p.slip ? keeps[1] : keeps[0];
     const kept = KEEPS[pick];
     if (kept.size === 5) return null;
     return markKept(dice, kept.counts);

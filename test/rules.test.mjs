@@ -5,6 +5,7 @@ import { score, options, jokerState, blankCard, mark, totals, filled, fiveOf, bo
 import { TABLES, CLASSIC, boardFor } from '../js/tour.js';
 import { Opponent, playTurn } from '../js/ai.js';
 import { mulberry32 } from '../js/rng.js';
+import { best, planned } from './exact.mjs';
 
 const box = (board, id) => board.boxes.find(b => b.id === id);
 const s = (id, dice, board = CLASSIC) => score(board, box(board, id), dice);
@@ -114,6 +115,45 @@ test('a first-turn five of a kind goes in Five of a kind for 50, not in its numb
     for (let f = 1; f <= 6; f++) {
       const o = opp.box(CLASSIC, blankCard(CLASSIC), [f, f, f, f, f], noSlip);
       assert.equal(o.box.kind, 'five', `${t.who.name} wrote five ${f}s in ${o.box.id}`);
+    }
+  }
+});
+
+// A card with every box filled but those in `open`: the top boxes as given, the bottom ones with scores a game might
+// have left there (times the table's multiplier).
+const BOTTOM = { three: 20, four: 15, full: 25, small: 30, large: 40, five: 50, chance: 22, pairs: 20, low: 30 };
+function cardWith(board, open, top) {
+  const card = blankCard(board);
+  for (const b of board.boxes) if (!open.includes(b.id)) card[b.id] = top[b.id] ?? BOTTOM[b.kind] * (b.mult || 1);
+  return card;
+}
+
+test('on the last turn the planner keeps dice within half a point of the best play there is', () => {
+  // test/exact.mjs works out the best expected final total over every roll and keep, and what the planner's own
+  // choices come to, without its slips. Some cards have the top-section bonus at stake on the last box, some don't.
+  const top = { f1: 3, f2: 6, f3: 9, f4: 12, f5: 15, f6: 18 };
+  const cases = [
+    [0, 'f6', { ...top, f6: null }], // Classic, 45 on top: Sixes needs three sixes for the bonus
+    [0, 'f4', { ...top, f4: null }], // 51 on top: Fours needs three
+    [0, 'f2', { ...top, f2: null }], // 57 on top: Twos needs three
+    [0, 'large', { ...top, f6: 12 }], // no bonus to play for
+    [0, 'five', { ...top, f6: 12 }],
+    [4, 'f1', { ...top, f1: null }], // Wild Ones, 60 on top: Ones needs three, and on top a 1 is just a 1
+    [4, 'small', { ...top, f5: 10 }],
+    [3, 'f5', { ...top, f5: null }], // Two Rolls, 48 on top: Fives needs three in two rolls
+    [3, 'five', { ...top, f5: 10 }],
+    [7, 'f4', { ...top, f4: null }], // High Stakes, 51 on top: Fours needs three in four rolls
+    [7, 'f6', { ...top, f6: null }], // 45 on top: Sixes needs three
+    [7, 'large', { ...top, f2: 4 }],
+    [7, 'chance', { ...top, f2: 4 }],
+  ];
+  for (const [t, open, scores] of cases) {
+    const board = boardFor(t, 0), card = cardWith(board, [open], scores), right = best(board, card);
+    for (const [who, play] of [['the planner at its best', { patience: 1, bonus: 1, slip: 0 }], [TABLES[t].who.name, { ...TABLES[t].play, slip: 0 }]]) {
+      if (play.look === false) continue;
+      const got = planned(board, card, new Opponent(play));
+      assert.ok(got <= right + 1e-9, `the exact check is wrong: ${got} beats the best play, ${right}`);
+      assert.ok(right - got < 0.5, `${who} at ${board.name} with ${open} left expects ${got.toFixed(2)}, the best play ${right.toFixed(2)}`);
     }
   }
 });
