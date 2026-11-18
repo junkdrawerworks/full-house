@@ -89,7 +89,7 @@ test('every table is a complete board; the twists are what they say', () => {
   assert.deepEqual(hot.boxes, again.boxes);
   const hotTop = hot.boxes.filter(x => x.mult === 3 && x.kind === 'face');
   assert.equal(hot.bonus.at, 63 + hotTop.reduce((a, x) => a + 6 * x.face, 0));
-  assert.match(TABLES[5].board.blurb, /bonus needs more to match/, 'the table says the bonus moves');
+  assert.match(TABLES[5].board.blurb, /bonus rises so three of each number still earns it/, 'the table says the bonus moves, and by how much');
 });
 
 test('opponents only ever score where the rules allow, and fill the card in thirteen turns', () => {
