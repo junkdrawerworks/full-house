@@ -329,6 +329,7 @@ function showDice(rolled = []) {
     canHold: mine && !busy && g.rolls > 0 && g.rolls < g.board.rolls,
     quick: settings.fast, // the dice land before roll() and PACE move on
     name: who(g).name,
+    wild: !!g.board.wild,
   });
 }
 

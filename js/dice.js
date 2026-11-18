@@ -16,7 +16,7 @@ export class Tray {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'die';
-      b.innerHTML = `<span class="hop"><span class="cube"><span class="core"></span><span class="core x"></span><span class="core y"></span>${[1, 2, 3, 4, 5, 6].map(face).join('')}</span></span><span class="held-tag">Held</span>`;
+      b.innerHTML = `<span class="hop"><span class="cube"><span class="core"></span><span class="core x"></span><span class="core y"></span>${[1, 2, 3, 4, 5, 6].map(face).join('')}</span></span><span class="wild-tag">Wild</span><span class="held-tag">Held</span>`;
       b.addEventListener('click', () => onToggle(i));
       // Done with once it lands: the tray hidden behind the tour and shown again would otherwise throw it all over again.
       const hop = b.querySelector('.hop');
@@ -30,8 +30,8 @@ export class Tray {
 
   // Show these dice. `rolled` lists the ones that were just thrown, which tumble into place: sooner when `quick`,
   // since the game then waits less for them to land.
-  // `name` is the opponent's, for their dice.
-  show(values, held, { rolled = [], theirs = false, idle = false, canHold = false, quick = false, name = '' } = {}) {
+  // `name` is the opponent's, for their dice. With `wild` (at Wild Ones), each 1 has a Wild tag on top, Held being under.
+  show(values, held, { rolled = [], theirs = false, idle = false, canHold = false, quick = false, name = '', wild = false } = {}) {
     this.el.classList.toggle('quick', quick);
     this.el.classList.toggle('theirs', theirs);
     this.el.classList.toggle('idle', idle);
@@ -60,10 +60,12 @@ export class Tray {
       cube.style.transform = `rotateX(${t.x}deg) rotateY(${t.y}deg)`;
       b.dataset.v = v;
       b.classList.toggle('held', !!held[i]);
+      const isWild = wild && v === 1;
+      b.classList.toggle('wild', isWild && !idle);
       b.disabled = !canHold;
       b.setAttribute('aria-pressed', String(!!held[i]));
       // Before a roll the faces are left over from the last one, so they aren't read out as if they were.
-      b.setAttribute('aria-label', idle ? `Die ${i + 1}, not rolled` : `${theirs ? `${name}’s die` : `Die ${i + 1}`}: ${v}${held[i] ? ', held' : ''}`);
+      b.setAttribute('aria-label', idle ? `Die ${i + 1}, not rolled` : `${theirs ? `${name}’s die` : `Die ${i + 1}`}: ${v}${isWild ? ', wild' : ''}${held[i] ? ', held' : ''}`);
     });
   }
 }

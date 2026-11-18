@@ -347,6 +347,25 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
   pointer-events: none;
 }
 .die.held .held-tag { opacity: 1; }
+/* At Wild Ones, a 1 has a small tag on its top edge (Held hangs underneath), shown once the die has landed. */
+.wild-tag {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% - 7px);
+  transform: translateX(-50%);
+  padding: 1px 5px 0;
+  border-radius: 4px;
+  background: var(--pip);
+  color: var(--ivory);
+  font: 700 10px/1.2 var(--cond);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+.die.wild .wild-tag { opacity: 1; }
+.die.wild .hop.go ~ .wild-tag { opacity: 0; transition: none; }
 
 .status { min-height: 2.75em; margin: 6px 4px 2px; text-align: center; font-size: 14.5px; line-height: 1.35; color: var(--muted); }
 .actions { display: flex; align-items: center; gap: 12px; }

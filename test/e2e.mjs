@@ -1806,6 +1806,48 @@ try {
     assert.deepEqual(dice.map(d => d[2]), [1, 2, 3, 4, 5].map(n => `Die ${n}, not rolled`));
   });
 
+  await step('at Wild Ones each 1 on the dice has a Wild tag on top, read out as wild, yours and the opponent’s; nowhere else', async ({ page }) => {
+    const dice = () => page.$$eval('.die', ds => ds.map(d => ({
+      wild: d.classList.contains('wild') && getComputedStyle(d.querySelector('.wild-tag')).opacity === '1',
+      label: d.getAttribute('aria-label'),
+    })));
+    const deal = (table, g) => page.evaluate(([table, g]) => {
+      window.fullHouse.start(table);
+      window.fullHouse.set({ ...structuredClone(window.fullHouse.game), ...g });
+    }, [table, g]);
+    // Before a roll the faces are left over from the last one: no tag.
+    await deal(4, { dice: [1, 1, 1, 1, 1] });
+    await page.waitForTimeout(300);
+    assert.deepEqual((await dice()).map(d => d.wild), [false, false, false, false, false], 'a 1 not yet rolled is tagged wild');
+    // Rolled, the 1s are tagged and read as wild, held or not.
+    await deal(4, { rolls: 1, dice: [1, 6, 1, 4, 6], held: [true, false, false, false, true] });
+    await page.waitForTimeout(300);
+    const shown = await dice();
+    assert.deepEqual(shown.map(d => d.wild), [true, false, true, false, false]);
+    assert.deepEqual(shown.map(d => d.label), ['Die 1: 1, wild, held', 'Die 2: 6', 'Die 3: 1, wild', 'Die 4: 4', 'Die 5: 6, held']);
+    // On top of the die, inside the tray, clear of the Held tag under it.
+    const box = sel => page.locator(sel).boundingBox();
+    const [tag, held, die, tray] = await Promise.all([box('.die >> nth=0 >> .wild-tag'), box('.die >> nth=0 >> .held-tag'), box('.die >> nth=0'), box('#tray')]);
+    assert.ok(tag.y < die.y && tag.y + tag.height > die.y, 'the Wild tag is not on the die’s top edge');
+    assert.ok(tag.y + tag.height < held.y, 'the Wild tag runs into the Held tag');
+    assert.ok(tag.y >= tray.y + 6, 'the Wild tag is off the top of the tray');
+    // The opponent's dice are read the same way.
+    await page.evaluate(async () => {
+      const { Tray } = await import('./js/dice.js');
+      const el = document.createElement('div');
+      document.body.append(el);
+      new Tray(el, { onToggle() {} }).show([2, 1, 3, 1, 5], [false, true, false, false, false], { theirs: true, name: 'Jules', wild: true });
+      window.labels = [...el.querySelectorAll('.die')].map(d => d.getAttribute('aria-label'));
+      el.remove();
+    });
+    assert.deepEqual(await page.evaluate(() => window.labels), ['Jules’s die: 2', 'Jules’s die: 1, wild, held', 'Jules’s die: 3', 'Jules’s die: 1, wild', 'Jules’s die: 5']);
+    // No other table has wild 1s.
+    await deal(0, { rolls: 1, dice: [1, 6, 1, 4, 6] });
+    await page.waitForTimeout(300);
+    assert.deepEqual((await dice()).map(d => d.wild), [false, false, false, false, false], 'a 1 at Classic is tagged wild');
+    assert.equal((await dice())[0].label, 'Die 1: 1');
+  });
+
   await step('a new game’s dice are simply there when you sit down, without a spin', async t => {
     const { page, settled } = t;
     const faces = () => page.evaluate(() => [...document.querySelectorAll('.die')].map(b => b.dataset.v).join(''));
