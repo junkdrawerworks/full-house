@@ -128,6 +128,37 @@ test('a first-turn five of a kind goes in Five of a kind for 50, not in its numb
   }
 });
 
+test('an opponent’s slips are ones a person might make: never rolling again on a made five of a kind, nor writing 0 with 25 on offer', () => {
+  // Made to slip at every chance (rand() is always 0), on part-filled cards at each opponent's own table.
+  const slip = () => 0, rand = mulberry32(77), MADE = ['full', 'small', 'large', 'five'];
+  let made = 0;
+  for (let t = 0; t < TABLES.length; t++) {
+    const opp = new Opponent({ ...TABLES[t].play, endgame: false }), sharp = new Opponent({ ...TABLES[t].play, endgame: false, slip: 0 });
+    for (let n = 0; n < 12; n++) {
+      // A card from a few turns of the opponent's own play, so the scores in it are ones a game leaves.
+      const board = boardFor(t, n);
+      let card = blankCard(board);
+      for (let k = Math.floor(rand() * 9); k > 0; k--) card = mark(card, playTurn(sharp, board, card, rand).option);
+      const five = board.boxes.find(b => b.kind === 'five');
+      for (let f = 1; f <= 6; f++) {
+        const dice = [f, f, f, f, f], where = `${TABLES[t].who.name} at ${board.name}, five ${f}s, card ${JSON.stringify(card)}`;
+        // Five of a kind open, or holding a score so another one earns the extra: there's no reason to roll again.
+        if (card[five.id] !== 0) for (let r = 1; r < board.rolls; r++) assert.equal(opp.keep(board, card, dice, r, slip), null, `${where}: rolled again with ${r} to go`);
+      }
+      for (let d = 0; d < 60; d++) {
+        const dice = Array.from({ length: 5 }, () => 1 + Math.floor(rand() * 6)), opts = options(board, card, dice);
+        // A made hand on offer: a full house, a straight or five of a kind. (Not any 25: two 6s in Sixes at Triple
+        // Sixes are 36 but short of par there, and 0 in Four of a kind is a fair place for that roll.)
+        if (!opts.some(o => MADE.includes(o.box.kind) && o.score >= 25)) continue;
+        const best = sharp.box(board, card, dice, slip), got = opp.box(board, card, dice, slip);
+        if (best.score > 0) assert.ok(got.score > 0, `${TABLES[t].who.name} at ${board.name} wrote 0 in ${got.box.id} with ${opts.map(o => `${o.box.id} ${o.score}`).join(', ')} on offer (${dice.join('-')})`);
+        made++;
+      }
+    }
+  }
+  assert.ok(made > 300, `only ${made} made hands tried`);
+});
+
 // A card with every box filled but those in `open`: the top boxes as given, the bottom ones with scores a game might
 // have left there (times the table's multiplier).
 const BOTTOM = { three: 20, four: 15, full: 25, small: 30, large: 40, five: 50, chance: 22, pairs: 20, low: 30 };
@@ -215,7 +246,7 @@ test('with two boxes left the sharpest opponents play it out exactly, and don’
       assert.ok(Math.abs(right - got) < 1e-6, `${TABLES[t].who.name} expects ${got.toFixed(3)} from here, the best play ${right.toFixed(3)}`);
     }
   }
-  assert.ok(!new Opponent(TABLES[3].play).p.endgame, 'Sol, who slips one time in eight, judges to the end');
+  assert.ok(!new Opponent(TABLES[3].play).p.endgame, 'Sol judges to the end');
 });
 
 test('when rolling again can’t do better than the dice already there, an opponent stands', () => {
@@ -229,9 +260,10 @@ test('when rolling again can’t do better than the dice already there, an oppon
 });
 
 test('the opponents get better as the tour goes on, each one on classic rules', () => {
-  // Each opponent's average over the same 600 games' worth of dice (game g rolls from its own seed). At 3,000 games
-  // the steps between neighbours are 4 to 12 points; at 600 from these seeds they're 3.4 or more, enough to stay
-  // in order without the test taking long (about 50 seconds).
+  // Each opponent's average over the same 600 games' worth of dice (game g rolls from its own seed). Over 4,600 games
+  // on the same dice the closest neighbours are Sol and Jules, about 3 points apart (Jules's slips are as many as
+  // that allows), and Wren and the Dealer, about 4; the other steps are 7 to 35 points. From these seeds the closest
+  // step is 4.9, enough to stay in order without the test taking long (about 50 seconds).
   const avg = play => {
     const opp = new Opponent(play);
     let sum = 0;
@@ -367,12 +399,12 @@ test('an opponent’s turn comes out the same from the same seed and turn number
   // say so in the commit and write the new turns in here.
   const seed = 20261118;
   const want = [
-    'f5 10, three 9, chance 24, f4 8, f6 12, four 11, f3 9, f2 0, full 0, small 0, f1 0, large 0, five 0',
-    'small 30, chance 17, evens 18, f3 6, f6 12, f2 4, f4 4, full 25, four 23, three 27, five 0, f5 10, large 0',
-    'small 30, chance 20, three 27, f1 0, f6 36, f2 4, f4 8, full 25, four 23, f5 15, f3 3, large 40, five 0',
-    'small 30, chance 17, f1 1, f2 4, four 0, three 13, f3 9, full 25, f5 20, f6 18, f4 4, five 0, large 40',
-    'three 23, five 50, four 29, small 30, chance 20, full 25, large 40, f5 15, f1 0, f6 18, f4 8, f3 6, f2 4',
-    'small 30, f2 24, three 27, f4 48, chance 21, large 40, full 25, f5 15, four 23, f6 18, f1 2, f3 9, five 0',
+    'chance 21, four 9, three 24, f4 8, f6 12, f3 3, f1 1, f5 15, full 0, small 0, f2 0, large 0, five 0',
+    'small 30, evens 10, three 27, chance 20, full 25, f2 4, f5 10, four 0, f6 6, f4 8, f3 3, large 40, five 0',
+    'small 30, chance 20, f6 54, f1 1, f2 2, four 0, three 19, full 25, f5 20, five 0, f4 8, large 40, f3 6',
+    'small 30, chance 17, four 0, f2 4, f1 1, three 13, f3 9, full 25, f5 20, f6 18, five 0, f4 4, large 0',
+    'three 23, five 50, large 40, chance 22, small 30, full 25, four 28, f5 15, f1 0, f6 18, f4 8, f3 6, f2 6',
+    'small 30, f2 24, chance 27, f4 48, f1 0, f5 10, full 25, three 20, four 23, f6 18, f3 3, large 40, five 0',
     'small 30, low 30, f6 18, pairs 12, f2 8, large 40, full 25, f5 15, four 23, f4 12, f1 2, f3 9, five 0',
     'large 80, four 26, three 54, small 60, f1 2, chance 48, full 50, f5 15, f2 2, f6 18, f4 8, f3 9, five 0',
   ];

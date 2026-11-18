@@ -38,7 +38,7 @@ export const TABLES = [
   {
     board: CLASSIC,
     who: { name: 'Pip', line: 'New to the game. Keeps whatever there’s most of.', colour: '#5b8c5a' },
-    play: { look: false, slip: 0.25 },
+    play: { look: false, slip: 0.5 },
   },
   {
     board: {
@@ -48,7 +48,7 @@ export const TABLES = [
       bonus: { at: 72, worth: 35 },
     },
     who: { name: 'Maud', line: 'Plays it safe and takes the points in front of her.', colour: '#8a6d3b' },
-    play: { patience: 0.35, bonus: 0.3, slip: 0.22 },
+    play: { patience: 0.35, bonus: 0.3, slip: 0.63 },
   },
   {
     board: {
@@ -58,7 +58,7 @@ export const TABLES = [
       bonus: { at: 99, worth: 35 },
     },
     who: { name: 'Bea', line: 'Never lets a six go to waste.', colour: '#b0503a' },
-    play: { patience: 0.6, bonus: 0.6, slip: 0.16, style: { boost: { face: 1.1 } } },
+    play: { patience: 0.6, bonus: 0.6, slip: 0.44, style: { boost: { face: 1.1 } } },
   },
   {
     board: {
@@ -68,7 +68,7 @@ export const TABLES = [
       bonus: { at: 52, worth: 35 },
     },
     who: { name: 'Sol', line: 'Quick hands. Loves a big Chance.', colour: '#3f6f9a' },
-    play: { patience: 0.8, bonus: 0.8, slip: 0.12, style: { boost: { chance: 0.7 } } },
+    play: { patience: 0.8, bonus: 0.8, slip: 0.35, style: { boost: { chance: 0.7 } } },
   },
   {
     board: {
@@ -77,7 +77,7 @@ export const TABLES = [
       boxes: boxes(), wild: true,
     },
     who: { name: 'Jules', line: 'Chases five of a kind, every time.', colour: '#7a4f8f' },
-    play: { patience: 0.9, bonus: 0.8, slip: 0.08, style: { boost: { five: 1.8 } } },
+    play: { patience: 0.9, bonus: 0.8, slip: 0.3, endgame: true, style: { boost: { five: 1.8 } } },
   },
   {
     board: {
@@ -86,7 +86,7 @@ export const TABLES = [
       hot: true,
     },
     who: { name: 'Otto', line: 'Steady. Always goes for the bonus.', colour: '#2f7d74' },
-    play: { patience: 1, bonus: 1.2, slip: 0.05 },
+    play: { patience: 1, bonus: 1.2, slip: 0.14, endgame: true },
   },
   {
     board: {
@@ -95,7 +95,7 @@ export const TABLES = [
       boxes: boxes({ three: { id: 'pairs', kind: 'pairs' }, chance: { id: 'low', kind: 'low' } }),
     },
     who: { name: 'Wren', line: 'Sharp, and getting sharper.', colour: '#9a7a2f' },
-    play: { patience: 1, bonus: 1, slip: 0.02 },
+    play: { patience: 1, bonus: 1, slip: 0.05, endgame: true },
   },
   {
     board: {
@@ -105,7 +105,7 @@ export const TABLES = [
       rolls: 4,
     },
     who: { name: 'The Dealer', line: 'Hasn’t lost a game in years.', colour: '#3a3a44' },
-    play: { patience: 1, bonus: 1, slip: 0 },
+    play: { patience: 1, bonus: 1, slip: 0, endgame: true },
   },
 ];
 

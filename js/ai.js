@@ -171,10 +171,18 @@ export const ranked = (k, s) => [...new Set(SUBSETS[s])].sort((a, b) => (Math.ab
 //   look      plans its keeps (true) or just keeps whatever there's most of (false)
 //   patience  0..1, how much it counts what a box is worth later
 //   bonus     0..1, how much it chases the top-section bonus
-//   slip      chance of taking the second-best choice at any point
+//   slip      chance of taking the second-best choice at any point, when it's close to the best (see SLIP below)
 //   tau       how quickly boxes lose their worth for later as the game runs out
 //   style     { boost: { kind: factor } }, boxes it likes more (or less) than they're worth
-//   endgame   works out the last two turns exactly (see toCome() above); on unless it slips one time in ten or more
+//   endgame   works out the last two turns exactly (see toCome() above). The tour's four sharpest opponents do (js/tour.js);
+//             otherwise it's on unless the opponent slips one time in ten or more
+// A slip is a mistake a person might make: the second-best choice, and only when it's within this many points of the
+// best, and never rolling again on dice the opponent would stand on. Without those limits a slip could be one no person
+// would make: rolling again on a made five of a kind, or writing a 0 with a full house on offer. (At Wild Ones, five 6s
+// with two rolls to go are worth only about 5 points more than four of them and a roll for a 6 or a 1, by Jules's
+// reckoning, so the points alone don't stop him rolling again.)
+export const SLIP = 10;
+
 export class Opponent {
   constructor(p) {
     this.p = { look: true, patience: 1, bonus: 1, slip: 0, tau: 6, pull: 4, style: {}, ...p };
@@ -187,7 +195,7 @@ export class Opponent {
     if (!this.p.look) return this.greedyKeep(board, card, dice);
     const k = plan(board, card, rollsLeft, this.p)[rollsLeft];
     const keeps = ranked(k, stateOf(dice));
-    const pick = keeps.length > 1 && rand() < this.p.slip ? keeps[1] : keeps[0];
+    const pick = keeps.length > 1 && rand() < this.p.slip && KEEPS[keeps[0]].size < 5 && k[keeps[0]] - k[keeps[1]] <= SLIP ? keeps[1] : keeps[0];
     const kept = KEEPS[pick];
     if (kept.size === 5) return null;
     return markKept(dice, kept.counts);
@@ -199,7 +207,7 @@ export class Opponent {
     // The beginner takes the most points, but would rather not cross out Five of a kind.
     const value = this.p.look ? valueFor(board, card, this.p) : o => o.score + o.extra - (o.box.kind === 'five' && !o.score ? 30 : 0);
     const ranked = opts.map(o => ({ o, v: value(o) })).sort((a, b) => b.v - a.v);
-    return (ranked.length > 1 && rand() < this.p.slip ? ranked[1] : ranked[0]).o;
+    return (ranked.length > 1 && rand() < this.p.slip && ranked[0].v - ranked[1].v <= SLIP ? ranked[1] : ranked[0]).o;
   }
 
   // The beginner's way: keep the most common number (the higher one in a tie).
