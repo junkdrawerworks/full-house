@@ -70,7 +70,7 @@ function pick(id) {
   fresh = { you: id };
   picked = null;
   if (option.extra) toast(`Another five of a kind: ${g.board.extra} extra points.`);
-  else if (option.box.kind === 'five' && option.score) toast('Five of a kind!');
+  else if (option.box.kind === 'five' && option.score) toast('Five of a kind.');
   g.turn = 'them';
   g.held = [false, false, false, false, false];
   busy = true; // the opponent is about to play, so going back and carrying on mustn't start their turn as well
@@ -218,7 +218,7 @@ function finish() {
   const last = g.table === TABLES.length - 1;
   $('result-line').textContent = won
     ? g.table === null ? 'A good game.' : last ? 'That’s the whole tour. Nobody at these tables has anything left to teach you.' : `Table ${g.table + 2} is open: ${TABLES[g.table + 1].board.name}, against ${TABLES[g.table + 1].who.name}.`
-    : tie ? 'Play it again to settle it.' : 'The dice owe you one. Try again?';
+    : tie ? 'Play it again to settle it.' : 'The dice owe you one.';
   $('result-scores').innerHTML = `<div><span>You</span><b>${you}</b></div><div class="them"><span>${escape(name)}</span><b>${them}</b></div>`;
   const next = $('b-next');
   if (won && g.table !== null && !last) { next.textContent = `On to table ${g.table + 2}`; next.onclick = () => { intro(g.table + 1); under = 'sheet-result'; }; }
@@ -290,7 +290,7 @@ function render() {
   if (mine && !busy) {
     if (picked) {
       const o = offers?.[picked];
-      status(`Tap ${boxLabel(b.boxes.find(x => x.id === picked))} again to score ${o}.`);
+      status(`Tap ${boxLabel(b.boxes.find(x => x.id === picked))} again to ${o === 0 ? 'write in a 0' : `score ${o}`}.`);
     } else if (g.rolls === 0) status(g.number === 1 ? 'Your turn. Roll the dice.' : 'Your turn.');
     else if (left > 0) status('Tap dice to hold them, then roll again. Or pick a box to score.');
     else status('Pick a box to score.');
@@ -439,7 +439,7 @@ $('b-menu-rules').addEventListener('click', () => openSheet('sheet-rules', $('b-
 const showMenu = () => {
   if (!game) return;
   $('menu-title').textContent = game.table === null ? 'Quick game' : `Table ${game.table + 1}: ${game.board.name}`;
-  $('menu-twist').textContent = `${game.board.blurb} You’re playing ${who(game).name}: ${who(game).line.charAt(0).toLowerCase()}${who(game).line.slice(1)}`;
+  $('menu-twist').textContent = `${game.board.blurb} Against ${who(game).name}. ${who(game).line}`;
   openSheet('sheet-menu');
 };
 // Giving up takes two taps, as scoring a box does: the first asks, and closing the menu takes the question back.

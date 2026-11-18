@@ -409,7 +409,7 @@ try {
     });
     await page.click('tr[data-box="five"]');
     await page.click('tr[data-box="five"]');
-    assert.match(await page.textContent('#toast'), /^Five of a kind/);
+    assert.equal(await page.textContent('#toast'), 'Five of a kind.');
     assert.ok(await page.isVisible('#toast'));
     await page.waitForFunction(() => /rolls\.$/.test(document.getElementById('status').textContent));
     await page.click('#tray'); // hurry them along, so the result comes while the message would still be up
@@ -472,6 +472,40 @@ try {
       assert.equal(c.same, false, `${colorScheme}: the opponent's score on the result is in your ink`);
       assert.ok(c.contrast >= 4.5, `${colorScheme}: the opponent's score on the result has a contrast of ${c.contrast.toFixed(2)}`);
     }
+  });
+
+  await step('the wording: a box that scores nothing, who you’re playing, and a loss', async t => {
+    const { page } = t;
+    await page.evaluate(() => window.fullHouse.start(3)); // Two Rolls, against Sol
+    await page.click('#b-menu');
+    assert.equal(await page.textContent('#menu-twist'), `${await page.evaluate(() => window.fullHouse.game.board.blurb)} Against Sol. Quick hands. Loves a big Chance.`);
+    await page.keyboard.press('Escape');
+    // A box the dice score nothing in is written in, not scored.
+    await page.evaluate(() => {
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) { g.you[b.id] = b.id === 'large' || b.id === 'chance' ? null : 1; g.them[b.id] = b.id === 'chance' ? null : 20; }
+      Object.assign(g, { number: 12, rolls: 1, turn: 'you', dice: [2, 2, 2, 3, 3] });
+      window.fullHouse.settings.fast = true;
+      window.fullHouse.set(g);
+    });
+    await page.click('tr[data-box="large"]');
+    assert.equal(await page.textContent('#status'), 'Tap Large straight again to write in a 0.');
+    await page.click('tr[data-box="chance"]');
+    assert.equal(await page.textContent('#status'), 'Tap Chance again to score 12.');
+    // Lose, and the line doesn't ask what the button under it already offers.
+    await page.click('tr[data-box="large"]');
+    await page.click('tr[data-box="large"]');
+    assert.equal(await page.textContent('#status'), 'You score 0 in Large straight.');
+    await page.click('#tray');
+    await t.myTurn();
+    await page.click('#b-roll');
+    await t.settled();
+    await page.click('tr[data-box="chance"]');
+    await page.click('tr[data-box="chance"]');
+    await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
+    assert.equal(await page.textContent('#result-title'), 'Sol wins');
+    assert.equal(await page.textContent('#result-line'), 'The dice owe you one.');
+    assert.equal(await page.textContent('#b-next'), 'Play again');
   });
 
   await step('giving up takes two taps, and the tour says what happened', async ({ page, game, settled }) => {
