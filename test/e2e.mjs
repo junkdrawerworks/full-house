@@ -995,12 +995,36 @@ try {
     await settled();
     for (let i = 0; i < 5; i++) await page.click(`.die >> nth=${i}`);
     assert.equal(await page.getAttribute('#b-roll', 'aria-disabled'), 'true', 'Roll is on with every die held');
+    // The line and the button say why, so a grey button doesn't look broken.
+    assert.equal(await page.textContent('#status'), 'All five held. Let one go to roll again, or pick a box to score in.');
+    assert.equal(await page.textContent('#b-roll'), 'All five held');
     await page.evaluate(() => document.activeElement.blur());
     await page.keyboard.press(' ');
     assert.equal((await game()).rolls, 1, 'a roll was used up with every die held');
     // Let one go and you can roll again.
     await page.click('.die >> nth=4');
     assert.equal(await page.getAttribute('#b-roll', 'aria-disabled'), 'false');
+    assert.equal(await page.textContent('#b-roll'), 'Roll again (2\u00a0left)');
+    assert.doesNotMatch(await page.textContent('#status'), /All five held/);
+  });
+
+  await step('while your dice are in the air the line under them is empty, at the same height', async ({ page, settled }) => {
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    const line = () => page.evaluate(() => { const e = document.getElementById('status'); return { said: e.textContent, height: e.getBoundingClientRect().height, busy: window.fullHouse.busy }; });
+    const before = await line();
+    assert.equal(before.said, 'Your turn. Roll the dice.');
+    await page.click('#b-roll');
+    assert.deepEqual(await line(), { said: '', height: before.height, busy: true }, 'the line while the first roll is in the air');
+    await settled();
+    assert.notEqual((await line()).said, '', 'no line once the dice land');
+    // A box picked, then a roll: "Tap ... again" doesn't stay under the new dice.
+    await page.locator('tr.can').first().click();
+    assert.match((await line()).said, /^Tap .* again/);
+    await page.click('#b-roll');
+    assert.deepEqual(await line(), { said: '', height: before.height, busy: true }, 'the line while the second roll is in the air');
+    await settled();
+    assert.notEqual((await line()).said, '');
   });
 
   await step('after the last roll the Held tags come off, while the opponent’s still show', async ({ page, game, settled, myTurn }) => {

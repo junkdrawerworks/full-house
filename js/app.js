@@ -46,6 +46,7 @@ function roll() {
   if (g.rolls === 0) g.held = [false, false, false, false, false];
   g.rolls++;
   busy = true;
+  status(''); // nothing under dice in the air (the line keeps its height): render() says what they came to when they land
   showDice(rolled);
   render();
   save();
@@ -344,7 +345,7 @@ function render() {
   // reads out whose turn it is, and roll() turns down a press it can't take.
   const button = $('b-roll');
   button.setAttribute('aria-disabled', String(!g.over && (!mine || busy || left <= 0 || allHeld(g))));
-  button.textContent = g.over ? 'See the result' : !mine ? `${opp.name}’s turn` : g.rolls === 0 ? 'Roll' : left > 0 ? `Roll again (${left}\u00a0left)` : 'No rolls left';
+  button.textContent = g.over ? 'See the result' : !mine ? `${opp.name}’s turn` : g.rolls === 0 ? 'Roll' : left > 0 && allHeld(g) ? 'All five held' : left > 0 ? `Roll again (${left}\u00a0left)` : 'No rolls left';
 
   if (mine && !busy) {
     const joker = g.rolls > 0 && jokerState(b, g.you, g.dice);
@@ -353,6 +354,7 @@ function render() {
       status(`Tap ${boxLabel(b.boxes.find(x => x.id === picked))} again to ${!o?.score ? 'write in a 0' : `score ${o.score}`}${o?.extra ? `, plus ${o.extra} extra` : ''}.`);
     } else if (g.rolls === 0) status(firstLine(g));
     else if (joker) status(jokerLine(b, joker, opts));
+    else if (left > 0 && allHeld(g)) status('All five held. Let one go to roll again, or pick a box to score in.');
     else if (left > 0) status('Tap dice to hold them, then roll again. Or pick a box to score.');
     else status('Pick a box to score.');
   }
