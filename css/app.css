@@ -75,6 +75,8 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 button { font: inherit; color: inherit; }
+/* A quick second tap (picking a box and scoring it, hurrying the opponent) is a tap, not a zoom on iOS. Pinch zoom stays. */
+button, a, .tray, .pad, .toggle { touch-action: manipulation; }
 .noscript { padding: 24px; text-align: center; }
 /* Out of sight, for a screen reader: taking no room, so the one after the game doesn't make the page scroll. */
 .vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -353,7 +355,6 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
   text-transform: uppercase;
   cursor: pointer;
   box-shadow: 0 3px 0 rgba(0, 0, 0, 0.18);
-  touch-action: manipulation;
 }
 .roll:active:not([aria-disabled='true']) { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.18); }
 .roll[aria-disabled='true'] { background: var(--line); color: var(--muted); box-shadow: none; cursor: default; }

@@ -1445,6 +1445,23 @@ try {
     }
   });
 
+  await step('a quick second tap on a box, a die, the tray or a button is a tap, not a zoom, and pinch zoom stays', async ({ page, settled }) => {
+    // touch-action: manipulation, which turns off double-tap zoom (on iOS Safari too) and nothing else. It isn't inherited,
+    // but a browser goes by the element's and all its ancestors' together, so one of those will do.
+    const touch = sel => page.evaluate(sel => [...document.querySelectorAll(sel)].filter(e => {
+      for (let a = e; a; a = a.parentElement) if (getComputedStyle(a).touchAction === 'manipulation') return false;
+      return true;
+    }).map(e => e.id || e.className || e.tagName), sel);
+    assert.deepEqual(await touch('.jd-foot a, .jd-foot button, .people button, #tables button'), [], 'on the tour');
+    await page.evaluate(() => window.fullHouse.start(0));
+    await page.click('#b-roll');
+    await settled();
+    assert.deepEqual(await touch('.tray, .die, .pad, tr.can, .bar button, #b-roll'), [], 'in the game');
+    await page.click('#b-menu');
+    assert.deepEqual(await touch('#sheet-menu button, #sheet-menu .toggle'), [], 'in the menu');
+    assert.match(await page.getAttribute('meta[name="viewport"]', 'content'), /^width=device-width, initial-scale=1, viewport-fit=cover$/, 'the page stops pinch zoom');
+  });
+
   await step('the browser’s bar is the colour of the table, light and dark', async ({ page }) => {
     const colours = () => page.evaluate(async () => ({
       bar: [...document.querySelectorAll('meta[name="theme-color"]')].find(m => matchMedia(m.media).matches)?.content,
