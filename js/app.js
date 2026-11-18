@@ -200,8 +200,11 @@ function finish() {
   resultSeen = false;
   const you = totals(b, g.you).total, them = totals(b, g.them).total, name = who(g).name;
   const won = you > them, tie = you === them;
+  let before = false, best = ''; // you'd beaten this table already; a new best there, over one you had
   if (g.table !== null) {
-    const i = g.table;
+    const i = g.table, was = progress.best[i] || 0;
+    before = !!progress.beaten[i];
+    if (was && you > was) best = `Your best here: ${you} (was ${was}).`;
     progress.played[i] = (progress.played[i] || 0) + 1;
     if (won) { progress.won[i] = (progress.won[i] || 0) + 1; progress.beaten[i] = true; }
     progress.best[i] = Math.max(progress.best[i] || 0, you);
@@ -217,9 +220,14 @@ function finish() {
   $('result-title').textContent = won ? `You beat ${name}` : tie ? 'A tie' : `${name} wins`;
   const last = g.table === TABLES.length - 1;
   $('result-line').textContent = won
-    ? g.table === null ? 'A good game.' : last ? 'That’s the whole tour. Nobody at these tables has anything left to teach you.' : `Table ${g.table + 2} is open: ${TABLES[g.table + 1].board.name}, against ${TABLES[g.table + 1].who.name}.`
+    ? g.table === null ? 'A good game.'
+      : last ? (before ? `You’ve beaten ${name} before. That’s still the whole tour.` : 'That’s the whole tour. Nobody at these tables has anything left to teach you.')
+      : before ? `You’ve beaten ${name} before; table ${g.table + 2} is still open.`
+      : `Table ${g.table + 2} is open: ${TABLES[g.table + 1].board.name}, against ${TABLES[g.table + 1].who.name}.`
     : tie ? 'Play it again to settle it.' : 'The dice owe you one.';
   $('result-scores').innerHTML = `<div><span>You</span><b>${you}</b></div><div class="them"><span>${escape(name)}</span><b>${them}</b></div>`;
+  $('result-best').textContent = best;
+  $('result-best').hidden = !best;
   const next = $('b-next');
   if (won && g.table !== null && !last) { next.textContent = `On to table ${g.table + 2}`; next.onclick = () => { intro(g.table + 1); under = 'sheet-result'; }; }
   else { next.textContent = 'Play again'; next.onclick = () => start(g.table, g.opp); }

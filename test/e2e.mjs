@@ -508,6 +508,51 @@ try {
     assert.equal(await page.textContent('#b-next'), 'Play again');
   });
 
+  await step('the result says when you’ve beaten your best at a table, and doesn’t open a table twice', async t => {
+    const { page } = t;
+    // A game at a table (null for a quick game) with every box but Chance worth `each` to you, played to its result.
+    const play = async (table, each) => {
+      await page.evaluate(([table, each]) => {
+        window.fullHouse.settings.fast = true;
+        window.fullHouse.start(table, table ?? 0);
+        const g = structuredClone(window.fullHouse.game);
+        for (const b of g.board.boxes) { g.you[b.id] = b.id === 'chance' ? null : each; g.them[b.id] = b.id === 'chance' ? null : 5; }
+        Object.assign(g, { number: 13, rolls: 1, turn: 'you' });
+        window.fullHouse.set(g);
+      }, [table, each]);
+      await page.click('tr[data-box="chance"]');
+      await page.click('tr[data-box="chance"]');
+      await page.click('#tray');
+      await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
+      return { line: await page.textContent('#result-line'), best: await page.isVisible('#result-best') ? await page.textContent('#result-best') : null, next: await page.textContent('#b-next'), you: +(await page.textContent('#result-scores div:first-child b')) };
+    };
+    // The first win at table 1: the next table opens, and there was no best to beat.
+    const first = await play(0, 10);
+    assert.equal(first.line, 'Table 2 is open: Evens, against Maud.');
+    assert.equal(first.best, null);
+    // A better win there: a new best, and table 2 isn't opened a second time.
+    const better = await play(0, 20);
+    assert.equal(better.line, 'You’ve beaten Pip before; table 2 is still open.');
+    assert.equal(better.best, `Your best here: ${better.you} (was ${first.you}).`);
+    assert.equal(better.next, 'On to table 2');
+    // A lesser win, a loss and a quick game say nothing about a best. A loss with more than your best does.
+    assert.equal((await play(0, 15)).best, null);
+    const lost = await play(0, 0);
+    assert.equal(lost.line, 'The dice owe you one.');
+    assert.equal(lost.best, null);
+    assert.equal((await play(null, 20)).best, null);
+    await page.evaluate(() => { window.fullHouse.progress.best[0] = 3; });
+    const close = await play(0, 0);
+    assert.equal(close.line, 'The dice owe you one.');
+    assert.equal(close.best, `Your best here: ${close.you} (was 3).`);
+    assert.equal((await page.evaluate(() => window.fullHouse.progress)).best[0], close.you);
+    // The last table, beaten a second time.
+    await page.evaluate(() => { for (let i = 0; i < 8; i++) window.fullHouse.progress.beaten[i] = true; });
+    const dealer = await play(7, 20);
+    assert.equal(dealer.line, 'You’ve beaten The Dealer before. That’s still the whole tour.');
+    assert.equal(dealer.next, 'Play again');
+  });
+
   await step('giving up takes two taps, and the tour says what happened', async ({ page, game, settled }) => {
     const screen = () => page.evaluate(() => document.body.dataset.screen);
     const label = () => page.textContent('#b-concede');
