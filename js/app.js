@@ -355,7 +355,7 @@ function render() {
     } else if (g.rolls === 0) status(firstLine(g));
     else if (joker) status(jokerLine(b, joker, opts));
     else if (left > 0 && allHeld(g)) status('All five held. Let one go to roll again, or pick a box to score in.');
-    else if (left > 0) status('Tap dice to hold them, then roll again. Or pick a box to score.');
+    else if (left > 0) status('Hold dice and roll again, or pick a box to score.');
     else status('Pick a box to score.');
   }
 }

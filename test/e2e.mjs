@@ -988,6 +988,21 @@ try {
     await myTurn();
   });
 
+  await step('after a roll the line says how to go on, in one line on a small phone and a phone', async ({ page, settled }) => {
+    const lines = () => page.evaluate(() => { const e = document.getElementById('status'), r = document.createRange(); r.selectNodeContents(e); return new Set([...r.getClientRects()].map(x => Math.round(x.top))).size; });
+    for (const [width, height] of [[320, 568], [390, 844]]) {
+      await page.setViewportSize({ width, height });
+      await page.evaluate(() => {
+        window.fullHouse.start(0);
+        const g = structuredClone(window.fullHouse.game);
+        Object.assign(g, { rolls: 1, dice: [1, 2, 3, 3, 6] });
+        window.fullHouse.set(g);
+      });
+      assert.equal(await page.textContent('#status'), 'Hold dice and roll again, or pick a box to score.');
+      assert.equal(await lines(), 1, `at ${width} wide the line takes more than one line`);
+    }
+  });
+
   await step('with all five dice held there is nothing to roll', async ({ page, game, settled }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
