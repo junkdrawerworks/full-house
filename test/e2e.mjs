@@ -1024,6 +1024,7 @@ try {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
     await page.evaluate(() => { window.fullHouse.settings.fast = true; });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight), 0, 'what a screen reader hears makes the page scroll');
     await page.click('#b-roll');
     await settled();
     let g = await game();

@@ -76,7 +76,8 @@ body {
 }
 button { font: inherit; color: inherit; }
 .noscript { padding: 24px; text-align: center; }
-.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+/* Out of sight, for a screen reader: taking no room, so the one after the game doesn't make the page scroll. */
+.vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; }
 
