@@ -20,6 +20,7 @@ let picked = null;     // the box you've tapped once and not yet scored
 let fresh = {};        // boxes just written in, pencilled in as you watch
 let theirPick = null;  // the box the opponent is about to write in
 let token = 0;         // changes whenever a game starts or ends, so a turn being played out knows to stop
+let resultSeen = false; // the finished game's result has been shown
 let givingUp = false;  // Give up tapped once in the menu, and not yet again
 let playing = -1;      // the token of the game whose opponent is playing a turn right now, so only one copy runs
 
@@ -34,7 +35,7 @@ const allHeld = g => g.rolls > 0 && g.held.every(Boolean); // nothing left to ro
 
 function roll() {
   const g = game;
-  if (!g || busy || g.turn !== 'you' || g.rolls >= g.board.rolls || allHeld(g)) return;
+  if (!g || g.over || busy || g.turn !== 'you' || g.rolls >= g.board.rolls || allHeld(g)) return;
   picked = null;
   const rolled = [];
   g.dice = g.dice.map((d, i) => (g.held[i] && g.rolls > 0 ? d : (rolled.push(i), die())));
@@ -189,6 +190,8 @@ function finish() {
   token++;
   busy = false;
   g.over = true;
+  g.held = [false, false, false, false, false]; // the opponent's last keep
+  resultSeen = false;
   const you = totals(b, g.you).total, them = totals(b, g.them).total, name = who(g).name;
   const won = you > them, tie = you === them;
   if (g.table !== null) {
@@ -212,11 +215,18 @@ function finish() {
     : tie ? 'Play it again to settle it.' : 'The dice owe you one. Try again?';
   $('result-scores').innerHTML = `<div><span>You</span><b>${you}</b></div><div><span>${escape(name)}</span><b>${them}</b></div>`;
   const next = $('b-next');
-  if (won && g.table !== null && !last) { next.textContent = `On to table ${g.table + 2}`; next.onclick = () => intro(g.table + 1); }
+  if (won && g.table !== null && !last) { next.textContent = `On to table ${g.table + 2}`; next.onclick = () => { intro(g.table + 1); under = 'sheet-result'; }; }
   else { next.textContent = 'Play again'; next.onclick = () => start(g.table, g.opp); }
   $('b-again').hidden = !(won && g.table !== null && !last);
   const t = token;
-  setTimeout(() => { if (t === token && game === g) openSheet('sheet-result'); }, 900); // unless a new game has started
+  setTimeout(() => { if (t === token && game === g && !resultSeen) showResult(); }, 900); // unless a new game has started, or it's been opened already
+}
+
+// The result of the game that's just finished, as finish() wrote it. It can be closed, to look over the pad, and opened again.
+function showResult() {
+  if (!game?.over || !$('sheet-result').hidden) return;
+  resultSeen = true;
+  openSheet('sheet-result');
 }
 
 // Leaving a game part way counts as a loss at that table. Leaving one that's over just goes back to the tour.
@@ -266,8 +276,8 @@ function render() {
   const left = b.rolls - g.rolls;
   $('rolls').innerHTML = Array.from({ length: b.rolls }, (_, i) => `<i class="${i < g.rolls && (mine || g.turn === 'them') ? 'used' : ''}"></i>`).join('');
   const button = $('b-roll');
-  button.disabled = !mine || busy || left <= 0 || allHeld(g);
-  button.textContent = !mine ? (g.over ? 'Game over' : `${opp.name}’s turn`) : g.rolls === 0 ? 'Roll' : left > 0 ? `Roll again (${left} left)` : 'No rolls left';
+  button.disabled = !g.over && (!mine || busy || left <= 0 || allHeld(g));
+  button.textContent = g.over ? 'See the result' : !mine ? `${opp.name}’s turn` : g.rolls === 0 ? 'Roll' : left > 0 ? `Roll again (${left} left)` : 'No rolls left';
 
   if (mine && !busy) {
     if (picked) {
@@ -320,6 +330,7 @@ function intro(table, opp = table) {
 }
 
 let opener = null;
+let under = null; // the sheet this one was opened from, to go back to if it's turned down
 const behind = () => [$('home'), $('game')]; // the screens under a sheet, out of reach while it's open
 // `back` is where the focus goes when the sheet closes, if not to whatever had it before.
 function openSheet(id, back) {
@@ -337,7 +348,14 @@ function closeSheets() {
   behind().forEach(el => { el.inert = false; }); // before the focus goes back, which it can't to something inert
   if (shown.length && opener?.focus && document.contains(opener)) opener.focus({ preventScroll: true });
   opener = null;
+  under = null;
   keepHistory();
+}
+// Close a sheet by its own Not yet or ×, a tap beside it, or Escape. The next table's card, opened from a result, goes back to the result.
+function dismiss() {
+  const back = under;
+  closeSheets();
+  if (back && game?.over) openSheet(back);
 }
 
 let toastTimer = 0;
@@ -383,7 +401,7 @@ function save() {
 
 // ---- buttons ----
 
-$('b-roll').addEventListener('click', roll);
+$('b-roll').addEventListener('click', () => (game?.over ? showResult() : roll()));
 $('b-home').addEventListener('click', () => open('home'));
 function carryOn() {
   open('game');
@@ -414,7 +432,7 @@ const showMenu = () => {
 // Giving up takes two taps, as scoring a box does: the first asks, and closing the menu takes the question back.
 function askGiveUp(on) {
   givingUp = on;
-  $('b-concede').textContent = on ? 'Tap again to give up. It counts as a loss.' : 'Give up this game';
+  $('b-concede').textContent = game?.over ? 'Back to the tour' : on ? 'Tap again to give up. It counts as a loss.' : 'Give up this game';
   $('b-concede').classList.toggle('asked', on);
 }
 function giveUp() {
@@ -428,14 +446,14 @@ function giveUp() {
 $('b-menu').addEventListener('click', showMenu);
 $('b-where').addEventListener('click', showMenu);
 $('b-concede').addEventListener('click', giveUp);
-document.querySelectorAll('[data-close]').forEach(el => el.addEventListener('click', closeSheets));
+document.querySelectorAll('[data-close]').forEach(el => el.addEventListener('click', dismiss));
 const TOGGLES = [['fast', 'o-fast'], ['hints', 'o-hints']];
 for (const [k, id] of TOGGLES) {
   $(id).checked = settings[k];
   $(id).addEventListener('change', e => { settings[k] = e.target.checked; save(); render(); });
 }
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeSheets(); return; }
+  if (e.key === 'Escape') { dismiss(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return; // the browser's shortcuts, like Ctrl+R to reload
   if (document.body.dataset.screen !== 'game' || document.querySelector('.sheet:not([hidden])')) return;
   // R rolls wherever the focus is; Space only when nothing has it, since Space presses the button in focus.

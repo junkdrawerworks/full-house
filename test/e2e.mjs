@@ -242,24 +242,73 @@ try {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
     await win(t);
-    // On to table 2, then Not yet: you're left on the finished game. Back to the tour.
+    // On to table 2, then Not yet: the result is back. Close it, and the arrow goes back to the tour.
     await page.click('#b-next');
     await page.click('#sheet-intro [data-close].plain');
+    assert.ok(await page.isVisible('#sheet-result .panel'), 'Not yet left no way on from the finished game');
     assert.equal(await screen(), 'game');
+    await page.keyboard.press('Escape');
     await page.click('#b-home');
     assert.ok(await page.isHidden('#b-continue'), 'Carry on offered for a finished game');
 
-    // Escape on the result sheet, then Give up from the menu: back to the tour.
+    // Escape on the result sheet, then the menu, which has nothing to give up: one tap goes back to the tour.
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
     await win(t);
     await page.keyboard.press('Escape');
     await page.click('#b-menu');
+    assert.equal(await page.textContent('#b-concede'), 'Back to the tour');
     await page.click('#b-concede');
     assert.equal(await screen(), 'home');
     assert.ok(await page.isHidden('#sheet-menu'));
     assert.ok(await page.isHidden('#b-continue'), 'Carry on offered for a finished game');
     assert.equal((await page.evaluate(() => window.fullHouse.progress)).played[0], 2, 'two games played, no extra loss');
+  });
+
+  await step('a finished game can be looked over, and its result opened again', async t => {
+    const { page } = t;
+    const result = () => page.isVisible('#sheet-result .panel');
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    // The opponent holds dice on their last turn; once the game is over nothing is held.
+    await lastTurn(t);
+    await page.waitForFunction(() => window.fullHouse.game?.over, null, { timeout: 30000 });
+    assert.equal(await page.locator('.die.held').count(), 0, 'dice are still held on a finished game');
+    assert.deepEqual((await t.game()).held, [false, false, false, false, false]);
+    // The button opens the result before it comes up by itself, and it doesn't then open a second time.
+    assert.equal(await page.textContent('#b-roll'), 'See the result');
+    await page.click('#b-roll');
+    assert.ok(await result());
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(1200);
+    assert.equal(await result(), false, 'the result came up again by itself after it was closed');
+    // Closed, the finished pad is there to read, and the button brings the result back: by Escape, and by the back button.
+    for (const close of [() => page.keyboard.press('Escape'), () => page.goBack()]) {
+      assert.ok(await page.isEnabled('#b-roll'));
+      await page.click('#b-roll');
+      assert.ok(await result(), 'the button did not open the result again');
+      assert.match(await page.textContent('#result-title'), /You beat Pip/);
+      await close();
+      await page.waitForSelector('#sheet-result', { state: 'hidden' });
+      assert.equal(await page.evaluate(() => document.body.dataset.screen), 'game');
+    }
+    // R and Space don't roll a finished game.
+    await page.keyboard.press('r');
+    assert.equal((await t.game()).over, true);
+    assert.equal(await page.textContent('#b-roll'), 'See the result');
+    // On to table 2, then Escape on its card: the result again. It counted once.
+    await page.click('#b-roll');
+    await page.click('#b-next');
+    await page.waitForSelector('#sheet-intro:not([hidden])');
+    await page.keyboard.press('Escape');
+    assert.ok(await result(), 'Escape on the next table left no way on');
+    assert.equal((await page.evaluate(() => window.fullHouse.progress)).played[0], 1);
+    // Play this table again works from there.
+    await page.click('#b-again');
+    assert.equal(await result(), false);
+    assert.equal((await t.game()).number, 1);
+    assert.equal(await page.textContent('#b-roll'), 'Roll');
+    assert.equal(await page.locator('.die.held').count(), 0);
   });
 
   await step('giving up takes two taps, and the tour says what happened', async ({ page, game, settled }) => {
