@@ -980,6 +980,67 @@ try {
     }
   });
 
+  await step('on a shorter phone things sit closer together, so the whole pad fits under the dice', async ({ page, ctx, settled }) => {
+    const look = () => page.evaluate(() => {
+      const box = s => document.querySelector(s).getBoundingClientRect();
+      const wrap = document.querySelector('.pad-wrap'), tray = box('.tray');
+      return {
+        over: wrap.scrollHeight - wrap.clientHeight, roll: box('.roll').height, row: Math.round(box('tr[data-box="full"]').height),
+        barTop: box('.bar').top, padBottom: box('.pad').bottom, statusBottom: box('.status').bottom, actionsTop: box('.actions').top,
+        tagsInFelt: [...document.querySelectorAll('.die.held .held-tag')].every(t => t.getBoundingClientRect().bottom <= tray.bottom - 8.5),
+        diceInTray: [...document.querySelectorAll('.die')].every(d => d.getBoundingClientRect().top >= tray.top && d.getBoundingClientRect().bottom <= tray.bottom),
+      };
+    });
+    // Mid-turn, two dice held and the two-line hint showing, at Classic and at High Stakes.
+    const sit = async table => {
+      await page.evaluate(table => window.fullHouse.start(table), table);
+      await page.click('#b-roll');
+      await settled();
+      await page.click('.die >> nth=0');
+      await page.click('.die >> nth=3');
+      await page.waitForTimeout(600); // the held dice have risen
+    };
+    for (const table of [0, 7]) {
+      await sit(table);
+      // 390 x 763 is what a 390 x 844 phone has left with the game installed; 393 x 759, the same for a 393 x 852 one.
+      for (const [width, height] of [[390, 763], [393, 759], [412, 780]]) {
+        await page.setViewportSize({ width, height });
+        const m = await look(), at = `at table ${table + 1}, ${width} x ${height},`;
+        assert.equal(m.over, 0, `${at} the pad is ${m.over}px too tall to fit`);
+        assert.ok(m.statusBottom <= m.actionsTop, `${at} the line runs into the Roll button`);
+        assert.ok(m.tagsInFelt, `${at} HELD is on the tray's wooden edge`);
+        assert.ok(m.diceInTray, `${at} the dice spill out of the tray`);
+      }
+      // Shorter still, it can't all fit, and the same holds for what's above the pad.
+      for (const [width, height] of [[390, 664], [360, 640], [320, 568]]) {
+        await page.setViewportSize({ width, height });
+        const m = await look(), at = `at table ${table + 1}, ${width} x ${height},`;
+        assert.ok(m.statusBottom <= m.actionsTop, `${at} the line runs into the Roll button`);
+        assert.ok(m.tagsInFelt && m.diceInTray, `${at} the dice or HELD don't fit the tray`);
+      }
+      // Tall phones, a tablet, a phone held sideways and a desktop keep the roomier layout they had.
+      for (const [width, height] of [[390, 844], [412, 915], [430, 932], [768, 1024], [844, 390], [1280, 800]]) {
+        await page.setViewportSize({ width, height });
+        const m = await look(), at = `at table ${table + 1}, ${width} x ${height},`;
+        assert.equal(m.roll, 50, `${at} the Roll button is ${m.roll}px tall`);
+        assert.equal(m.row, 36, `${at} a row with a hint is ${m.row}px tall`);
+        assert.ok(m.tagsInFelt && m.diceInTray, `${at} the dice or HELD don't fit the tray`);
+        if (height > width) assert.equal(m.over, 0, `${at} the pad is ${m.over}px too tall to fit`);
+      }
+    }
+    // An installed game on a 390 x 844 phone: the screen is 844 tall, but a notch and a home bar take 81 of it.
+    const cdp = await ctx.newCDPSession(page);
+    let notch = true;
+    try { await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: 47, bottom: 34 } }); } catch { notch = false; }
+    if (notch) {
+      await page.setViewportSize({ width: 390, height: 844 });
+      const m = await look();
+      assert.ok(m.barTop >= 47, 'the bar is under the notch');
+      assert.equal(m.over, 0, `under a notch and over a home bar, the pad is ${m.over}px too tall to fit`);
+      assert.ok(m.padBottom <= 844 - 34, 'the pad runs under the home bar');
+    } else console.log('    (this Chromium can’t pretend to have a notch: that part was skipped)');
+  });
+
   await step('a second copy open at the same time picks up what the other one saves', async t => {
     const { page, ctx } = t;
     const other = await ctx.newPage(), trouble = [];

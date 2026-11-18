@@ -194,6 +194,7 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
   max-width: 560px;
   margin: 0 auto;
   padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); /* clear of a notch and a home bar */
+  container-type: size; /* its own height, inside that padding, decides how close things sit: see "a shorter screen" below */
 }
 .bar {
   display: flex;
@@ -438,6 +439,27 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 /* The Total stays at the foot of the pad's window while the boxes scroll under it, so who's ahead is always in view. */
 .pad tfoot th, .pad tfoot td { position: sticky; bottom: 0; z-index: 1; background: var(--paper); }
 
+/* A shorter screen, in one column: with under 840px of height to itself, which is most phones once the browser's
+   bars or a notch and home bar come off, the same things sit a little closer together, so the whole pad fits under
+   the dice from about 755px up (a 390 x 844 phone has 763 with the game installed). It goes by the game's own
+   height, not the screen's, which counts the notch and home bar. The two widths are the layouts below, turned round. */
+@media (max-width: 639.98px), (max-width: 879.98px) and (min-height: 500.02px) {
+  @container (max-height: 840px) {
+    .bar { padding-top: 2px; padding-bottom: 0; }
+    .play { padding-top: 2px; }
+    .tray { height: calc(var(--d) + 36px); }
+    .held-tag { bottom: -15px; line-height: 1; }
+    .status { min-height: 2.5em; margin-top: 4px; line-height: 1.25; }
+    .roll { height: 46px; }
+    .pad-wrap { padding-top: 8px; }
+    .pad { margin-bottom: 8px; }
+    .pad th[scope='row'] { padding-top: 1px; padding-bottom: 1px; }
+    .mult { line-height: 1.3; }
+    .pad tfoot th { padding-top: 6px; padding-bottom: 6px; }
+    .pad tfoot td { height: 40px; }
+  }
+}
+
 /* Side by side when there's room, and on a phone held sideways, where one column would leave the pad a sliver. */
 @media (min-width: 880px), (orientation: landscape) and (max-height: 500px) and (min-width: 640px) {
   .game { max-width: 1060px; grid-template-columns: 1fr minmax(380px, 460px); grid-template-rows: auto 1fr; column-gap: 24px; }
@@ -458,11 +480,11 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 /* ---- sheets and messages ---- */
 
 /* A message lies over the game's bar (on the tour, at the top of the page): on two lines it still stops short of the
-   dice, which are often what it's about. */
+   dice, which are often what it's about, on a shorter screen too, where the bar is 46px. */
 .toast {
   position: fixed;
   left: 50%;
-  top: calc(6px + env(safe-area-inset-top));
+  top: calc(4px + env(safe-area-inset-top));
   transform: translateX(-50%);
   display: grid;
   align-items: center;
