@@ -99,21 +99,24 @@ export class Pad {
     };
     const upper = board.boxes.filter(isUpper), lower = board.boxes.filter(b => !isUpper(b));
     // The bonus, once made, is pencilled in like a box: as you watch, when the score that made it has just gone in.
-    const bonusCell = (t, who) => (t.bonus
-      ? `<td class="${who}${fresh.bonus === who ? ' fresh' : ''}"><span>${t.bonus}</span></td>`
-      : `<td class="${who}">${t.upper >= 0 ? `<small>${t.upper}/${board.bonus.at}</small>` : ''}</td>`);
+    // Missed, with the top all filled, it's a pencilled 0. Until then, how far there is to go, in small print.
+    const bonusCell = (t, card, who) => (t.bonus || upper.every(b => card[b.id] !== null)
+      ? `<td class="${who}${t.bonus && fresh.bonus === who ? ' fresh' : ''}"><span>${t.bonus}</span></td>`
+      : `<td class="${who}"><small>${t.upper}/${board.bonus.at}</small></td>`);
+    // A column with nothing written in it yet has no total, as on a fresh sheet of paper.
+    const total = (t, card) => (board.boxes.some(b => card[b.id] !== null) ? t.total : '');
     const anyExtras = you.extras || them.extras;
     this.el.classList.toggle('long', name.length > 6); // the Dealer: see css/app.css
     this.el.innerHTML = `
       <caption class="vh">Score pad</caption>
       <thead><tr><th scope="col"><span class="vh">Box</span></th><th scope="col" class="you">You</th><th scope="col" class="them">${escape(name)}</th></tr></thead>
       <tbody>${upper.map(row).join('')}
-        <tr class="sub"><th scope="row"><b>Bonus</b><small>${board.bonus.at} or more on top: ${board.bonus.worth}</small></th>${bonusCell(ty, 'you')}${bonusCell(tt, 'them')}</tr>
+        <tr class="sub"><th scope="row"><b>Bonus</b><small>${board.bonus.at} or more on top: ${board.bonus.worth}</small></th>${bonusCell(ty, you, 'you')}${bonusCell(tt, them, 'them')}</tr>
       </tbody>
       <tbody>${lower.map(row).join('')}
         ${anyExtras ? `<tr class="sub"><th scope="row"><b>Extra fives</b><small>${board.extra} each</small></th><td class="you">${ty.extras || ''}</td><td class="them">${tt.extras || ''}</td></tr>` : ''}
       </tbody>
-      <tfoot><tr class="total"><th scope="row">Total</th><td class="you">${ty.total}</td><td class="them">${tt.total}</td></tr></tfoot>`;
+      <tfoot><tr class="total"><th scope="row">Total</th><td class="you">${total(ty, you)}</td><td class="them">${total(tt, them)}</td></tr></tfoot>`;
     if (focused) this.el.querySelector(`tr.can[data-box="${focused}"]`)?.focus({ preventScroll: true });
   }
 }

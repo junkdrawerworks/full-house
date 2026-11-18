@@ -1162,6 +1162,44 @@ try {
     assert.deepEqual(await bonus('you'), { text: '35', fresh: true, drawn: 'none' });
   });
 
+  await step('a bonus out of reach is a pencilled 0, and a column with nothing written in it has no total yet', async ({ page }) => {
+    const pad = () => page.evaluate(() => {
+      const cell = td => ({ text: td.textContent, pencil: !!td.querySelector('span') && !td.querySelector('small') });
+      return {
+        bonus: [...document.querySelectorAll('#pad tr.sub td')].slice(0, 2).map(cell),
+        totals: [...document.querySelectorAll('#pad tfoot td')].map(td => td.textContent),
+        inks: [...document.querySelectorAll('#pad tr.sub td')].slice(0, 2).map(td => getComputedStyle(td).color),
+      };
+    });
+    await page.evaluate(() => window.fullHouse.start(0));
+    // A fresh sheet: the bonus so far in small print, and no totals pencilled in.
+    let p = await pad();
+    assert.deepEqual(p.totals, ['', ''], 'a fresh sheet has totals written in');
+    assert.deepEqual(p.bonus, [{ text: '0/63', pencil: false }, { text: '0/63', pencil: false }]);
+    // Your top filled at 41, theirs at 62: a pencilled 0 each, theirs in red. A top still open keeps its small print.
+    await page.evaluate(() => {
+      const g = structuredClone(window.fullHouse.game);
+      Object.assign(g.you, { f1: 2, f2: 4, f3: 6, f4: 8, f5: 10, f6: 11 });
+      Object.assign(g.them, { f1: 3, f2: 6, f3: 9, f4: 12, f5: 15, f6: 17, chance: 20 });
+      Object.assign(g, { number: 8 });
+      window.fullHouse.set(g);
+    });
+    p = await pad();
+    assert.deepEqual(p.bonus, [{ text: '0', pencil: true }, { text: '0', pencil: true }]);
+    assert.notEqual(p.inks[0], p.inks[1], 'the opponent’s 0 is not in red pencil');
+    assert.deepEqual(p.totals, ['41', '82']);
+    await page.evaluate(() => {
+      const g = structuredClone(window.fullHouse.game);
+      g.you.f6 = null;
+      for (const b of g.board.boxes) g.them[b.id] = null;
+      g.them.chance = 20;
+      window.fullHouse.set(g);
+    });
+    p = await pad();
+    assert.deepEqual(p.bonus, [{ text: '30/63', pencil: false }, { text: '0/63', pencil: false }]);
+    assert.deepEqual(p.totals, ['30', '20'], 'a column with a box written in has its total');
+  });
+
   await step('with all five dice held there is nothing to roll', async ({ page, game, settled }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
@@ -2329,7 +2367,7 @@ try {
         table: document.getElementById('g-table').textContent,
         sheets: document.querySelectorAll('.sheet:not([hidden])').length,
       }));
-      assert.deepEqual(s, { cells: [], totals: ['0', '0'], marks: 0, held: 0, toast: true, status: 'Your turn. Roll the dice.', pips: 0, table: label, sheets: 0 }, `${label} did not open clean`);
+      assert.deepEqual(s, { cells: [], totals: ['', ''], marks: 0, held: 0, toast: true, status: 'Your turn. Roll the dice.', pips: 0, table: label, sheets: 0 }, `${label} did not open clean`);
       const g = await game();
       assert.deepEqual([g.number, g.rolls, g.turn, g.held, g.last], [1, 0, 'you', [false, false, false, false, false], null]);
       // Their first turn: the line says they roll, and nothing of theirs is held yet.
