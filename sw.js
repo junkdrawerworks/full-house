@@ -27,7 +27,10 @@ self.addEventListener('install', e => {
 
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
-    .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+    // Only this game's own old copies, by exact name: anything served from the same address (localhost, say) shares one
+    // Cache Storage, and a looser match would delete another project's copy (all of them, or one whose name starts with
+    // this one's).
+    .then(keys => Promise.all(keys.filter(k => k !== CACHE && /^full-house-v[0-9]+$/.test(k)).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 

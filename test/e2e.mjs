@@ -2613,6 +2613,7 @@ try {
   const { fileURLToPath } = await import('node:url');
   const { createHash } = await import('node:crypto');
   const root = fileURLToPath(new URL('..', import.meta.url));
+  const sw0 = await readFile(join(root, 'sw.js'), 'utf8');
   const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
   let net = 'up', release = false;
   const held = [];
@@ -2639,8 +2640,13 @@ try {
   const page = await ctx.newPage();
   const problems = [];
   page.on('pageerror', e => problems.push(e.message));
+  // Another project served from the same address (localhost, say) keeps its own offline copy, and an old release of
+  // this one left its copy behind: the worker deletes only the old release's.
+  await page.goto(base + 'manifest.webmanifest');
+  await page.evaluate(() => Promise.all(['other-project-v1', 'full-house-v2', 'full-house-v2-old'].map(k => caches.open(k))));
   await page.goto(base);
   await page.waitForFunction(() => navigator.serviceWorker?.controller, null, { timeout: 15000 });
+  assert.deepEqual((await page.evaluate(() => caches.keys())).sort(), ['full-house-v2-old', sw0.match(/const CACHE = '([^']+)'/)[1], 'other-project-v1'].sort(), 'the worker deleted copies that are not its own old ones');
   const title = await page.title();
 
   // Works offline once it has been opened.

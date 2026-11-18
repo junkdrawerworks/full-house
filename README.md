@@ -40,7 +40,7 @@
 It's a static site: plain HTML, CSS and JavaScript, with no build step.
 
 ```sh
-npm start                      # serves it at http://localhost:8080 (or use any static file server)
+npm start                      # serves it at http://localhost:8086 (or use any static file server)
 npm install                    # once, for the bundler and the screenshot tool's PNG compressor
 npm test                       # the rules and the opponents in Node, then the game played in Chromium, the one-file build too (needs Playwright, and npm install)
 node tools/screenshots.mjs     # redraws docs/*.png and og.png

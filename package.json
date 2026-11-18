@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Five dice against eight opponents, on tables that change the rules. No ads.",
   "scripts": {
-    "start": "npx --yes http-server -c-1 -p 8080 .",
+    "start": "npx --yes http-server -c-1 -p 8086 .",
     "test": "node --test test/rules.test.mjs && node test/e2e.mjs",
     "build": "node scripts/build.mjs",
     "sim": "node dev/ladder.mjs"
