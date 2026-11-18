@@ -44,15 +44,15 @@ export class Pad {
         <th scope="row"><b>${boxLabel(b)}${mult}</b>${boxHint(b) ? `<small>${boxHint(b)}</small>` : ''}</th>${cell(you, b, 'you')}${cell(them, b, 'them')}</tr>`;
     };
     const upper = board.boxes.filter(isUpper), lower = board.boxes.filter(b => !isUpper(b));
-    const bonusCell = t => `<td>${t.bonus ? t.bonus : t.upper >= 0 ? `<small>${t.upper}/${board.bonus.at}</small>` : ''}</td>`;
+    const bonusCell = (t, who) => `<td class="${who}">${t.bonus ? t.bonus : t.upper >= 0 ? `<small>${t.upper}/${board.bonus.at}</small>` : ''}</td>`;
     const anyExtras = you.extras || them.extras;
     this.el.innerHTML = `
       <thead><tr><th scope="col"><span class="vh">Box</span></th><th scope="col" class="you">You</th><th scope="col" class="them">${escape(name)}</th></tr></thead>
       <tbody>${upper.map(row).join('')}
-        <tr class="sub"><th scope="row"><b>Bonus</b><small>${board.bonus.at} or more on top: ${board.bonus.worth}</small></th>${bonusCell(ty)}${bonusCell(tt)}</tr>
+        <tr class="sub"><th scope="row"><b>Bonus</b><small>${board.bonus.at} or more on top: ${board.bonus.worth}</small></th>${bonusCell(ty, 'you')}${bonusCell(tt, 'them')}</tr>
       </tbody>
       <tbody>${lower.map(row).join('')}
-        ${anyExtras ? `<tr class="sub"><th scope="row"><b>Extra fives</b><small>${board.extra} each</small></th><td>${ty.extras || ''}</td><td>${tt.extras || ''}</td></tr>` : ''}
+        ${anyExtras ? `<tr class="sub"><th scope="row"><b>Extra fives</b><small>${board.extra} each</small></th><td class="you">${ty.extras || ''}</td><td class="them">${tt.extras || ''}</td></tr>` : ''}
       </tbody>
       <tfoot><tr class="total"><th scope="row">Total</th><td class="you">${ty.total}</td><td class="them">${tt.total}</td></tr></tfoot>`;
     if (focused) this.el.querySelector(`tr.can[data-box="${focused}"]`)?.focus({ preventScroll: true });

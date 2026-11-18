@@ -219,7 +219,7 @@ function finish() {
   $('result-line').textContent = won
     ? g.table === null ? 'A good game.' : last ? 'That’s the whole tour. Nobody at these tables has anything left to teach you.' : `Table ${g.table + 2} is open: ${TABLES[g.table + 1].board.name}, against ${TABLES[g.table + 1].who.name}.`
     : tie ? 'Play it again to settle it.' : 'The dice owe you one. Try again?';
-  $('result-scores').innerHTML = `<div><span>You</span><b>${you}</b></div><div><span>${escape(name)}</span><b>${them}</b></div>`;
+  $('result-scores').innerHTML = `<div><span>You</span><b>${you}</b></div><div class="them"><span>${escape(name)}</span><b>${them}</b></div>`;
   const next = $('b-next');
   if (won && g.table !== null && !last) { next.textContent = `On to table ${g.table + 2}`; next.onclick = () => { intro(g.table + 1); under = 'sheet-result'; }; }
   else { next.textContent = 'Play again'; next.onclick = () => start(g.table, g.opp); }

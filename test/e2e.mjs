@@ -433,6 +433,47 @@ try {
     assert.equal(await page.evaluate(() => document.getAnimations().length), 0, 'something still slides in though less motion was asked for');
   });
 
+  await step('everything the opponent has is in red pencil: bonus, extra fives, and the result', async t => {
+    const { page } = t;
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    await page.evaluate(() => {
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) { g.you[b.id] = b.id === 'chance' ? null : 20; g.them[b.id] = b.id === 'chance' ? null : 12; }
+      g.you.extras = g.them.extras = 1;
+      Object.assign(g, { number: 13, rolls: 1, turn: 'you' });
+      window.fullHouse.settings.fast = true;
+      window.fullHouse.set(g);
+    });
+    const ink = sel => page.evaluate(sel => getComputedStyle(document.querySelector(sel)).color, sel);
+    const red = await ink('#pad tfoot td.them'), black = await ink('#pad tfoot td.you');
+    assert.notEqual(red, black);
+    for (const row of ['Bonus', 'Extra fives']) {
+      const cells = page.locator('#pad tr.sub', { hasText: row }).locator('td');
+      assert.match(await cells.nth(1).textContent(), /^\d+$/);
+      assert.equal(await cells.nth(0).evaluate(td => getComputedStyle(td).color), black, `your ${row}`);
+      assert.equal(await cells.nth(1).evaluate(td => getComputedStyle(td).color), red, `the opponent's ${row} is not in red pencil`);
+    }
+    // The result: their number in red, and readable on its tile, light and dark.
+    await page.click('tr[data-box="chance"]');
+    await page.click('tr[data-box="chance"]');
+    await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
+    for (const colorScheme of ['light', 'dark']) {
+      await page.emulateMedia({ colorScheme });
+      const c = await page.evaluate(() => {
+        const rgb = s => s.match(/[\d.]+/g).map(Number);
+        const b = document.querySelector('#result-scores div:last-child b'), yours = document.querySelector('#result-scores div:first-child b');
+        const [r, g, bl, a = 1] = rgb(getComputedStyle(b.parentElement).backgroundColor), under = rgb(getComputedStyle(document.querySelector('#sheet-result .panel')).backgroundColor);
+        const tile = [r, g, bl].map((v, i) => v * a + under[i] * (1 - a));
+        const lum = c => { const [x, y, z] = c.map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * x + 0.7152 * y + 0.0722 * z; };
+        const l1 = lum(rgb(getComputedStyle(b).color).slice(0, 3)), l2 = lum(tile);
+        return { same: getComputedStyle(b).color === getComputedStyle(yours).color, contrast: (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05) };
+      });
+      assert.equal(c.same, false, `${colorScheme}: the opponent's score on the result is in your ink`);
+      assert.ok(c.contrast >= 4.5, `${colorScheme}: the opponent's score on the result has a contrast of ${c.contrast.toFixed(2)}`);
+    }
+  });
+
   await step('giving up takes two taps, and the tour says what happened', async ({ page, game, settled }) => {
     const screen = () => page.evaluate(() => document.body.dataset.screen);
     const label = () => page.textContent('#b-concede');

@@ -21,6 +21,7 @@
   --rule: rgba(46, 72, 102, 0.16);
   --pencil: #2f2c29;
   --red-pencil: #b0392d;
+  --red-score: #a5332a; /* the red pencil, on a result's tile rather than on the pad's paper */
   --offer: #6b7b90;
   --small-print: #647283;
   --red-print: #b8432f;
@@ -56,6 +57,7 @@
     --offer: #6e7d91;
     --small-print: #556170;
     --red-print: #a43b2a;
+    --red-score: #f0907f;
     --accent: #c9553b;
     --accent-text: #ef8e73;
     --panel: #26211c;
@@ -529,6 +531,7 @@ body[data-screen='home'] .toast { top: auto; bottom: calc(16px + env(safe-area-i
 .scores div { display: grid; justify-items: center; padding: 10px; border-radius: 14px; background: var(--line); }
 .scores span { font: 700 13px var(--cond); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .scores b { font: 700 46px/1 var(--hand); }
+.scores .them b { color: var(--red-score); }
 .toggle { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0; font-size: 14.5px; line-height: 1.4; color: var(--muted); cursor: pointer; }
 .toggle b { display: block; color: var(--ink); font-size: 15.5px; font-weight: 600; }
 .toggle input {
