@@ -79,9 +79,10 @@ export class Pad {
     const cell = (card, b, who) => {
       const v = card[b.id];
       if (v !== null) return `<td class="${who}${fresh[who] === b.id ? ' fresh' : ''}"><span>${v}</span></td>`;
+      // A box the dice would score nothing in shows a light dash, not a pencilled 0 that looks like a score, until you pick it.
       if (who === 'you' && offers && b.id in offers) {
-        const show = hints || picked === b.id;
-        return `<td class="you offer${picked === b.id ? ' picked' : ''}">${show ? `<span>${offers[b.id]}</span>` : ''}</td>`;
+        const show = hints || picked === b.id, nil = !offers[b.id] && picked !== b.id;
+        return `<td class="you offer${picked === b.id ? ' picked' : ''}">${!show ? '' : nil ? '<span class="nil">–</span>' : `<span>${offers[b.id]}</span>`}</td>`;
       }
       if (who === 'them' && theirPick?.id === b.id) return `<td class="them offer picked"><span>${theirPick.score}</span></td>`;
       return `<td class="${who}"></td>`;

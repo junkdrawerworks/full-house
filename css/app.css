@@ -426,6 +426,7 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 .pad td.them { color: var(--red-pencil); }
 .pad td small { font: 600 13px var(--cond); color: var(--small-print); letter-spacing: 0.03em; }
 .pad td.offer span { color: var(--offer); font-weight: 500; }
+.pad td.offer span.nil { font-weight: 400; opacity: 0.6; } /* nothing to score there: a light dash until it's picked */
 .pad tr.can { cursor: pointer; }
 .pad tr.can:not(.picked):hover th, .pad tr.can:not(.picked):hover td.you { background: rgba(46, 72, 102, 0.05); }
 .pad tr.can:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }

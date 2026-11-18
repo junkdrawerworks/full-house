@@ -723,10 +723,16 @@ try {
       window.fullHouse.settings.fast = true;
       window.fullHouse.set(g);
     });
+    // Until it's picked it shows a light dash, not a 0 that looks like a score; picked, the 0 it would write in.
+    const large = () => page.textContent('tr[data-box="large"] td.you');
+    assert.equal(await large(), '–', 'a box that scores nothing shows a pencilled score');
+    assert.equal(await page.textContent('tr[data-box="chance"] td.you'), '12');
     await page.click('tr[data-box="large"]');
     assert.equal(await page.textContent('#status'), 'Tap Large straight again to write in a 0.');
+    assert.equal(await large(), '0');
     await page.click('tr[data-box="chance"]');
     assert.equal(await page.textContent('#status'), 'Tap Chance again to score 12.');
+    assert.equal(await large(), '–');
     // Lose, and the line doesn't ask what the button under it already offers.
     await page.click('tr[data-box="large"]');
     await page.click('tr[data-box="large"]');
@@ -1451,7 +1457,7 @@ try {
     for (const b of open) {
       assert.equal(b.role, 'button');
       assert.equal(b.pressed, 'false');
-      assert.ok(b.label.endsWith(b.shows === '0' ? ': write in 0' : `: score ${b.shows}`), `${b.id} is read as "${b.label}" and shows ${b.shows}`);
+      assert.ok(b.label.endsWith(b.shows === '–' ? ': write in 0' : `: score ${b.shows}`), `${b.id} is read as "${b.label}" and shows ${b.shows}`);
     }
     assert.match(open.find(b => b.id === 'f6').label, /^Sixes, times 3: /);
     assert.match(open.find(b => b.id === 'f1').label, /^Ones: /);
