@@ -865,6 +865,28 @@ try {
     }
   }, { viewport: { width: 844, height: 390 } });
 
+  await step('the Dealer’s name fits on one line of the pad, and a box marked ×2 is no taller than any other', async ({ page }) => {
+    const sizes = table => page.evaluate(table => {
+      window.fullHouse.start(table);
+      const box = s => document.querySelector(s).getBoundingClientRect();
+      return {
+        head: Math.round(box('.pad thead').height), row: Math.round(box('tr[data-box="four"]').height), pad: Math.round(box('.pad').height),
+        label: box('tr[data-box="three"] th b').height, you: box('.pad thead .you').width, them: box('.pad thead .them').width,
+        sideways: document.documentElement.scrollWidth > innerWidth,
+      };
+    }, table);
+    for (const width of [320, 360, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      const classic = await sizes(0), high = await sizes(7);
+      assert.equal(high.head, classic.head, `at ${width} wide, The Dealer takes two lines of the pad’s heading`);
+      assert.equal(high.row, classic.row, `at ${width} wide, a box marked ×2 is taller than a plain one`);
+      assert.equal(high.pad, classic.pad, `at ${width} wide, the pad is taller at High Stakes than at Classic`);
+      assert.ok(high.label < 20, `at ${width} wide, Three of a kind and its ×2 take two lines`);
+      assert.equal(high.you, high.them, `at ${width} wide, the two score columns are different widths`);
+      assert.equal(high.sideways, false, `at ${width} wide, the page scrolls sideways`);
+    }
+  });
+
   await step('a second copy open at the same time picks up what the other one saves', async t => {
     const { page, ctx } = t;
     const other = await ctx.newPage(), trouble = [];

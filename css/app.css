@@ -379,7 +379,11 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
   font: 700 13px var(--cond);
   letter-spacing: 0.1em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
+/* A long name (the Dealer's) is set a little tighter, over two slightly wider columns, to stay on one line. */
+.pad.long thead th { padding: 7px 2px; font-size: 12px; line-height: 16px; letter-spacing: 0.02em; }
+.pad.long td { width: 74px; }
 .pad thead th.them::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; background: var(--them-colour); box-shadow: 0 0 0 1.5px var(--paper); }
 .pad th[scope='row'] { padding: 3px 6px 3px 12px; text-align: left; font-weight: 400; }
 .pad th[scope='row'] b { display: block; font: 700 15px/1.05 var(--cond); letter-spacing: 0.03em; text-transform: uppercase; }
@@ -408,7 +412,7 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 .pad .hot th[scope='row'] { background: rgba(184, 67, 47, 0.07); }
 .mult {
   display: inline-block;
-  margin-left: 6px;
+  margin: -2px 0 -2px 6px; /* taller than the label's line, without making its row any taller */
   padding: 0 5px;
   border-radius: 4px;
   background: var(--accent);

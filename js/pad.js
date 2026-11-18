@@ -46,6 +46,7 @@ export class Pad {
     const upper = board.boxes.filter(isUpper), lower = board.boxes.filter(b => !isUpper(b));
     const bonusCell = (t, who) => `<td class="${who}">${t.bonus ? t.bonus : t.upper >= 0 ? `<small>${t.upper}/${board.bonus.at}</small>` : ''}</td>`;
     const anyExtras = you.extras || them.extras;
+    this.el.classList.toggle('long', name.length > 6); // the Dealer: see css/app.css
     this.el.innerHTML = `
       <thead><tr><th scope="col"><span class="vh">Box</span></th><th scope="col" class="you">You</th><th scope="col" class="them">${escape(name)}</th></tr></thead>
       <tbody>${upper.map(row).join('')}
