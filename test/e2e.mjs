@@ -1505,8 +1505,10 @@ try {
       await page.waitForFunction(() => !window.fullHouse.busy);
       await page.waitForTimeout(100);
       const size = `at ${width} x ${height}`;
-      assert.ok(m.over <= 6, `${size} a die rises ${m.over.toFixed(1)}px above the tray`);
-      assert.ok(m.under <= 6, `${size} a die drops ${m.under.toFixed(1)}px below the tray`);
+      // How far depends on how each die happens to turn: at most about 6px over a dozen rolls each, against 21 to 25px
+      // with the old high hop. The tray clips what gets past its edge.
+      assert.ok(m.over <= 10, `${size} a die rises ${m.over.toFixed(1)}px above the tray`);
+      assert.ok(m.under <= 10, `${size} a die drops ${m.under.toFixed(1)}px below the tray`);
       assert.notEqual(m.clip, 'none', `${size} nothing keeps the dice inside the tray`);
       assert.ok(m.core, `${size} a tumbling cube is hollow`);
       // At rest the cube's middle is out of sight, so it can't show through a face.
