@@ -1311,15 +1311,27 @@ try {
     assert.equal(await page.locator('.die.held').count(), 0, 'dice are tagged Held with no rolls left');
     assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll('.die')].map(d => d.getAttribute('aria-pressed'))), ['false', 'false', 'false', 'false', 'false']);
     assert.deepEqual((await game()).held.slice(0, 2), [true, true], 'the game forgot what was held');
-    // The opponent's holds show while they roll, the last one too.
-    await page.evaluate(() => {
-      const g = structuredClone(window.fullHouse.game);
+    // The opponent's holds show while they roll, after their last roll too: a seed on which Pip holds some dice, not
+    // all, for that last roll (found the way the game plays their turn, from the seed and the turn number).
+    await page.evaluate(async () => {
+      const [{ Opponent }, { TABLES }, { mulberry32 }] = await Promise.all(['./js/ai.js', './js/tour.js', './js/rng.js'].map(u => import(u)));
+      const g = structuredClone(window.fullHouse.game), b = g.board, opp = new Opponent(TABLES[0].play);
+      for (let seed = 1; ; seed++) {
+        const rand = mulberry32((seed ^ Math.imul(g.number, 0x9E3779B1)) >>> 0), roll = () => 1 + Math.floor(rand() * 6);
+        let dice = Array.from({ length: 5 }, roll), keep = null;
+        for (let left = b.rolls - 1; left > 0; left--) {
+          keep = opp.keep(b, g.them, dice, left, rand);
+          if (!keep) break;
+          dice = dice.map((d, i) => (keep[i] ? d : roll()));
+        }
+        if (keep && keep.some(Boolean) && !keep.every(Boolean)) { g.seed = seed; break; }
+      }
       Object.assign(g, { turn: 'them', rolls: 0, held: [false, false, false, false, false] });
       window.fullHouse.settings.fast = false;
       window.fullHouse.set(g);
     });
-    const theirs = await page.waitForFunction(() => document.querySelector('.tray.theirs .die.held') && window.fullHouse.game.rolls, null, { timeout: 30000 }).catch(() => null);
-    if (!theirs) console.log('    (the opponent held nothing this time)');
+    await page.waitForFunction(rolls => window.fullHouse.game.rolls === rolls && document.querySelector('.tray.theirs .die.held'), (await game()).board.rolls, { timeout: 30000 })
+      .catch(() => assert.fail('the opponent’s Held tags did not show after their last roll'));
     await myTurn();
   });
 
