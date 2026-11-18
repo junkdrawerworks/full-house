@@ -237,6 +237,16 @@ try {
     for (let i = 0; i < 3; i++) await page.touchscreen.tap(die.x + die.width / 2, die.y + die.height / 2);
     await myTurn();
     assert.ok(Date.now() - t0 < 3000, `their turn took ${Date.now() - t0} ms after tapping the dice`);
+    // A tap straight after scoring, while the line still says what you scored and before they've rolled, counts too.
+    await page.click('#b-roll');
+    await settled();
+    await page.locator('tr.can').first().click();
+    await page.locator('tr.can').first().click();
+    const t1 = Date.now();
+    await page.touchscreen.tap(die.x + die.width / 2, die.y + die.height / 2);
+    assert.match(await page.textContent('#status'), /^You score/, 'the tap came after they had started');
+    await myTurn();
+    assert.ok(Date.now() - t1 < 3000, `their turn took ${Date.now() - t1} ms after a tap straight after scoring`);
   });
 
   await step('a finished game is not offered to carry on', async t => {

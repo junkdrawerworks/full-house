@@ -73,6 +73,7 @@ function pick(id) {
   else if (option.box.kind === 'five' && option.score) toast('Five of a kind.');
   g.turn = 'them';
   g.held = [false, false, false, false, false];
+  hurry = false; // a tap from here on hurries the turn that's coming, even before they roll
   busy = true; // the opponent is about to play, so going back and carrying on mustn't start their turn as well
   save();
   render();
@@ -106,7 +107,6 @@ async function theirTurn() {
   const rand = mulberry32((g.seed ^ Math.imul(g.number, 0x9E3779B1)) >>> 0), roll = () => 1 + Math.floor(rand() * 6);
   playing = t;
   busy = true;
-  hurry = false;
 
   theirDice = true;
   g.held = [false, false, false, false, false];
@@ -180,7 +180,7 @@ function start(table, opp = table) {
     turn: 'you', number: 1, rolls: 0,
     dice: [die(), die(), die(), die(), die()], held: [false, false, false, false, false],
   };
-  busy = false;
+  busy = hurry = false;
   picked = null;
   theirPick = null;
   theirDice = false;
