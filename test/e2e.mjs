@@ -1901,7 +1901,7 @@ try {
     await page.waitForSelector('#sheet-intro:not([hidden])');
     assert.equal(await page.textContent('#intro-n'), 'Quick game');
     assert.equal(await page.textContent('#intro-title'), 'Classic');
-    assert.match(await page.textContent('#intro-who'), /Pip.*Sitting down here ends the game you’re in\. It counts as a loss\.$/);
+    assert.match(await page.textContent('#intro-who'), /Pip.*Sitting down here ends the game you’re in\. It counts as a\u00a0loss\.$/);
     // Not yet: the game at table 1 carries on, and nothing is counted.
     await page.click('#sheet-intro [data-close].plain');
     assert.equal(await page.evaluate(() => document.body.dataset.screen), 'home');
