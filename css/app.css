@@ -10,7 +10,7 @@
   --table: #ebe2d0;
   --table-edge: #dccdb2;
   --ink: #2a241d;
-  --muted: #6e6352;
+  --muted: #5f5647;
   --line: rgba(42, 36, 29, 0.14);
   --felt: #24594f;
   --felt-deep: #173f37;
@@ -23,12 +23,12 @@
   --red-pencil: #b0392d;
   --red-score: #a5332a; /* the red pencil, on a result's tile rather than on the pad's paper */
   --offer: #6b7b90;
-  --small-print: #647283;
-  --red-print: #b8432f;
+  --small-print: #55606f;
+  --red-print: #a33b2a;
   --hold: #e3a82b;
   --accent: #b8432f;
   --accent-ink: #fff;
-  --accent-text: #b8432f;
+  --accent-text: #a33b2a; /* a shade darker than --accent, so it reads on the grey of a card too */
   --ivory: #fbf7ee;
   --pip: #1d1b19;
   --red-die: #b8392f;
@@ -46,7 +46,7 @@
     --table: #1c1916;
     --table-edge: #14110e;
     --ink: #ece4d6;
-    --muted: #a99d8b;
+    --muted: #b2a898;
     --line: rgba(236, 228, 214, 0.14);
     --felt: #1c4a42;
     --felt-deep: #10302a;
@@ -55,10 +55,10 @@
     --paper: #e4dac5;
     --rule: rgba(46, 72, 102, 0.2);
     --offer: #6e7d91;
-    --small-print: #556170;
-    --red-print: #a43b2a;
+    --small-print: #4b5563;
+    --red-print: #9c3828;
     --red-score: #f0907f;
-    --accent: #c9553b;
+    --accent: #b54d35;
     --accent-text: #ef8e73;
     --panel: #26211c;
     color-scheme: dark;
