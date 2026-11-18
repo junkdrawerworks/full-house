@@ -365,6 +365,67 @@ try {
     assert.equal((await now()).said, 'You score 30 in Sixes, plus 100 extra.');
   });
 
+  await step('your turn says what the opponent just scored, and a game at Hot Boxes starts by naming its hot boxes', async ({ page, game, myTurn, settled }) => {
+    const status = () => page.textContent('#status');
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    await page.evaluate(() => { window.fullHouse.settings.fast = true; });
+    assert.equal(await status(), 'Your turn. Roll the dice.');
+    await page.click('#b-roll');
+    await settled();
+    await page.locator('tr.can').first().click();
+    await page.locator('tr.can').first().click();
+    await page.click('#tray');
+    await myTurn();
+    const [id, score] = Object.entries((await game()).them).find(([k, v]) => k !== 'extras' && v !== null);
+    const line = `Your turn. Pip scored ${score} in ${await page.textContent(`tr[data-box="${id}"] th b`)}.`;
+    assert.equal(await status(), line);
+    // It's still there after a reload, and after the tour and Carry on; it goes once you roll.
+    await page.reload();
+    await myTurn();
+    assert.equal(await status(), line, 'after a reload');
+    await page.click('#b-home');
+    await page.click('#b-continue');
+    assert.equal(await status(), line, 'after Carry on');
+    await page.click('#b-roll');
+    await settled();
+    assert.notEqual(await status(), line);
+
+    // Hot Boxes, sat down to with seed 15: Threes and Fives are hot, and the first line and the menu say so.
+    const sit = (seed, hot) => page.evaluate(async ([seed, hot]) => {
+      const { boardFor } = await import('./js/tour.js');
+      window.fullHouse.start(5);
+      const g = structuredClone(window.fullHouse.game);
+      g.seed = seed;
+      g.board = boardFor(5, seed);
+      if (hot) g.board.boxes.forEach(b => { b.mult = hot.includes(b.id) ? 3 : 1; });
+      window.fullHouse.set(g);
+    }, [seed, hot]);
+    await sit(15);
+    assert.equal(await status(), 'Hot this time: Threes and Fives. Roll the dice.');
+    await page.click('#b-menu');
+    assert.equal(await page.textContent('#menu-twist'), `${await page.evaluate(() => window.fullHouse.game.board.blurb)} This time it’s Threes and Fives. Against Otto. Steady. Always goes for the bonus.`);
+    await page.keyboard.press('Escape');
+
+    // The longest of these lines keep to two lines, as every status line does, on a small phone and a phone.
+    const lines = () => page.evaluate(() => { const e = document.getElementById('status'); return Math.round(e.getBoundingClientRect().height / parseFloat(getComputedStyle(e).lineHeight)); });
+    for (const [width, height] of [[320, 568], [390, 844]]) {
+      await page.setViewportSize({ width, height });
+      await sit(15, ['three', 'small']);
+      assert.equal(await status(), 'Hot this time: Three of a kind and Small straight. Roll the dice.');
+      assert.ok(await lines() <= 2, `at ${width} x ${height}, the line runs to three lines: ${await status()}`);
+      await page.evaluate(() => {
+        window.fullHouse.start(7);
+        const g = structuredClone(window.fullHouse.game);
+        g.them.three = 60;
+        Object.assign(g, { number: 2, last: { id: 'three', score: 60 } });
+        window.fullHouse.set(g);
+      });
+      assert.equal(await status(), 'Your turn. The Dealer scored 60 in Three of a kind.');
+      assert.ok(await lines() <= 2, `at ${width} x ${height}, the line runs to three lines: ${await status()}`);
+    }
+  });
+
   await step('the dice have landed by the time their scores show, at either pace', async ({ page, myTurn }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');

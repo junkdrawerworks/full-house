@@ -154,6 +154,7 @@ async function theirTurn() {
   if (!still()) return;
 
   g.them = mark(g.them, option);
+  g.last = { id: option.box.id, score: option.score }; // for your turn's line, after a reload or Carry on as well
   theirPick = null;
   fresh = { them: option.box.id };
   if (option.extra) toast(`${name} rolls another five of a kind: ${b.extra} extra points.`);
@@ -187,7 +188,7 @@ function start(table, opp = table) {
   game = {
     table, opp, seed, board,
     you: blankCard(board), them: blankCard(board),
-    turn: 'you', number: 1, rolls: 0,
+    turn: 'you', number: 1, rolls: 0, last: null,
     dice: [die(), die(), die(), die(), die()], held: [false, false, false, false, false],
   };
   busy = hurry = false;
@@ -312,7 +313,7 @@ function render() {
     if (picked) {
       const o = opts?.find(x => x.box.id === picked);
       status(`Tap ${boxLabel(b.boxes.find(x => x.id === picked))} again to ${!o?.score ? 'write in a 0' : `score ${o.score}`}${o?.extra ? `, plus ${o.extra} extra` : ''}.`);
-    } else if (g.rolls === 0) status(g.number === 1 ? 'Your turn. Roll the dice.' : 'Your turn.');
+    } else if (g.rolls === 0) status(firstLine(g));
     else if (joker) status(jokerLine(b, joker, opts));
     else if (left > 0) status('Tap dice to hold them, then roll again. Or pick a box to score.');
     else status('Pick a box to score.');
@@ -329,6 +330,16 @@ function jokerLine(b, joker, opts) {
   const whole = [has('full') && 'a full house', (has('small') || has('large')) && 'a straight'].filter(Boolean).join(' or ') || (has('pairs') && 'two pairs');
   return `${again} ${whole ? `Any bottom box: ${whole} counts in full.` : 'It can go in any bottom box.'}`;
 }
+
+// Before your first roll: what the opponent just scored, or, as a game starts at Hot Boxes, which boxes are hot.
+function firstLine(g) {
+  const b = g.board, last = g.number > 1 && g.last && b.boxes.find(x => x.id === g.last.id);
+  if (last) return `Your turn. ${who(g).name} scored ${g.last.score} in ${boxLabel(last)}.`;
+  if (g.number > 1) return 'Your turn.';
+  return hotNames(b) ? `Hot this time: ${hotNames(b)}. Roll the dice.` : 'Your turn. Roll the dice.';
+}
+// The boxes that score three times over at a Hot Boxes table, drawn when you sat down: "Ones and Threes".
+const hotNames = board => (board.hot ? board.boxes.filter(x => x.mult > 1).map(boxLabel).join(' and ') : '');
 
 function status(text) { $('status').textContent = text; }
 
@@ -392,10 +403,9 @@ function showRules(board, here) {
   };
   // Three of each number earns the bonus on a board where it adds up to the target exactly: not at Evens.
   const threeEach = top.length === 6 && 3 * top.reduce((a, b) => a + b.face * (b.mult || 1), 0) === board.bonus.at;
-  const hot = board.hot ? board.boxes.filter(b => b.mult > 1).map(boxLabel) : [];
   const evens = board.boxes.find(b => b.kind === 'evens');
   const items = [
-    here && `<b>At this table:</b> ${escape(board.blurb)}${hot.length ? ` This time it’s ${hot.join(' and ')}.` : ''}`,
+    here && `<b>At this table:</b> ${escape(board.blurb)}${hotNames(board) ? ` This time it’s ${hotNames(board)}.` : ''}`,
     `On your turn, roll all five dice. Tap any dice you want to hold, then roll the rest. You get ${COUNT[board.rolls]} rolls.`,
     'After any roll you can stop and score: tap a box on the pad, then tap it again to write the score in. Every turn fills one box, even if it scores nothing.',
     `<b>Top section:</b> add up the dice showing that number. Reach ${board.bonus.at} across the six boxes for a ${board.bonus.worth}-point bonus${threeEach ? ' (three of each number gets you there)' : ''}.`,
@@ -509,7 +519,7 @@ $('b-menu-rules').addEventListener('click', () => { showRules(game?.board || CLA
 const showMenu = () => {
   if (!game) return;
   $('menu-title').textContent = game.table === null ? 'Quick game' : `Table ${game.table + 1}: ${game.board.name}`;
-  $('menu-twist').textContent = `${game.board.blurb} Against ${who(game).name}. ${who(game).line}`;
+  $('menu-twist').textContent = `${game.board.blurb}${hotNames(game.board) ? ` This time it’s ${hotNames(game.board)}.` : ''} Against ${who(game).name}. ${who(game).line}`;
   openSheet('sheet-menu');
 };
 // Giving up takes two taps, as scoring a box does: the first asks, and closing the menu takes the question back.
