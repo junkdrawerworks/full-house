@@ -236,7 +236,7 @@ function finish() {
   const last = g.table === TABLES.length - 1;
   const onward = won && g.table !== null && !last && !(before && progress.beaten[g.table + 1]); // a table to send you on to
   $('result-line').textContent = won
-    ? g.table === null ? 'A good game.'
+    ? g.table === null ? (progress.beaten[g.opp] ? 'A good game.' : `A good game. It doesn’t count on the tour: ${name} is waiting at table ${g.opp + 1}.`)
       : last ? (before ? `You’ve beaten ${name} before. That’s still the whole tour.` : 'That’s the whole tour. Nobody at these tables has anything left to teach you.')
       : before ? (onward ? `You’ve beaten ${name} before; table ${g.table + 2} is still open.` : `You’ve beaten ${name} before.`)
       : `Table ${g.table + 2} is open: ${TABLES[g.table + 1].board.name}, against ${TABLES[g.table + 1].who.name}.`

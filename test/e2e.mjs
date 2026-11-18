@@ -791,6 +791,11 @@ try {
       await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
       return { line: await page.textContent('#result-line'), best: await page.isVisible('#result-best') ? await page.textContent('#result-best') : null, next: await page.textContent('#b-next'), you: +(await page.textContent('#result-scores div:first-child b')) };
     };
+    // A quick game won against Pip before table 1 is beaten: it says why the tour hasn't moved, and where Pip is.
+    const early = await play(null, 20);
+    assert.equal(early.line, 'A good game. It doesn’t count on the tour: Pip is waiting at table 1.');
+    assert.equal(early.next, 'Play again');
+    assert.equal((await page.evaluate(() => window.fullHouse.progress)).beaten[0], undefined);
     // The first win at table 1: the next table opens, and there was no best to beat.
     const first = await play(0, 10);
     assert.equal(first.line, 'Table 2 is open: Evens, against Maud.');
@@ -805,7 +810,9 @@ try {
     const lost = await play(0, 0);
     assert.equal(lost.line, 'The dice owe you one.');
     assert.equal(lost.best, null);
-    assert.equal((await play(null, 20)).best, null);
+    const quick = await play(null, 20);
+    assert.equal(quick.best, null);
+    assert.equal(quick.line, 'A good game.', 'a quick game against an opponent already beaten');
     await page.evaluate(() => { window.fullHouse.progress.best[0] = 3; });
     const close = await play(0, 0);
     assert.equal(close.line, 'The dice owe you one.');
