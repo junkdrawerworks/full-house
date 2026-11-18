@@ -1833,10 +1833,23 @@ try {
     }
   });
 
-  await step('the tour’s footer has the house line, then How to play', async ({ page }) => {
-    assert.deepEqual(await page.locator('.jd-foot a, .jd-foot button').allTextContents(), ['Part of junkdrawer.works', 'Privacy', 'How to play']);
+  await step('the tour’s footer has the house line, then How to play, and the game’s menu has the house line at its foot', async ({ page }) => {
+    assert.deepEqual(await page.locator('#home .jd-foot a, #home .jd-foot button').allTextContents(), ['Part of junkdrawer.works', 'Privacy', 'How to play']);
+    const house = sel => page.locator(`${sel} .jd-foot a`).evaluateAll(as => as.map(a => [a.textContent, a.getAttribute('href')]));
+    const line = [['Part of junkdrawer.works', 'https://junkdrawer.works/'], ['Privacy', 'https://junkdrawer.works/privacy.html']];
+    assert.deepEqual(await house('#home'), line);
     await page.click('#b-rules');
     assert.ok(await page.isVisible('#sheet-rules .panel'));
+    await page.keyboard.press('Escape');
+    // In a game, where the tour's footer is out of sight: the menu has the same line, last, under Give up.
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    await page.click('#b-menu');
+    assert.deepEqual(await house('#sheet-menu'), line);
+    const [give, foot, panel] = await Promise.all(['#b-concede', '#sheet-menu .jd-foot', '#sheet-menu .panel'].map(s => page.locator(s).boundingBox()));
+    assert.ok(foot.y >= give.y + give.height, 'the house line is not under Give up');
+    assert.ok(Math.abs(foot.x + foot.width / 2 - (panel.x + panel.width / 2)) < 2, 'the house line is not centred in the menu');
+    assert.ok(await page.locator('#sheet-menu .jd-foot a').evaluateAll(as => as.every(a => a.offsetParent)), 'the house line is hidden in the menu');
   });
 
   await step('the small buttons are a thumb high: the footer’s links, the bar’s arrows, a sheet’s ×, the quick-game names', async ({ page }) => {
@@ -1847,15 +1860,17 @@ try {
     for (const width of [320, 390]) {
       await page.setViewportSize({ width, height: 844 });
       await page.evaluate(() => { document.body.dataset.screen = 'home'; });
-      assert.equal(await page.locator('.jd-foot a, .jd-foot button, .people button').count(), 4);
-      assert.deepEqual(await small('.jd-foot a, .jd-foot button, .people button'), [], `at ${width} wide, on the tour`);
-      const foot = await page.evaluate(() => [...document.querySelectorAll('.jd-foot a, .jd-foot button')].map(e => e.getBoundingClientRect().top));
+      assert.equal(await page.locator('#home .jd-foot a, #home .jd-foot button, .people button').count(), 4);
+      assert.deepEqual(await small('#home .jd-foot a, #home .jd-foot button, .people button'), [], `at ${width} wide, on the tour`);
+      const foot = await page.evaluate(() => [...document.querySelectorAll('#home .jd-foot a, #home .jd-foot button')].map(e => e.getBoundingClientRect().top));
       assert.ok(foot.every(t => t === foot[0]), `at ${width} wide, the footer’s links take more than one line`);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `at ${width} wide, the tour scrolls sideways`);
       await page.evaluate(() => window.fullHouse.start(6)); // Pairs and the Low Road, the longest name in the bar
       assert.deepEqual(await small('.bar button'), [], `at ${width} wide, in the game’s bar`);
       await page.click('#b-menu');
-      assert.deepEqual(await small('#sheet-menu .close'), [], `at ${width} wide, in the menu`);
+      assert.deepEqual(await small('#sheet-menu .close, #sheet-menu .jd-foot a'), [], `at ${width} wide, in the menu`);
+      const menuFoot = await page.evaluate(() => [...document.querySelectorAll('#sheet-menu .jd-foot a')].map(e => e.getBoundingClientRect().top));
+      assert.ok(menuFoot.length === 2 && menuFoot.every(t => t === menuFoot[0]), `at ${width} wide, the menu’s house line takes more than one line`);
       await page.click('#sheet-menu .close');
     }
   });
