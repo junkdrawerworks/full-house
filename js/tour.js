@@ -52,7 +52,7 @@ export const TABLES = [
   {
     board: {
       ...base, id: 'sixes', name: 'Triple Sixes',
-      blurb: 'Sixes score three times over. The top-section bonus needs 99 to match.',
+      blurb: 'Sixes score three times over, so the top-section bonus needs 99: still three of each number.',
       boxes: boxes({ f6: { mult: 3 } }),
       bonus: { at: 99, worth: 35 },
     },
