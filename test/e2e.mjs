@@ -301,6 +301,27 @@ try {
     assert.equal(await pad(), 0, 'a new game started with the pad scrolled down');
   }, { viewport: { width: 375, height: 667 } });
 
+  await step('the tour shows the table you’re on, even near the end of it', async ({ page }) => {
+    const next = () => page.evaluate(() => { const r = document.querySelector('#tables li.next').getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; });
+    await page.evaluate(() => localStorage.setItem('full-house.v1', JSON.stringify({ progress: { beaten: [true, true, true, true, true, true, true], best: [231, 247, 260, 240, 250, 255, 238], played: [1, 1, 1, 1, 1, 1, 1], won: [1, 1, 1, 1, 1, 1, 1] } })));
+    await page.reload();
+    let r = await next();
+    assert.ok(r.top >= 0 && r.bottom <= 844, `with seven tables beaten, the Next up row is at ${r.top} to ${r.bottom}px in an 844px screen`);
+    // Back from a game there, the same.
+    await page.click('[data-table="7"]');
+    await page.click('#b-sit');
+    await page.click('#b-menu');
+    await page.click('#b-concede');
+    await page.click('#b-concede');
+    r = await next();
+    assert.ok(r.top >= 0 && r.bottom <= 844, `back from a game, the Next up row is at ${r.top} to ${r.bottom}px`);
+    // With a game to carry on, the tour stays at the top, where Carry on is.
+    await page.click('[data-table="7"]');
+    await page.click('#b-sit');
+    await page.click('#b-home');
+    assert.equal(await page.evaluate(() => scrollY), 0, 'the tour scrolled away from Carry on');
+  });
+
   await step('a finished game is not offered to carry on', async t => {
     const { page } = t;
     const screen = () => page.evaluate(() => document.body.dataset.screen);

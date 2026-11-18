@@ -368,6 +368,12 @@ function open(screen) {
   document.body.dataset.screen = screen;
   if (screen === 'home') { renderHome(); hideToast(); } // a message about the game stays with it (giving up raises its own after)
   window.scrollTo(0, 0);
+  // Near the end of the tour the table you're on is below the fold: bring it into view, unless Carry on is the thing to tap.
+  const at = screen === 'home' && $('b-continue').hidden && document.querySelector('#tables li.next');
+  if (at) {
+    const r = at.getBoundingClientRect();
+    if (r.top < 0 || r.bottom > innerHeight) at.scrollIntoView({ block: 'center', behavior: 'instant' });
+  }
   keepHistory();
 }
 
