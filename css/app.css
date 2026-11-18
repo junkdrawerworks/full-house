@@ -170,7 +170,7 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 .quick p { margin: -4px 0 10px; color: var(--muted); font-size: 14.5px; }
 .people { display: flex; flex-wrap: wrap; gap: 8px; }
 .people button {
-  padding: 8px 14px;
+  padding: 10px 14px;
   border: 1.5px solid var(--line);
   border-radius: 999px;
   background: transparent;
@@ -179,10 +179,10 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 }
 .people button:hover { border-color: var(--accent); }
 
-.jd-foot { margin-top: 36px; text-align: center; font-size: 13px; color: var(--muted); }
-.jd-foot a, .linkish { color: var(--muted); text-decoration: none; background: none; border: 0; padding: 0; cursor: pointer; font-size: 13px; }
+/* Each link is padded out to a thumb's height, and the footer's margins pulled in by as much, so the line sits where it would unpadded. */
+.jd-foot { margin: 22px -6px -14px; text-align: center; font-size: 13px; color: var(--muted); }
+.jd-foot a, .linkish { display: inline-block; color: var(--muted); text-decoration: none; background: none; border: 0; padding: 14px 6px; cursor: pointer; font-size: 13px; }
 .jd-foot a:hover, .jd-foot a:focus-visible, .linkish:hover { text-decoration: underline; }
-.jd-foot span { margin: 0 6px; }
 
 /* ---- a game ---- */
 
@@ -199,12 +199,12 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px calc(8px + env(safe-area-inset-right)) 4px calc(8px + env(safe-area-inset-left));
+  padding: 4px calc(6px + env(safe-area-inset-right)) 2px calc(6px + env(safe-area-inset-left));
 }
 .icon {
   flex: none;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
   border: 0;
@@ -218,7 +218,9 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 .where {
   flex: 1;
   min-width: 0;
+  min-height: 44px;
   display: grid;
+  align-content: center;
   border: 0;
   background: transparent;
   text-align: center;
@@ -514,7 +516,7 @@ body[data-screen='home'] .toast { top: auto; bottom: calc(16px + env(safe-area-i
 .panel p { margin: 0 0 12px; }
 .panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .eyebrow { margin: 0 0 4px !important; font: 700 13px var(--cond); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent-text); }
-.close { flex: none; width: 40px; height: 40px; margin: -6px -8px 0 0; border: 0; border-radius: 50%; background: transparent; font-size: 28px; line-height: 1; color: var(--muted); cursor: pointer; }
+.close { flex: none; width: 44px; height: 44px; margin: -8px -10px 0 0; border: 0; border-radius: 50%; background: transparent; font-size: 28px; line-height: 1; color: var(--muted); cursor: pointer; }
 .close:hover { background: var(--line); }
 .who { display: flex; gap: 14px; align-items: center; margin: 16px 0 6px; padding: 14px; border-radius: 14px; background: var(--line); }
 .who div { display: grid; }

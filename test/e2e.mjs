@@ -801,6 +801,27 @@ try {
     assert.ok(await page.isVisible('#sheet-rules .panel'));
   });
 
+  await step('the small buttons are a thumb high: the footer’s links, the bar’s arrows, a sheet’s ×, the quick-game names', async ({ page }) => {
+    const small = sel => page.evaluate(sel => [...document.querySelectorAll(sel)].filter(e => e.offsetParent).map(e => {
+      const r = e.getBoundingClientRect();
+      return { what: e.getAttribute('aria-label') || e.textContent.trim(), w: Math.round(r.width), h: Math.round(r.height) };
+    }).filter(b => b.h < 44 || b.w < 44), sel);
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.evaluate(() => { document.body.dataset.screen = 'home'; });
+      assert.equal(await page.locator('.jd-foot a, .jd-foot button, .people button').count(), 4);
+      assert.deepEqual(await small('.jd-foot a, .jd-foot button, .people button'), [], `at ${width} wide, on the tour`);
+      const foot = await page.evaluate(() => [...document.querySelectorAll('.jd-foot a, .jd-foot button')].map(e => e.getBoundingClientRect().top));
+      assert.ok(foot.every(t => t === foot[0]), `at ${width} wide, the footer’s links take more than one line`);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `at ${width} wide, the tour scrolls sideways`);
+      await page.evaluate(() => window.fullHouse.start(6)); // Pairs and the Low Road, the longest name in the bar
+      assert.deepEqual(await small('.bar button'), [], `at ${width} wide, in the game’s bar`);
+      await page.click('#b-menu');
+      assert.deepEqual(await small('#sheet-menu .close'), [], `at ${width} wide, in the menu`);
+      await page.click('#sheet-menu .close');
+    }
+  });
+
   await step('a quick game asks first when it would end the game you’re in', async ({ page, game }) => {
     const progress = () => page.evaluate(() => window.fullHouse.progress);
     await page.click('[data-table="0"]');
