@@ -228,8 +228,9 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
   cursor: pointer;
   line-height: 1.2;
 }
-.where b { font: 700 17px var(--cond); text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.where span { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* A long table name, or bigger text, takes a second line rather than losing its end. */
+.where b { font: 700 17px var(--cond); text-transform: uppercase; letter-spacing: 0.04em; text-wrap: balance; }
+.where span { font-size: 13px; color: var(--muted); text-wrap: balance; }
 
 .play { padding: 4px 12px 0; }
 
@@ -244,7 +245,7 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
   justify-content: center;
   align-items: center;
   gap: min(3vw, 16px);
-  height: calc(var(--d) + 48px);
+  height: calc(var(--d) + 20px + 1.75em); /* room under a held die for its tag, which grows with the text */
   padding: 0 12px;
   border-radius: 18px;
   background: radial-gradient(120% 140% at 50% 30%, var(--felt) 40%, var(--felt-deep) 100%);
@@ -321,7 +322,7 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 .held-tag {
   position: absolute;
   left: 50%;
-  bottom: -21px;
+  top: calc(100% + 7px); /* hung from the die, so bigger text takes it down, not up over the die */
   transform: translateX(-50%);
   font: 700 12px var(--cond);
   letter-spacing: 0.12em;
@@ -340,12 +341,13 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 .rolls i.used { background: var(--accent); }
 .roll {
   flex: 1;
-  height: 50px;
+  min-height: 50px;
+  padding: 6px 10px;
   border: 0;
   border-radius: 14px;
   background: var(--accent);
   color: var(--accent-ink);
-  font: 700 19px var(--cond);
+  font: 700 19px/1.1 var(--cond); /* "Roll again (2 left)" in bigger text takes two lines */
   letter-spacing: 0.06em;
   text-transform: uppercase;
   cursor: pointer;
@@ -448,10 +450,10 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
   @container (max-height: 840px) {
     .bar { padding-top: 2px; padding-bottom: 0; }
     .play { padding-top: 2px; }
-    .tray { height: calc(var(--d) + 36px); }
-    .held-tag { bottom: -15px; line-height: 1; }
+    .tray { height: calc(var(--d) + 12px + 1.5em); }
+    .held-tag { top: calc(100% + 3px); line-height: 1; }
     .status { min-height: 2.5em; margin-top: 4px; line-height: 1.25; }
-    .roll { height: 46px; }
+    .roll { min-height: 46px; }
     .pad-wrap { padding-top: 8px; }
     .pad { margin-bottom: 8px; }
     .pad th[scope='row'] { padding-top: 1px; padding-bottom: 1px; }
@@ -473,7 +475,7 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 @media (orientation: landscape) and (max-height: 500px) and (min-width: 640px) {
   .game { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 16px; }
   .play { padding: 12px 0 0 calc(12px + env(safe-area-inset-left)); }
-  .tray { --d: min(7vw, 56px); height: calc(var(--d) + 48px); gap: min(1.8vw, 14px); }
+  .tray { --d: min(7vw, 56px); height: calc(var(--d) + 20px + 1.75em); gap: min(1.8vw, 14px); }
   .pad-wrap { padding: 4px calc(12px + env(safe-area-inset-right)) 0 0; }
   .pad { margin-bottom: 10px; }
 }

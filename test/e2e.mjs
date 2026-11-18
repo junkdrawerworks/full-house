@@ -710,7 +710,7 @@ try {
     // At his table: the bar, the menu and Carry on.
     await page.click('#b-next');
     await page.click('#b-sit');
-    assert.equal(await page.textContent('#g-twist'), 'against the Dealer · turn 1 of 13');
+    assert.equal(await page.textContent('#g-twist'), 'against the Dealer\u00a0· turn 1 of 13');
     assert.equal(await page.textContent('.pad thead .them'), 'The Dealer');
     await page.click('#b-menu');
     assert.match(await page.textContent('#menu-twist'), / Against the Dealer\. Hasn’t lost a game in years\.$/);
@@ -1146,6 +1146,33 @@ try {
     await page.click('#b-menu');
     assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById('o-fast')).appearance), 'auto', 'the settings show no control');
   });
+
+  await step('with the text enlarged, Roll, the Held tag and the bar keep all their words in view', async ({ page, settled }) => {
+    const look = () => page.evaluate(() => {
+      const roll = document.getElementById('b-roll'), r = roll.getBoundingClientRect(), words = document.createRange();
+      words.selectNodeContents(roll);
+      const w = words.getBoundingClientRect(), die = document.querySelector('.die.held'), tag = die.querySelector('.held-tag').getBoundingClientRect();
+      const cut = el => el.scrollWidth > el.clientWidth + 1;
+      return { roll: w.top >= r.top - 1 && w.bottom <= r.bottom + 1, overDie: Math.round(die.getBoundingClientRect().bottom - tag.top), underTray: Math.round(document.getElementById('tray').getBoundingClientRect().bottom - tag.bottom), bar: [cut(document.getElementById('g-table')), cut(document.getElementById('g-twist'))] };
+    });
+    await page.evaluate(() => { window.fullHouse.settings.fast = true; window.fullHouse.start(6); }); // Pairs and the Low Road, the longest name in the bar
+    await page.click('#b-roll');
+    await settled();
+    await page.click('.die >> nth=0');
+    await page.waitForTimeout(600); // risen, as a held die is
+    for (const k of [1, 1.5, 2]) {
+      // Text made bigger on its own, as a browser's text-only zoom does: every size in px times k.
+      await page.evaluate(k => {
+        for (const el of document.querySelectorAll('body *')) el.dataset.px ||= parseFloat(getComputedStyle(el).fontSize);
+        for (const el of document.querySelectorAll('body *')) el.style.fontSize = `${el.dataset.px * k}px`;
+      }, k);
+      const seen = await look();
+      assert.ok(seen.roll, `at ${k} times, Roll cuts off its words`);
+      assert.ok(seen.overDie <= 0, `at ${k} times, the Held tag is ${seen.overDie}px over its die`);
+      assert.ok(seen.underTray >= 8, `at ${k} times, the Held tag is on the tray's frame`);
+      assert.deepEqual(seen.bar, [false, false], `at ${k} times, the bar cuts off its words`);
+    }
+  }, { viewport: { width: 320, height: 568 } });
 
   await step('keyboard: Space or Enter hurries the opponent, and How to play says which keys do what', async ({ page, game, myTurn, settled }) => {
     await page.click('#b-rules');
