@@ -309,7 +309,9 @@ function showDice(rolled = []) {
   const g = game;
   if (!g) return;
   const mine = g.turn === 'you';
-  tray.show(g.dice, g.held, {
+  // Your holds show only while there's a roll left for them to stay out of. The opponent's show to the end of their turn.
+  const held = !mine || g.rolls < g.board.rolls ? g.held : [false, false, false, false, false];
+  tray.show(g.dice, held, {
     rolled,
     theirs: !mine && theirDice,
     idle: mine && g.rolls === 0,

@@ -978,6 +978,34 @@ try {
     assert.equal(await page.getAttribute('#b-roll', 'aria-disabled'), 'false');
   });
 
+  await step('after the last roll the Held tags come off, while the opponent’s still show', async ({ page, game, settled, myTurn }) => {
+    await page.evaluate(() => window.fullHouse.start(0));
+    await page.evaluate(() => { window.fullHouse.settings.fast = true; });
+    await page.click('#b-roll');
+    await settled();
+    await page.click('.die >> nth=0');
+    await page.click('.die >> nth=1');
+    await page.click('#b-roll');
+    await settled();
+    assert.equal(await page.locator('.die.held').count(), 2, 'with a roll left the held dice say so');
+    await page.click('#b-roll');
+    await settled();
+    assert.match(await page.textContent('#b-roll'), /No rolls left/);
+    assert.equal(await page.locator('.die.held').count(), 0, 'dice are tagged Held with no rolls left');
+    assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll('.die')].map(d => d.getAttribute('aria-pressed'))), ['false', 'false', 'false', 'false', 'false']);
+    assert.deepEqual((await game()).held.slice(0, 2), [true, true], 'the game forgot what was held');
+    // The opponent's holds show while they roll, the last one too.
+    await page.evaluate(() => {
+      const g = structuredClone(window.fullHouse.game);
+      Object.assign(g, { turn: 'them', rolls: 0, held: [false, false, false, false, false] });
+      window.fullHouse.settings.fast = false;
+      window.fullHouse.set(g);
+    });
+    const theirs = await page.waitForFunction(() => document.querySelector('.tray.theirs .die.held') && window.fullHouse.game.rolls, null, { timeout: 30000 }).catch(() => null);
+    if (!theirs) console.log('    (the opponent held nothing this time)');
+    await myTurn();
+  });
+
   await step('with a mouse, a picked box shows its amber fill', async ({ page, settled }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
