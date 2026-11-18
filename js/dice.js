@@ -18,6 +18,9 @@ export class Tray {
       b.className = 'die';
       b.innerHTML = `<span class="hop"><span class="cube">${[1, 2, 3, 4, 5, 6].map(face).join('')}</span></span><span class="held-tag">Held</span>`;
       b.addEventListener('click', () => onToggle(i));
+      // Done with once it lands: the tray hidden behind the tour and shown again would otherwise throw it all over again.
+      const hop = b.querySelector('.hop');
+      hop.addEventListener('animationend', () => hop.classList.remove('go'));
       el.append(b);
       this.dice.push(b);
       this.turns.push({ x: 0, y: 0 });
@@ -48,6 +51,11 @@ export class Tray {
       } else if (rolled.includes(i) || b.dataset.v !== String(v)) { // or a new game's dice, set without a roll
         t.x = Math.round(t.x / 360) * 360 + fx;
         t.y = Math.round(t.y / 360) * 360 + fy;
+        // At once: turning to the new face would spin the die in place, on its edge, with no throw to explain it.
+        cube.style.transition = 'none';
+        cube.style.transform = `rotateX(${t.x}deg) rotateY(${t.y}deg)`;
+        void cube.offsetWidth;
+        cube.style.transition = '';
       }
       cube.style.transform = `rotateX(${t.x}deg) rotateY(${t.y}deg)`;
       b.dataset.v = v;

@@ -1418,6 +1418,39 @@ try {
     assert.deepEqual(dice.map(d => d[2]), [1, 2, 3, 4, 5].map(n => `Die ${n}, not rolled`));
   });
 
+  await step('a new game’s dice are simply there when you sit down, without a spin', async t => {
+    const { page, settled } = t;
+    const faces = () => page.evaluate(() => [...document.querySelectorAll('.die')].map(b => b.dataset.v).join(''));
+    // Anything still moving in the tray: a cube turning to its new face, or a die hopping or settling. Only the dimming
+    // of dice not yet rolled may fade in.
+    const moving = () => page.evaluate(() => document.getElementById('tray').getAnimations({ subtree: true })
+      .filter(a => !['opacity', 'filter'].includes(a.transitionProperty)).map(a => `${a.effect.target.className} ${a.transitionProperty || a.animationName}`));
+    const sitDown = async how => {
+      const before = await faces();
+      await page.click('#b-sit');
+      const m = await moving();
+      assert.notEqual(await faces(), before, 'the new game has the same dice as the last, so this checks nothing');
+      assert.deepEqual(m, [], `sitting down ${how}, the new game’s dice move into place`);
+    };
+    // From the tour, after giving up a game.
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    await page.click('#b-roll');
+    await settled();
+    await page.waitForTimeout(900); // landed and still
+    await page.click('#b-menu');
+    await page.click('#b-concede');
+    await page.click('#b-concede');
+    await page.click('[data-table="0"]');
+    await sitDown('from the tour');
+    // From the result of a game won, on to the next table, over the game just played.
+    await t.page.evaluate(() => { window.fullHouse.settings.fast = true; });
+    await win(t);
+    await page.waitForTimeout(900);
+    await page.click('#b-next');
+    await sitDown('from the result');
+  });
+
   await step('the tour’s footer has the house line, then How to play', async ({ page }) => {
     assert.deepEqual(await page.locator('.jd-foot a, .jd-foot button').allTextContents(), ['Part of junkdrawer.works', 'Privacy', 'How to play']);
     await page.click('#b-rules');
