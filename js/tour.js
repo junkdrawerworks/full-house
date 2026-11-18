@@ -57,7 +57,7 @@ export const TABLES = [
       boxes: boxes({ f6: { mult: 3 } }),
       bonus: { at: 99, worth: 35 },
     },
-    who: { name: 'Bea', line: 'Never lets a six go to waste.', colour: '#b0503a' },
+    who: { name: 'Bea', line: 'Patient. Waits for the big numbers.', colour: '#b0503a' },
     play: { patience: 0.6, bonus: 0.6, slip: 0.44, style: { boost: { face: 1.1 } } },
   },
   {
@@ -67,7 +67,7 @@ export const TABLES = [
       boxes: boxes(), rolls: 2,
       bonus: { at: 52, worth: 35 },
     },
-    who: { name: 'Sol', line: 'Quick hands. Loves a big Chance.', colour: '#3f6f9a' },
+    who: { name: 'Sol', line: 'Quick hands. Not many slips.', colour: '#3f6f9a' },
     play: { patience: 0.8, bonus: 0.8, slip: 0.35, style: { boost: { chance: 0.7 } } },
   },
   {
@@ -76,7 +76,7 @@ export const TABLES = [
       blurb: 'In the bottom section, every 1 counts as whatever number scores best. In the top section a 1 is just a\u00a01. The extra 100 for another five of a kind needs five dice showing the same number.',
       boxes: boxes(), wild: true,
     },
-    who: { name: 'Jules', line: 'Chases five of a kind, every time.', colour: '#7a4f8f' },
+    who: { name: 'Jules', line: 'Knows the odds and rarely forgets them.', colour: '#7a4f8f' },
     play: { patience: 0.9, bonus: 0.8, slip: 0.3, endgame: true, style: { boost: { five: 1.8 } } },
   },
   {
@@ -85,7 +85,7 @@ export const TABLES = [
       blurb: 'Two boxes, picked at random each time you sit down, score three times over. When one is a number box, the top-section bonus rises so three of each number still earns it.',
       hot: true,
     },
-    who: { name: 'Otto', line: 'Steady. Always goes for the bonus.', colour: '#2f7d74' },
+    who: { name: 'Otto', line: 'Steady. Hardly puts a foot wrong.', colour: '#2f7d74' },
     play: { patience: 1, bonus: 1.2, slip: 0.14, endgame: true },
   },
   {

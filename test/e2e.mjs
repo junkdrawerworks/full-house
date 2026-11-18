@@ -482,7 +482,7 @@ try {
     await sit(15);
     assert.equal(await status(), 'Hot this time: Fours and Sixes. Roll the dice.');
     await page.click('#b-menu');
-    assert.equal(await page.textContent('#menu-twist'), `${await page.evaluate(() => window.fullHouse.game.board.blurb)} This time it’s Fours and Sixes. Against Otto. Steady. Always goes for the bonus.`);
+    assert.equal(await page.textContent('#menu-twist'), `${await page.evaluate(() => window.fullHouse.game.board.blurb)} This time it’s Fours and Sixes. Against Otto. Steady. Hardly puts a foot wrong.`);
     await page.keyboard.press('Escape');
 
     // The longest of these lines keep to two lines, as every status line does, on a small phone and a phone.
@@ -704,7 +704,7 @@ try {
     const { page } = t;
     await page.evaluate(() => window.fullHouse.start(3)); // Two Rolls, against Sol
     await page.click('#b-menu');
-    assert.equal(await page.textContent('#menu-twist'), `${await page.evaluate(() => window.fullHouse.game.board.blurb)} Against Sol. Quick hands. Loves a big Chance.`);
+    assert.equal(await page.textContent('#menu-twist'), `${await page.evaluate(() => window.fullHouse.game.board.blurb)} Against Sol. Quick hands. Not many slips.`);
     await page.keyboard.press('Escape');
     // A box the dice score nothing in is written in, not scored.
     await page.evaluate(() => {
