@@ -22,21 +22,28 @@ export class Pad {
         e.preventDefault();
         const next = open[Math.max(0, Math.min(to, open.length - 1))];
         next.focus({ preventScroll: true });
-        this.reveal(next.dataset.box);
+        this.reveal(next.dataset.box, { anywhere: true });
         return;
       }
       if (e.key !== 'Enter' && e.key !== ' ') return;
       e.preventDefault();
       onPick(row.dataset.box);
-      this.reveal(row.dataset.box); // a box picked from the keyboard may have been scrolled out of sight
+      this.reveal(row.dataset.box, { anywhere: true }); // a box picked from the keyboard may have been scrolled out of sight
     });
   }
 
   // Bring a box's row into view in the pad's own window, which is all that moves: the page stays where it is. It goes
   // just far enough to clear the window's top, or the Total stuck to its foot, and nowhere if the row shows already.
-  reveal(id) {
-    const row = this.el.querySelector(`tr[data-box="${id}"]`), foot = this.el.querySelector('tfoot th'), wrap = this.el.parentElement;
+  // In a window so short that the whole game scrolls instead (see css/app.css), it scrolls the game, but only when
+  // `anywhere` says so: the keyboard's moves, not the opponent's, which would take the dice out of sight.
+  reveal(id, { anywhere = false } = {}) {
+    const row = this.el.querySelector(`tr[data-box="${id}"]`), foot = this.el.querySelector('tfoot th');
+    let wrap = this.el.parentElement;
     if (!row || !foot) return;
+    if (getComputedStyle(wrap).overflowY === 'visible') {
+      if (!anywhere) return;
+      wrap = wrap.parentElement;
+    }
     const r = row.getBoundingClientRect(), w = wrap.getBoundingClientRect();
     const floor = Math.min(w.bottom, foot.getBoundingClientRect().top);
     const by = r.top < w.top ? r.top - w.top : r.bottom > floor ? r.bottom - floor : 0;

@@ -464,6 +464,14 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
   }
 }
 
+/* A short window in one column (a small one zoomed in, say, or a small phone held sideways): the pad's own window would
+   be a sliver under the dice, so the whole game scrolls instead, with the Total stuck to the foot of the screen. The
+   game keeps the screen's height, which the "shorter screen" rules above go by. */
+@media (max-height: 520px) and (max-width: 639.98px), (max-height: 520px) and (min-height: 500.02px) and (max-width: 879.98px) {
+  .game { position: relative; /* what's out of sight on the pad scrolls with it */ grid-template-rows: auto auto auto; overflow-y: auto; overscroll-behavior: contain; scroll-padding-bottom: 44px; }
+  .pad-wrap { overflow: visible; min-height: auto; }
+}
+
 /* Side by side when there's room, and on a phone held sideways, where one column would leave the pad a sliver. */
 @media (min-width: 880px), (orientation: landscape) and (max-height: 500px) and (min-width: 640px) {
   .game { max-width: 1060px; grid-template-columns: 1fr minmax(380px, 460px); grid-template-rows: auto 1fr; column-gap: 24px; }

@@ -1175,6 +1175,44 @@ try {
     }
   }, { viewport: { width: 320, height: 568 } });
 
+  // A small window zoomed in (1024 x 640 at 200%, 1280 x 800 at 300%, 1280 x 1024 at 400%) or a small phone sideways.
+  for (const [width, height] of [[512, 320], [568, 320], [427, 267], [320, 256]]) {
+    await step(`in a short window (${width} x ${height}) the game scrolls, every box can be reached, and the Total stays at the foot`, async ({ page, settled }) => {
+      await page.evaluate(() => { window.fullHouse.settings.fast = true; window.fullHouse.start(0); });
+      await page.click('#b-roll');
+      await settled();
+      const look = id => page.evaluate(id => {
+        const r = document.querySelector(`tr[data-box="${id}"]`).getBoundingClientRect(), t = document.querySelector('#pad tfoot th').getBoundingClientRect();
+        return { top: r.top, bottom: r.bottom, totalTop: t.top, totalBottom: t.bottom, vh: innerHeight, pad: document.querySelector('.pad-wrap').clientHeight };
+      }, id);
+      const open = await page.$$eval('tr.can', rows => rows.map(r => r.dataset.box));
+      assert.ok((await look(open[0])).pad > 400, `the pad shows only ${(await look(open[0])).pad}px at a time`);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight), 0, 'the page scrolls as well as the game');
+      // Scrolled with the wheel to the foot: the last box shows above the Total, and the Total at the foot of the window.
+      const roll = await page.locator('#b-roll').boundingBox();
+      await page.mouse.move(roll.x + 10, roll.y + 10);
+      await page.mouse.wheel(0, 3000);
+      await page.waitForTimeout(400);
+      let m = await look('chance');
+      assert.ok(m.bottom <= m.totalTop + 1 && m.top >= 0, `Chance can't be scrolled into view: ${JSON.stringify(m)}`);
+      assert.ok(m.totalBottom <= m.vh && m.totalBottom >= m.vh - 16, `the Total isn't at the foot of the window: ${JSON.stringify(m)}`); // the pad's margin under it
+      // By keyboard, each open box comes into view clear of the Total as the focus reaches it, top to bottom and back.
+      await page.focus(`tr[data-box="${open[0]}"]`);
+      for (const [key, ids] of [['ArrowDown', open.slice(1)], ['ArrowUp', open.slice(0, -1).reverse()]]) {
+        for (const id of ids) {
+          await page.keyboard.press(key);
+          await page.waitForTimeout(450);
+          m = await look(id);
+          assert.ok(m.top >= -1 && m.bottom <= m.totalTop + 1, `${id} isn't in view after ${key}: ${JSON.stringify(m)}`);
+        }
+      }
+      // Picked from there, and scored with a tap.
+      await page.keyboard.press('Enter');
+      await page.locator(`tr[data-box="${open[0]}"]`).click();
+      assert.notEqual((await page.evaluate(() => window.fullHouse.game)).you[open[0]], null);
+    }, { viewport: { width, height } });
+  }
+
   await step('keyboard: Space or Enter hurries the opponent, and How to play says which keys do what', async ({ page, game, myTurn, settled }) => {
     await page.click('#b-rules');
     assert.ok(await page.isVisible('#rules-list .keys'), 'How to play does not say the keys on a computer');

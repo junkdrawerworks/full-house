@@ -217,7 +217,7 @@ function start(table, opp = table) {
   hideToast();
   closeSheets();
   open('game');
-  document.querySelector('.pad-wrap').scrollTop = 0; // a new sheet of the pad, from the top (Carry on keeps your place)
+  document.querySelector('.pad-wrap').scrollTop = $('game').scrollTop = 0; // a new sheet of the pad, from the top (Carry on keeps your place)
   save();
   showDice();
   render();
