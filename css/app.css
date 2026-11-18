@@ -681,7 +681,8 @@ body[data-screen='home'] .toast { top: auto; bottom: calc(16px + env(safe-area-i
 .rules { margin: 0; padding-left: 20px; font-size: 15px; line-height: 1.5; }
 .rules li { margin: 6px 0; }
 .rules .keys { display: none; }
-@media (hover: hover) and (pointer: fine) { .rules .keys { display: list-item; } } /* a mouse, so most likely a keyboard */
+.toggle.keys-only { display: none; }
+@media (hover: hover) and (pointer: fine) { .rules .keys { display: list-item; } .toggle.keys-only { display: flex; } } /* a mouse, so most likely a keyboard */
 
 @media (prefers-reduced-motion: reduce) {
   .cube, .die { transition-duration: 0.01s; }

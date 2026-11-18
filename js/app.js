@@ -524,11 +524,12 @@ function showRules(board, here) {
     KEYS,
     !here && 'Some tables change these; each says how when you sit down.',
   ];
-  $('rules-list').innerHTML = items.filter(Boolean).map(t => (t === KEYS ? `<li class="keys">${t}</li>` : `<li>${t}</li>`)).join('');
+  $('rules-list').innerHTML = items.filter(Boolean).map(t => (t === KEYS ? `<li class="keys">${settings.keys ? KEYS : NO_KEYS}</li>` : `<li>${t}</li>`)).join('');
 }
 
-// Shown where there's a mouse, and so most likely a keyboard: see css/app.css.
+// Shown where there's a mouse, and so most likely a keyboard: see css/app.css. With the shortcuts off in the menu, the second.
 const KEYS = 'On a keyboard: Space or R rolls and 1 to 5 hold the dice. Tab to a box and press Enter to pick it, then Enter again to score it. Space or Enter hurries the opponent along.';
+const NO_KEYS = 'On a keyboard: Tab to Roll or a die and press Space or Enter. Tab to a box and press Enter to pick it, then Enter again to score it. Enter on Roll hurries the opponent along. The single-key shortcuts are off in the game’s menu.';
 
 let opener = null;
 let under = null; // the sheet this one was opened from, to go back to if it's turned down
@@ -586,7 +587,7 @@ function read() {
 // A save from before the three paces has a Quick opponents switch (fast) in place of the pace: on is Quick.
 function settingsFrom(s) {
   const { fast, ...rest } = s && typeof s === 'object' ? s : {};
-  return { hints: true, ...rest, pace: ['normal', 'quick', 'score'].includes(rest.pace) ? rest.pace : fast ? 'quick' : 'normal' };
+  return { hints: true, keys: true, ...rest, pace: ['normal', 'quick', 'score'].includes(rest.pace) ? rest.pace : fast ? 'quick' : 'normal' };
 }
 function progressFrom(p) {
   const out = { beaten: [], best: [], played: [], won: [], quick: { played: 0, won: 0 }, ...p };
@@ -656,7 +657,7 @@ $('b-menu').addEventListener('click', showMenu);
 $('b-where').addEventListener('click', showMenu);
 $('b-concede').addEventListener('click', giveUp);
 document.querySelectorAll('[data-close]').forEach(el => el.addEventListener('click', dismiss));
-const TOGGLES = [['hints', 'o-hints']];
+const TOGGLES = [['hints', 'o-hints'], ['keys', 'o-keys']];
 for (const [k, id] of TOGGLES) {
   $(id).checked = settings[k];
   $(id).addEventListener('change', e => { settings[k] = e.target.checked; save(); showDice(); render(); });
@@ -671,11 +672,14 @@ document.addEventListener('keydown', e => {
   if (document.body.dataset.screen !== 'game' || document.querySelector('.sheet:not([hidden])')) return;
   // On the opponent's turn, Space or Enter hurries them along, as a tap on the dice does: from Roll, where a score leaves
   // the focus, or from nowhere. Kept from Roll itself, so a Space let go as your turn comes doesn't roll for you.
-  if ((e.key === ' ' || e.key === 'Enter') && game?.turn === 'them' && busy && (e.target === document.body || e.target.id === 'b-roll')) {
+  // With the shortcuts off (in the menu), only from Roll: Space presses only what has the focus, and R and 1 to 5 do nothing.
+  const from = e.target.id === 'b-roll' || (settings.keys && e.target === document.body);
+  if ((e.key === ' ' || e.key === 'Enter') && game?.turn === 'them' && busy && from) {
     e.preventDefault();
     hurry = true;
     return;
   }
+  if (!settings.keys) return;
   // R rolls wherever the focus is; Space only when nothing has it, since Space presses the button in focus. Once the
   // game is over, they open its result, as the button does.
   if (e.key.toLowerCase() === 'r' || (e.key === ' ' && e.target === document.body)) { e.preventDefault(); if (game?.over) showResult(); else roll(); }

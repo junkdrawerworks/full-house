@@ -1694,6 +1694,61 @@ try {
     assert.equal((await game()).rolls, 0, 'letting go of Space rolled for you');
   }, { desktop: true });
 
+  await step('keyboard: the shortcuts can be turned off in the menu, on a computer only, and then R, 1 to 5 and a loose Space do nothing', async ({ page, game, myTurn, settled }) => {
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    await page.click('#b-menu');
+    const keys = page.getByRole('switch', { name: 'Keyboard shortcuts', exact: true });
+    assert.ok(await keys.isVisible(), 'no Keyboard shortcuts switch on a computer');
+    assert.equal(await keys.isChecked(), true, 'the shortcuts start off');
+    await keys.click();
+    assert.equal(JSON.parse(await page.evaluate(() => localStorage.getItem('full-house.v1'))).settings.keys, false, 'the switch was not saved');
+    await page.click('#b-menu-rules');
+    assert.match(await page.textContent('#rules-list .keys'), /^On a keyboard: Tab to Roll or a die and press Space or Enter\..*The single-key shortcuts are off in the game’s menu\.$/);
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => document.activeElement.blur());
+    for (const key of ['r', ' ', '1']) {
+      await page.keyboard.press(key);
+      await page.waitForTimeout(100);
+      assert.equal((await game()).rolls, 0, `${JSON.stringify(key)} rolled with the shortcuts off`);
+    }
+    // Space still presses what has the focus: Roll, then a die.
+    await page.focus('#b-roll');
+    await page.keyboard.press(' ');
+    await settled();
+    assert.equal((await game()).rolls, 1);
+    await page.evaluate(() => document.activeElement.blur());
+    await page.keyboard.press('1');
+    assert.equal((await game()).held[0], false, '1 held a die with the shortcuts off');
+    await page.focus('.die >> nth=0');
+    await page.keyboard.press(' ');
+    assert.equal((await game()).held[0], true, 'Space on a die did not hold it');
+    // Their turn: a loose Space doesn't hurry them, Enter on Roll does.
+    await page.focus('tr.can >> nth=0');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    await page.evaluate(() => document.activeElement.blur());
+    await page.keyboard.press(' ');
+    assert.equal(await page.evaluate(() => window.fullHouse.hurry), false, 'a loose Space hurried the opponent with the shortcuts off');
+    await page.focus('#b-roll');
+    await page.keyboard.press('Enter');
+    assert.equal(await page.evaluate(() => window.fullHouse.hurry), true, 'Enter on Roll did not hurry the opponent');
+    await myTurn();
+    // On again, R rolls.
+    await page.click('#b-menu');
+    await keys.click();
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('r');
+    await settled();
+    assert.equal((await game()).rolls, 1, 'R did not roll with the shortcuts back on');
+  }, { desktop: true });
+
+  await step('on a phone the menu has no Keyboard shortcuts switch', async ({ page }) => {
+    await page.evaluate(() => window.fullHouse.start(0));
+    await page.click('#b-menu');
+    assert.ok(await page.isHidden('#o-keys'), 'a phone’s menu offers keyboard shortcuts');
+  });
+
   await step('keyboard: Roll keeps the focus, so Enter on it rolls each time', async ({ page, game, settled }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
