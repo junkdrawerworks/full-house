@@ -54,4 +54,4 @@ for (const [from, to] of swaps) {
 await mkdir(new URL('dist/', root), { recursive: true });
 await writeFile(new URL('dist/full-house.html', root), html);
 await writeFile(new URL('dist/artifact.html', root), embedded);
-console.log(`dist/full-house.html  ${(html.length / 1024).toFixed(1)} KB`);
+for (const [file, text] of [['dist/full-house.html', html], ['dist/artifact.html', embedded]]) console.log(`${file.padEnd(22)}${(Buffer.byteLength(text) / 1024).toFixed(1)} KB`);
