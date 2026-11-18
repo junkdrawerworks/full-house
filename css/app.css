@@ -253,6 +253,7 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
   border-radius: 18px;
   background: radial-gradient(120% 140% at 50% 30%, var(--felt) 40%, var(--felt-deep) 100%);
   box-shadow: inset 0 0 0 7px var(--wood), inset 0 0 0 9px var(--wood-dark), inset 0 6px 16px rgba(0, 0, 0, 0.45), 0 2px 0 rgba(255, 255, 255, 0.25);
+  clip-path: inset(0 0 -3px round 18px); /* tumbling dice stay inside the frame; the highlight under it shows */
 }
 
 .die {
@@ -285,11 +286,13 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 /* Only the die's own flat box takes taps: a cube face turned edge-on would otherwise catch taps far across the page. */
 .die .hop * { pointer-events: none; }
 .die .hop.go { animation: hop var(--tumble) cubic-bezier(0.3, 0.7, 0.4, 1); }
+/* A low hop: a die turning corner up already reaches past the felt in a shorter tray, so much more would carry it out
+   over the bar. The tray clips what still gets past its edge for a frame or two. */
 @keyframes hop {
   0% { transform: translateY(0); }
-  25% { transform: translateY(-42%) scale(1.06); }
+  25% { transform: translateY(-12%) scale(1.03); }
   55% { transform: translateY(0); }
-  72% { transform: translateY(-9%); }
+  72% { transform: translateY(-4%); }
   100% { transform: none; }
 }
 .cube { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform var(--tumble) cubic-bezier(0.25, 0.8, 0.3, 1); }
@@ -314,8 +317,16 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 .f3 { transform: rotateX(90deg) translateZ(calc(var(--d) / 2)); }
 .f4 { transform: rotateX(-90deg) translateZ(calc(var(--d) / 2)); }
 .f1 i { width: 84%; }
+/* Three planes through the middle of the cube, one each way, so the gaps at its rounded corners and edges show ivory
+   (or red) mid-tumble, not the felt through an empty box. Only mid-tumble: on a die at rest, two of them stand edge on
+   and can show through its face as hairlines. */
+.core { position: absolute; inset: 4%; background: #e8e0cf; visibility: hidden; }
+.hop.go .core { visibility: visible; }
+.core.x { transform: rotateX(90deg); }
+.core.y { transform: rotateY(90deg); }
 
 .tray.theirs .face { background: radial-gradient(circle at 30% 25%, #e0675a, var(--red-die) 55%, #8f2a22); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18), inset 0 -3px 6px rgba(0, 0, 0, 0.2); }
+.tray.theirs .core { background: #8f2a22; }
 .tray.theirs .face i { background: var(--red-pip); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35); }
 .tray.quick { --tumble: 0.38s; --settle: 0.38s; }
 .tray.idle .die { opacity: 0.55; filter: saturate(0.5); }
@@ -622,7 +633,7 @@ body[data-screen='home'] .toast { top: auto; bottom: calc(16px + env(safe-area-i
    shadows, which is how the dice, the switches and the picked box are drawn. The tray keeps its own felt and dice (ivory
    and red, already high contrast) inside an outline; the rest takes the theme's colours, with borders where a fill went. */
 @media (forced-colors: active) {
-  .tray { forced-color-adjust: none; outline: 2px solid CanvasText; outline-offset: 2px; }
+  .tray { forced-color-adjust: none; outline: 2px solid CanvasText; outline-offset: 2px; clip-path: none; }
   .roll, .primary, .continue, .people button { border: 2px solid ButtonText; }
   .roll[aria-disabled='true'] { border-color: GrayText; color: GrayText; }
   .rolls i { border-color: CanvasText; }

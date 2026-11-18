@@ -16,7 +16,7 @@ export class Tray {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'die';
-      b.innerHTML = `<span class="hop"><span class="cube">${[1, 2, 3, 4, 5, 6].map(face).join('')}</span></span><span class="held-tag">Held</span>`;
+      b.innerHTML = `<span class="hop"><span class="cube"><span class="core"></span><span class="core x"></span><span class="core y"></span>${[1, 2, 3, 4, 5, 6].map(face).join('')}</span></span><span class="held-tag">Held</span>`;
       b.addEventListener('click', () => onToggle(i));
       // Done with once it lands: the tray hidden behind the tour and shown again would otherwise throw it all over again.
       const hop = b.querySelector('.hop');

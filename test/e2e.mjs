@@ -1479,6 +1479,41 @@ try {
     await sitDown('from the result');
   });
 
+  await step('a thrown die stays inside the tray, and its corners show no hole as it turns', async ({ page }) => {
+    for (const [width, height] of [[390, 844], [844, 390], [430, 932]]) {
+      await page.setViewportSize({ width, height });
+      await page.evaluate(() => { window.fullHouse.start(0); window.fullHouse.settings.fast = false; });
+      await page.click('#b-roll');
+      // Held still, then stepped through the tumble 20 ms at a time.
+      const m = await page.evaluate(async () => {
+        const tray = document.getElementById('tray'), going = tray.getAnimations({ subtree: true });
+        going.forEach(a => a.pause());
+        const t = tray.getBoundingClientRect(), out = { over: -99, under: -99, core: true };
+        for (let ms = 0; ms <= 700; ms += 20) {
+          going.forEach(a => { a.currentTime = ms; });
+          for (const f of tray.querySelectorAll('.face')) {
+            const r = f.getBoundingClientRect();
+            out.over = Math.max(out.over, t.top - r.top);
+            out.under = Math.max(out.under, r.bottom - t.bottom);
+          }
+          if (ms < 600) out.core &&= [...tray.querySelectorAll('.core')].every(c => getComputedStyle(c).visibility === 'visible');
+        }
+        going.forEach(a => a.finish());
+        out.clip = getComputedStyle(tray).clipPath;
+        return out;
+      });
+      await page.waitForFunction(() => !window.fullHouse.busy);
+      await page.waitForTimeout(100);
+      const size = `at ${width} x ${height}`;
+      assert.ok(m.over <= 6, `${size} a die rises ${m.over.toFixed(1)}px above the tray`);
+      assert.ok(m.under <= 6, `${size} a die drops ${m.under.toFixed(1)}px below the tray`);
+      assert.notEqual(m.clip, 'none', `${size} nothing keeps the dice inside the tray`);
+      assert.ok(m.core, `${size} a tumbling cube is hollow`);
+      // At rest the cube's middle is out of sight, so it can't show through a face.
+      assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll('.core')].filter(c => getComputedStyle(c).visibility !== 'hidden').length), 0, `${size} a die at rest shows its middle`);
+    }
+  });
+
   await step('the tour’s footer has the house line, then How to play', async ({ page }) => {
     assert.deepEqual(await page.locator('.jd-foot a, .jd-foot button').allTextContents(), ['Part of junkdrawer.works', 'Privacy', 'How to play']);
     await page.click('#b-rules');
