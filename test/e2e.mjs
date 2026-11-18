@@ -2604,7 +2604,8 @@ try {
 
   // The one-file copy that npm run build makes: built afresh, opened from the disk, and played to a result.
   const oneFile = 'the one-file copy from npm run build opens from the disk and plays a game to its end';
-  if (oneFile.includes(only)) execSync('node scripts/build.mjs', { cwd: root, stdio: 'ignore' });
+  const hosted = 'the copy for a host page takes the host’s light or dark, whatever the system’s, and plays from the disk';
+  if (oneFile.includes(only) || hosted.includes(only)) execSync('node scripts/build.mjs', { cwd: root, stdio: 'ignore' });
   await step(oneFile, async t => {
     const { page } = t;
     assert.equal(await page.evaluate(() => 'single' in document.documentElement.dataset), true, 'not the one-file copy');
@@ -2615,6 +2616,52 @@ try {
     assert.match(await page.textContent('#result-title'), /You beat Pip/);
     assert.ok(await page.evaluate(() => [...document.fonts].some(f => f.family.includes('Barlow Condensed') && f.status === 'loaded')), 'its fonts did not load');
   }, { at: pathToFileURL(join(root, 'dist/full-house.html')).href });
+
+  // dist/artifact.html, the same page without <html>, <head> and <body>, put inside a host's own page, as a host that
+  // sets data-theme="light" or "dark" on <html> does: the host's choice wins over the system's either way.
+  if (!only || hosted.includes(only)) {
+    const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const dir = await mkdtemp(join(tmpdir(), 'full-house-host-'));
+    try {
+      const artifact = await readFile(join(root, 'dist/artifact.html'), 'utf8');
+      for (const theme of ['light', 'dark']) {
+        await writeFile(join(dir, `${theme}.html`), `<!doctype html>\n<html lang="en" data-theme="${theme}">\n<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>A host</title></head>\n<body>\n${artifact}\n</body>\n</html>\n`);
+      }
+      const css = await readFile(join(root, 'css/app.css'), 'utf8');
+      const hex = h => `rgb(${h.match(/[0-9a-f]{2}/gi).map(x => parseInt(x, 16)).join(', ')})`;
+      const palette = {
+        light: hex(css.match(/^:root \{[^}]*?--table: (#[0-9a-f]{6})/m)[1]),
+        dark: hex(css.match(/@media \(prefers-color-scheme: dark\) \{\s*:root \{[^}]*?--table: (#[0-9a-f]{6})/)[1]),
+      };
+      await step(hosted, async ({ page, myTurn, settled }) => {
+        for (const theme of ['light', 'dark']) {
+          await page.goto(pathToFileURL(join(dir, `${theme}.html`)).href);
+          for (const scheme of ['dark', 'light']) {
+            await page.emulateMedia({ colorScheme: scheme });
+            assert.equal(await page.evaluate(() => getComputedStyle(document.body).backgroundColor), palette[theme], `with the host ${theme} and the system ${scheme}, the table is not the ${theme} one`);
+          }
+        }
+        // A game, from sitting down to the opponent's first turn played out.
+        await page.emulateMedia({ colorScheme: 'dark' });
+        assert.equal(await page.locator('#tables li').count(), 8);
+        await page.click('[data-table="0"]');
+        await page.click('#b-sit');
+        assert.equal(await page.evaluate(() => Math.round(document.getElementById('game').getBoundingClientRect().height)), 844, 'the game does not fill the host page');
+        assert.ok(await page.locator('.pad tfoot').isVisible(), 'the pad is out of sight');
+        await page.evaluate(() => { window.fullHouse.settings.fast = true; });
+        await page.click('#b-roll');
+        await settled();
+        await page.locator('tr.can').first().click();
+        await page.locator('tr.can').first().click();
+        await page.waitForFunction(() => window.fullHouse.game.turn === 'them');
+        await myTurn();
+        assert.equal(await page.evaluate(() => window.fullHouse.game.number), 2, 'the opponent did not play its first turn');
+      }, { at: pathToFileURL(join(dir, 'dark.html')).href });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
 
   await step('a save stuck with both cards full on the opponent’s turn ends the game', async ({ page, myTurn }) => {
     await page.click('[data-table="0"]');

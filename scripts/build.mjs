@@ -37,9 +37,11 @@ const fragment = html
   .replace(/<meta name="viewport"[^>]*>\s*/i, '');
 
 // That host pads the page clear of a phone's notch and home bar itself, so the game fills the padded frame
-// instead of the whole screen, and nothing adds the same padding again.
+// instead of the whole screen, and nothing adds the same padding again. <main> takes that height too, for the game
+// to take from it: the game measures itself for its layout (container-type: size), so without a height to fill it
+// would have none at all.
 const swaps = [
-  ['html, body { margin: 0; min-height: 100%; }', 'html, body { margin: 0; height: 100%; }'],
+  ['html, body { margin: 0; min-height: 100%; }', 'html, body, main { margin: 0; height: 100%; }'],
   ['height: 100vh;\n  height: 100dvh;', 'height: 100%;'],
   ['padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);', 'padding: 0;'],
   ['top: calc(4px + env(safe-area-inset-top));', 'top: 4px;'],
