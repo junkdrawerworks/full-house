@@ -311,6 +311,47 @@ try {
     assert.equal(await page.locator('.die.held').count(), 0);
   });
 
+  await step('after you score, the line says what you scored and your dice stay yours until the opponent rolls', async ({ page, game, myTurn, settled }) => {
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    await page.click('#b-roll');
+    await settled();
+    // Straight after the second tap, and for as long as the opponent hasn't rolled.
+    const row = page.locator('tr.can').first();
+    const label = await row.locator('th b').textContent();
+    await row.click();
+    const now = () => page.evaluate(() => ({ said: document.getElementById('status').textContent, red: document.getElementById('tray').classList.contains('theirs'), turn: window.fullHouse.game.turn, dice: window.fullHouse.game.dice.join('') }));
+    const mine = (await game()).dice.join('');
+    await row.click();
+    const seen = [];
+    for (let at = await now(); !/^Pip /.test(at.said); at = await now()) { seen.push(at); await page.waitForTimeout(50); }
+    assert.ok(seen.length > 2, 'the opponent rolled at once');
+    for (const at of seen) {
+      assert.equal(at.turn, 'them');
+      assert.match(at.said, new RegExp(`^You score \\d+ in ${label}\\.$`), 'the line after scoring');
+      assert.equal(at.dice, mine);
+      assert.equal(at.red, false, 'your own dice turned red before the opponent rolled');
+    }
+    // Once they roll, the dice are theirs: and after a reload part way through their turn as well.
+    assert.ok((await now()).red, 'the opponent’s dice are not red');
+    await page.reload();
+    await page.waitForFunction(() => /^Pip /.test(document.getElementById('status').textContent));
+    assert.ok((await now()).red, 'after a reload the opponent’s dice are not red');
+    await myTurn();
+    assert.equal((await now()).red, false);
+
+    // Another five of a kind: the line gives the extra too.
+    await page.evaluate(() => {
+      const g = structuredClone(window.fullHouse.game);
+      Object.assign(g.you, { five: 50, f6: null });
+      Object.assign(g, { dice: [6, 6, 6, 6, 6], rolls: 1, turn: 'you' });
+      window.fullHouse.set(g);
+    });
+    await page.click('tr[data-box="f6"]');
+    await page.click('tr[data-box="f6"]');
+    assert.equal((await now()).said, 'You score 30 in Sixes, plus 100 extra.');
+  });
+
   await step('giving up takes two taps, and the tour says what happened', async ({ page, game, settled }) => {
     const screen = () => page.evaluate(() => document.body.dataset.screen);
     const label = () => page.textContent('#b-concede');

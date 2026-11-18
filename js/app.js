@@ -20,6 +20,7 @@ let picked = null;     // the box you've tapped once and not yet scored
 let fresh = {};        // boxes just written in, pencilled in as you watch
 let theirPick = null;  // the box the opponent is about to write in
 let token = 0;         // changes whenever a game starts or ends, so a turn being played out knows to stop
+let theirDice = false;  // the dice in the tray are the opponent's: they've rolled this turn (or the last of the game)
 let resultSeen = false; // the finished game's result has been shown
 let givingUp = false;  // Give up tapped once in the menu, and not yet again
 let playing = -1;      // the token of the game whose opponent is playing a turn right now, so only one copy runs
@@ -75,7 +76,8 @@ function pick(id) {
   busy = true; // the opponent is about to play, so going back and carrying on mustn't start their turn as well
   save();
   render();
-  showDice();
+  showDice(); // still yours, until the opponent rolls
+  status(`You score ${option.score} in ${boxLabel(option.box)}${option.extra ? `, plus ${g.board.extra} extra` : ''}.`);
   setTimeout(theirTurn, settings.fast ? 300 : 650);
 }
 
@@ -106,6 +108,7 @@ async function theirTurn() {
   busy = true;
   hurry = false;
 
+  theirDice = true;
   g.held = [false, false, false, false, false];
   g.dice = g.dice.map(roll);
   g.rolls = 1;
@@ -157,6 +160,7 @@ function yourTurn(g) {
   busy = false;
   hurry = false;
   playing = -1;
+  theirDice = false;
   save();
   render();
   showDice();
@@ -178,6 +182,7 @@ function start(table, opp = table) {
   busy = false;
   picked = null;
   theirPick = null;
+  theirDice = false;
   closeSheets();
   open('game');
   save();
@@ -254,7 +259,7 @@ function showDice(rolled = []) {
   const mine = g.turn === 'you';
   tray.show(g.dice, g.held, {
     rolled,
-    theirs: !mine,
+    theirs: !mine && theirDice,
     idle: mine && g.rolls === 0,
     canHold: mine && !busy && g.rolls > 0 && g.rolls < g.board.rolls,
   });
@@ -495,6 +500,7 @@ function adopt(g) {
   game = g;
   busy = hurry = false;
   picked = theirPick = null;
+  theirDice = false;
   playing = -1;
   fresh = {};
   if ($('sheet-rules').hidden) closeSheets();
@@ -568,5 +574,5 @@ window.fullHouse = {
   progress,
   settings,
   start,
-  set(g) { token++; game = g; busy = false; picked = null; theirPick = null; open('game'); showDice(); render(); if (g.turn === 'them') theirTurn(); },
+  set(g) { token++; game = g; busy = false; picked = null; theirPick = null; theirDice = false; open('game'); showDice(); render(); if (g.turn === 'them') theirTurn(); },
 };
