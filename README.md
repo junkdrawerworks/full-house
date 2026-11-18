@@ -30,7 +30,7 @@
   8. **High Stakes** against the Dealer: four rolls a turn, and the bottom section scores double, though the extra for another five of a kind stays at 100.
 - **Opponents who plan.** Five dice can only land 252 different ways, so an opponent works out, for every possible roll, which dice to keep for the best result over the rest of its turn. It values each box by what it scores now, what it might be worth later, and the top-section bonus. The early opponents leave parts of that out and make mistakes on purpose, though only close calls a person might get wrong. Past Pip, the further up the tour, the more patient an opponent is and the fewer slips it makes. On classic rules Pip averages about 151, and the Dealer about 244 (`node dev/strength.mjs 600 classic`); the best possible play averages 254.59 (Tom Verhoeff, *Optimal Solitaire Yahtzee Player*, Eindhoven University of Technology, 1999).
 - **Watch them play.** Their red dice tumble in your tray and their scores go into the pad in red pencil. Tap the dice to hurry them along, or turn on quick opponents.
-- **Quick game.** Classic rules against anyone you've met on the tour.
+- **Quick game.** Classic rules against anyone you've met on the tour, once you've beaten Pip at table 1.
 - **Your progress.** The tables you've beaten and your best score at each. Giving up part way counts as a loss.
 - **On a keyboard,** Space or R rolls and 1 to 5 hold the dice. Tab reaches the boxes, the arrows go between them, and Enter picks one, then scores it. Space or Enter hurries the opponent along. How to play says so on a computer.
 - No ads, no account and no server. Your progress and any game in progress stay in your browser. It works offline and installs to a phone's home screen.

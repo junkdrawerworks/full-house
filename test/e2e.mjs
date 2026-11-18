@@ -73,6 +73,11 @@ async function win(t) {
   await lastTurn(t);
   await t.page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
 }
+// Pip beaten at table 1, which a quick game waits for: on a fresh page, before anything else.
+async function pipBeaten(page) {
+  await page.evaluate(() => localStorage.setItem('full-house.v1', JSON.stringify({ progress: { beaten: [true] } })));
+  await page.reload();
+}
 
 try {
   await step('a game through the tour', async ({ page, ctx, game, myTurn, settled }) => {
@@ -80,6 +85,8 @@ try {
     assert.equal(await page.locator('#tables li').count(), 8);
     assert.match(await page.textContent('#tables li:nth-child(1)'), /Next up/);
     assert.equal(await page.locator('#tables li.locked').count(), 7);
+    // No quick game until Pip is beaten, so the first game you win counts on the tour.
+    assert.ok(await page.isHidden('#quick'), 'a quick game is offered before Pip is beaten');
 
     // Sit down at table 1.
     await page.click('[data-table="0"]');
@@ -164,6 +171,7 @@ try {
     assert.equal((await page.evaluate(() => window.fullHouse.progress)).played[1], 1);
     assert.match(await page.textContent('#tables li:nth-child(2)'), /Next up/);
     assert.match(await page.textContent('#tables li:nth-child(1)'), /Beaten/);
+    assert.ok(await page.isVisible('#quick'), 'no quick game once Pip is beaten');
     assert.equal(await page.locator('#people button').count(), 2, 'Pip and Maud for a quick game');
 
     // A quick game: classic rules against someone you've met.
@@ -603,6 +611,7 @@ try {
 
   await step('a message sits over the bar, clear of the dice, and doesn’t outlast its game', async t => {
     const { page } = t;
+    await pipBeaten(page);
     await page.evaluate(() => { window.fullHouse.settings.fast = true; window.fullHouse.start(7); });
     // The longest one there is, on a small phone, a phone, a phone held sideways and a desktop.
     for (const [width, height] of [[320, 568], [390, 844], [844, 390], [1280, 800]]) {
@@ -1012,6 +1021,7 @@ try {
   });
 
   await step('giving up takes two taps, and the tour says what happened', async ({ page, game, settled }) => {
+    await pipBeaten(page);
     const screen = () => page.evaluate(() => document.body.dataset.screen);
     const label = () => page.textContent('#b-concede');
     await page.click('[data-table="0"]');
@@ -1053,6 +1063,7 @@ try {
   });
 
   await step('giving up while the opponent writes a score leaves no trace in the next game', async ({ page, settled }) => {
+    await pipBeaten(page);
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
     await page.click('#b-roll');
@@ -1729,6 +1740,7 @@ try {
 
   await step('the result of a finished game does not pop up over the next one', async t => {
     const { page } = t;
+    await pipBeaten(page);
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
     await lastTurn(t);
@@ -1756,7 +1768,7 @@ try {
     // Progress with a part that isn't a list: the tour still shows.
     await load({ progress: { beaten: null, best: [250] } });
     assert.equal(await page.locator('#tables li').count(), 8);
-    assert.equal(await page.locator('#people button').count(), 1);
+    assert.ok(await page.isHidden('#quick'), 'quick games are offered with no table beaten');
     // A game with parts missing or out of range is dropped, and the progress kept.
     const progress = { beaten: [true], best: [250], played: [1], won: [1] };
     const broken = [{ table: 0, opp: 0, turn: 'you', number: 1, rolls: 0 }, {}, { ...good, opp: 99 }, { ...good, turn: 'them', you: null, them: null }, { ...good, dice: [0, 1, 2, 3, 4] }];
@@ -1770,6 +1782,7 @@ try {
   });
 
   await step('a new game’s dice show the numbers they hold, and are read out as not rolled', async ({ page, settled }) => {
+    await pipBeaten(page);
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
     await page.click('#b-roll');
@@ -1953,6 +1966,7 @@ try {
   });
 
   await step('a quick game asks first when it would end the game you’re in', async ({ page, game }) => {
+    await pipBeaten(page);
     const progress = () => page.evaluate(() => window.fullHouse.progress);
     await page.click('[data-table="0"]');
     await page.click('#b-sit');

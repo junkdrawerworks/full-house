@@ -431,6 +431,8 @@ function renderHome() {
         <span class="txt"><b>${t.board.name}</b><span class="vs"><i class="dot" style="--c:${t.who.colour}"></i>${t.who.name}</span><small>${state}</small></span>
       </button></li>`;
   }).join('');
+  // Quick games open once you've beaten Pip, so the first game you win is always one that counts on the tour.
+  $('quick').hidden = !progress.beaten[0];
   const met = TABLES.map((t, i) => ({ t, i })).filter(({ i }) => i === 0 || progress.beaten[i - 1]);
   $('people').innerHTML = met.map(({ t, i }) => `<button type="button" data-quick="${i}"><i class="dot" style="--c:${t.who.colour}"></i>${t.who.name}</button>`).join('');
   const c = $('b-continue'), going = game && !game.over;
