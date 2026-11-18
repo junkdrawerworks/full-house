@@ -500,6 +500,14 @@ try {
       });
       assert.equal(await status(), 'Your turn. The Dealer scored 60 in Three of a kind.');
       assert.ok(await lines() <= 2, `at ${width} x ${height}, the line runs to three lines: ${await status()}`);
+      await page.evaluate(() => {
+        const g = structuredClone(window.fullHouse.game);
+        Object.assign(g.them, { five: 100, full: 50, extras: 1 });
+        Object.assign(g, { number: 3, last: { id: 'full', score: 50, extra: g.board.extra } });
+        window.fullHouse.set(g);
+      });
+      assert.equal(await status(), 'Your turn. The Dealer scored 50 in Full house, plus 100 extra.');
+      assert.ok(await lines() <= 2, `at ${width} x ${height}, the line runs to three lines: ${await status()}`);
     }
   });
 
@@ -829,6 +837,13 @@ try {
     await at({}, [2, 3, 4, 5, 6], { seed: 2, turn: 'them' }, { five: 50 });
     await page.waitForFunction(() => /scores/.test(document.getElementById('status').textContent), null, { timeout: 15000 });
     assert.equal(await status(), 'Pip scores 5 in Ones, plus 100 extra.');
+    // And your turn's line after it, after a reload too.
+    await t.myTurn();
+    assert.equal(await status(), 'Your turn. Pip scored 5 in Ones, plus 100 extra.');
+    await twoLines();
+    await page.reload();
+    await t.myTurn();
+    assert.equal(await status(), 'Your turn. Pip scored 5 in Ones, plus 100 extra.');
   });
 
   await step('the result says when you’ve beaten your best at a table, and doesn’t open a table twice', async t => {

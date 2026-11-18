@@ -175,7 +175,7 @@ async function theirTurn() {
   if (!still()) return;
 
   g.them = mark(g.them, option);
-  g.last = { id: option.box.id, score: option.score }; // for your turn's line, after a reload or Carry on as well
+  g.last = { id: option.box.id, score: option.score, extra: option.extra ? b.extra : 0 }; // for your turn's line, after a reload or Carry on as well
   theirPick = null;
   fresh = { them: option.box.id };
   if (option.extra) toast(`${name} rolls another five of a kind: ${b.extra} extra points.`);
@@ -378,7 +378,7 @@ function jokerLine(b, joker, opts) {
 // Before your first roll: what the opponent just scored, or, as a game starts at Hot Boxes, which boxes are hot.
 function firstLine(g) {
   const b = g.board, last = g.number > 1 && g.last && b.boxes.find(x => x.id === g.last.id);
-  if (last) return `Your turn. ${who(g).name} scored ${g.last.score} in ${boxLabel(last)}.`;
+  if (last) return `Your turn. ${who(g).name} scored ${g.last.score} in ${boxLabel(last)}${g.last.extra ? `, plus ${g.last.extra} extra` : ''}.`;
   if (g.number > 1) return 'Your turn.';
   return hotNames(b) ? `Hot this time: ${hotNames(b)}. Roll the dice.` : 'Your turn. Roll the dice.';
 }
