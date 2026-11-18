@@ -1,5 +1,6 @@
 // Plays the game in Chromium through the real page:  node test/e2e.mjs  (needs Playwright)
 // Give it part of a step's name to run only the steps that match:  node test/e2e.mjs tour
+// (the offline checks at the end run only with no name given, or with offline:  node test/e2e.mjs offline)
 import { createRequire } from 'node:module';
 import { execSync } from 'node:child_process';
 import { createServer } from 'node:http';
@@ -2620,13 +2621,13 @@ try {
     await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 15000 });
     assert.match(await page.textContent('#result-title'), /You beat Pip/);
   });
-} finally {
   // Offline, checked the junkdrawer house kit's way, from a server that answers like GitHub Pages: a browser may keep
 // each file for ten minutes, and asks again by its ETag. `net` is the connection: 'up', 'down' (the server drops every
 // connection) or 'stalled' (a plane's or a train's wifi: it takes each request and holds on to it). With `release`
 // set it serves the next release. The server's own switches are needed because the browser's offline switch can't
-// make a stall, and in some Chromium builds it doesn't stop the service worker's own requests.
-{
+// make a stall, and in some Chromium builds it doesn't stop the service worker's own requests. Then what the offline
+// copy keeps. Run with no name given, or with offline.
+if (!only || only.includes('offline')) {
   const { createServer } = await import('node:http');
   const { readFile } = await import('node:fs/promises');
   const { join, extname } = await import('node:path');
@@ -2731,9 +2732,10 @@ try {
   for (const f of shell) all.update(createHash('sha1').update(await readFile(join(root, f.endsWith('/') ? f + 'index.html' : f))).digest());
   const files = all.digest('hex').slice(0, 8);
   assert.equal(sw.match(/const FILES = '([0-9a-f]*)'/)?.[1], files, `a file sw.js keeps for offline has changed: set FILES in sw.js to '${files}'`);
+  console.log('ok  offline, on a stalled connection, and a release\'s offline copy whole and up to date');
 }
-
-await browser.close();
+} finally {
+  await browser.close();
   server.close();
 }
 console.log('all good');
