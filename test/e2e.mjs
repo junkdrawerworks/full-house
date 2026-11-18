@@ -104,7 +104,7 @@ try {
     const row = page.locator('tr.can').first();
     const id = await row.getAttribute('data-box');
     await row.click();
-    assert.match(await page.textContent('#status'), /again to score/);
+    assert.match(await page.textContent('#status'), /again to (score \d+|write in a 0)\.$/);
     await row.click();
     g = await game();
     assert.notEqual(g.you[id], null, 'the score went in');
@@ -651,7 +651,7 @@ try {
     await page.focus('tr.can >> nth=0'); // where Tab gets to after the dice and Roll
     const id = await page.evaluate(() => document.activeElement.dataset.box);
     await page.keyboard.press('Enter');
-    assert.match(await page.textContent('#status'), /again to score/);
+    assert.match(await page.textContent('#status'), /again to (score \d+|write in a 0)\.$/);
     await page.keyboard.press('Enter');
     const g = await game();
     assert.notEqual(g.you[id], null, 'the second Enter did not score the box');
@@ -666,7 +666,7 @@ try {
     const row = page.locator('tr.can').first();
     const id = await row.getAttribute('data-box');
     await row.click(); // picked, to see what it would score
-    assert.match(await page.textContent('#status'), /again to score/);
+    assert.match(await page.textContent('#status'), /again to (score \d+|write in a 0)\.$/);
     await page.keyboard.press(' ');
     await settled();
     const g = await game();
