@@ -502,6 +502,7 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
   text-align: center;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
   z-index: 40;
+  pointer-events: none; /* over the bar's buttons, it lets a tap through to them */
   animation: drop 0.25s ease;
 }
 body[data-screen='home'] .toast { top: auto; bottom: calc(16px + env(safe-area-inset-bottom)); } /* clear of the masthead */

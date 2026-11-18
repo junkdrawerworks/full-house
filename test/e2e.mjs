@@ -396,11 +396,17 @@ try {
         toast.hidden = false;
         await Promise.all(toast.getAnimations().map(a => a.finished)); // once it has dropped into place
         const r = toast.getBoundingClientRect(), out = { top: r.top, bottom: r.bottom, left: r.left, right: r.right, tray: document.getElementById('tray').getBoundingClientRect().top };
+        // It lies over the bar's buttons on a small phone, and a tap on one still reaches it.
+        out.blocks = ['b-home', 'b-menu'].filter(id => {
+          const b = document.getElementById(id).getBoundingClientRect(), x = b.left + b.width / 2;
+          return [b.top + 4, b.top + b.height / 2].some(y => !document.getElementById(id).contains(document.elementFromPoint(x, y)));
+        });
         toast.hidden = true;
         return out;
       });
       assert.ok(m.bottom <= m.tray, `at ${width} x ${height} a message reaches ${m.bottom}px, over the dice tray at ${m.tray}px`);
       assert.ok(m.top >= 0 && m.left >= 0 && m.right <= width, `at ${width} x ${height} a message runs off the screen`);
+      assert.deepEqual(m.blocks, [], `at ${width} x ${height} a message takes the taps meant for the bar's buttons`);
     }
     await page.setViewportSize({ width: 390, height: 844 });
     // Five of a kind on the last turn: its message is gone by the time the result is up.
