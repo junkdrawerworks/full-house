@@ -1041,6 +1041,92 @@ try {
     } else console.log('    (this Chromium can’t pretend to have a notch: that part was skipped)');
   });
 
+  await step('on a short phone the pad scrolls to the box the opponent scores in, and the page stays put', async ({ page, myTurn }) => {
+    await page.evaluate(() => window.fullHouse.start(0));
+    // The opponent's turn, with only these boxes left for them to score in, and the pad scrolled to its top or its end.
+    const theirTurn = (open, scrollTop) => page.evaluate(([open, scrollTop]) => {
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) { g.you[b.id] = b.id === 'three' ? null : 20; g.them[b.id] = open.includes(b.id) ? null : 5; }
+      Object.assign(g, { number: 12, rolls: 0, turn: 'them' });
+      window.fullHouse.settings.fast = true;
+      window.fullHouse.set(g);
+      document.querySelector('.pad-wrap').scrollTop = scrollTop;
+    }, [open, scrollTop]);
+    // Whether a box's row is in the pad's window, below its top edge and above the Total.
+    const shown = id => page.evaluate(id => {
+      const r = document.querySelector(`tr[data-box="${id}"]`).getBoundingClientRect(), w = document.querySelector('.pad-wrap').getBoundingClientRect();
+      const total = document.querySelector('.pad tfoot th').getBoundingClientRect();
+      return r.top >= w.top - 0.5 && r.bottom <= Math.min(w.bottom, total.top) + 0.5;
+    }, id);
+    const picked = async () => (await page.waitForFunction(() => document.querySelector('td.them.picked')?.closest('tr').dataset.box, null, { timeout: 30000 })).jsonValue();
+    const pad = () => page.evaluate(() => document.querySelector('.pad-wrap').scrollTop);
+    const pageMoved = () => page.evaluate(() => scrollY !== 0 || document.scrollingElement.scrollTop !== 0 || document.querySelector('.game').getBoundingClientRect().top !== 0);
+
+    for (const [open, scrollTop, where] of [[['f1', 'f2'], 9999, 'above'], [['five', 'chance'], 0, 'below'], [['f4', 'f5'], 9999, 'above']]) {
+      await theirTurn(open, scrollTop);
+      const id = await picked();
+      assert.ok(open.includes(id));
+      // It glides there, so give it a moment; the score is written in meanwhile, in the same row.
+      await page.waitForFunction(id => {
+        const r = document.querySelector(`tr[data-box="${id}"]`).getBoundingClientRect(), w = document.querySelector('.pad-wrap').getBoundingClientRect();
+        return r.top >= w.top - 0.5 && r.bottom <= Math.min(w.bottom, document.querySelector('.pad tfoot th').getBoundingClientRect().top) + 0.5;
+      }, id, { timeout: 5000 }).catch(() => assert.fail(`the opponent scored in ${id}, ${where} what the pad was showing, and it stayed out of sight`));
+      assert.equal(await pageMoved(), false, 'the page itself moved');
+      // Your turn starts with the pad where that left it.
+      await myTurn();
+      await page.waitForTimeout(700);
+      const at = await pad();
+      assert.ok(await shown(id), `their score in ${id} went out of sight again`);
+      if (id === 'f1') assert.equal(at, 0, 'the pad stopped just short of its top');
+      await page.click('#b-roll');
+      await page.waitForFunction(() => !window.fullHouse.busy);
+      assert.equal(await pad(), at, 'the pad moved at the start of your turn');
+    }
+
+    // A box already in view moves nothing.
+    await theirTurn(['five', 'chance'], 9999);
+    await picked();
+    await myTurn();
+    await page.waitForTimeout(700);
+    assert.equal(await pad(), await page.evaluate(() => { const w = document.querySelector('.pad-wrap'); return w.scrollHeight - w.clientHeight; }), 'the pad moved though the box was in view');
+
+    // With less motion asked for, it's there at once.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await theirTurn(['f1', 'f2'], 9999);
+    const id = await picked();
+    await page.waitForTimeout(60);
+    assert.ok(await shown(id), 'with less motion asked for, the box was not in view straight away');
+    assert.equal(await pageMoved(), false, 'the page itself moved');
+  }, { viewport: { width: 360, height: 640 } });
+
+  await step('keyboard: a box picked while scrolled out of sight comes into view, and Tab stops clear of the Total', async ({ page, settled }) => {
+    await page.setViewportSize({ width: 1280, height: 420 }); // a short window, where the pad scrolls beside the dice
+    await page.evaluate(() => window.fullHouse.start(0));
+    await page.keyboard.press('r');
+    await settled();
+    const shown = () => page.evaluate(() => {
+      const r = document.activeElement.closest('tr[data-box]')?.getBoundingClientRect() || document.querySelector('tr.picked').getBoundingClientRect();
+      const w = document.querySelector('.pad-wrap').getBoundingClientRect(), total = document.querySelector('.pad tfoot th').getBoundingClientRect();
+      return r.top >= w.top - 0.5 && r.bottom <= Math.min(w.bottom, total.top) + 0.5;
+    });
+    // Tab from the Roll button through every box: each one it lands on is in view, not under the Total.
+    await page.focus('#b-roll');
+    for (let i = 0; i < 13; i++) {
+      await page.keyboard.press('Tab');
+      const id = await page.evaluate(() => document.activeElement.dataset.box);
+      assert.ok(id, 'Tab left the pad early');
+      await page.waitForTimeout(350);
+      assert.ok(await shown(), `Tab reached ${id}, out of sight or under the Total`);
+    }
+    // The focus on Ones, the pad then scrolled to its end with the wheel, and Enter: the picked box comes back into view.
+    await page.focus('tr.can[data-box="f1"]');
+    await page.evaluate(() => { document.querySelector('.pad-wrap').scrollTop = 9999; });
+    await page.keyboard.press('Enter');
+    assert.equal(await page.evaluate(() => document.querySelector('tr.picked')?.dataset.box), 'f1');
+    await page.waitForFunction(() => document.querySelector('.pad-wrap').scrollTop === 0, null, { timeout: 5000 }).catch(() => assert.fail('Ones was picked out of sight and stayed there'));
+    assert.equal(await page.evaluate(() => scrollY), 0, 'the page itself moved');
+  }, { desktop: true });
+
   await step('a second copy open at the same time picks up what the other one saves', async t => {
     const { page, ctx } = t;
     const other = await ctx.newPage(), trouble = [];

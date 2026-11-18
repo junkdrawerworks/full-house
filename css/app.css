@@ -363,6 +363,7 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 12px 12px 0;
+  scroll-padding-bottom: 44px; /* a box reached with Tab stops clear of the Total */
 }
 .pad {
   width: 100%;

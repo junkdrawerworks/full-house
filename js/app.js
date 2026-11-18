@@ -139,6 +139,7 @@ async function theirTurn() {
   theirPick = { id: option.box.id, score: option.score };
   status(`${name} scores ${option.score} in ${boxLabel(option.box)}.`);
   render();
+  pad.reveal(option.box.id); // on a short screen the box may be scrolled out of sight; your own turn never moves the pad
   await wait(pace.choose);
   if (!still()) return;
 

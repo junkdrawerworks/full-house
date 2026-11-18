@@ -15,8 +15,25 @@ export class Pad {
     el.addEventListener('keydown', e => {
       if (e.key !== 'Enter' && e.key !== ' ') return;
       const row = e.target.closest('tr[data-box]');
-      if (row && row.classList.contains('can')) { e.preventDefault(); onPick(row.dataset.box); }
+      if (!row || !row.classList.contains('can')) return;
+      e.preventDefault();
+      onPick(row.dataset.box);
+      this.reveal(row.dataset.box); // a box picked from the keyboard may have been scrolled out of sight
     });
+  }
+
+  // Bring a box's row into view in the pad's own window, which is all that moves: the page stays where it is. It goes
+  // just far enough to clear the window's top, or the Total stuck to its foot, and nowhere if the row shows already.
+  reveal(id) {
+    const row = this.el.querySelector(`tr[data-box="${id}"]`), foot = this.el.querySelector('tfoot th'), wrap = this.el.parentElement;
+    if (!row || !foot) return;
+    const r = row.getBoundingClientRect(), w = wrap.getBoundingClientRect();
+    const floor = Math.min(w.bottom, foot.getBoundingClientRect().top);
+    const by = r.top < w.top ? r.top - w.top : r.bottom > floor ? r.bottom - floor : 0;
+    if (!by) return;
+    let top = wrap.scrollTop + by;
+    if (by < 0 && top < 48) top = 0; // nearly back at the top: all the way, so the heading shows as well
+    wrap.scrollTo({ top, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }
 
   // board, both cards, the opponent's name, and on your turn: what each allowed box would score ({ id: score }),
