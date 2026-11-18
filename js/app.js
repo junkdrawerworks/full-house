@@ -736,5 +736,5 @@ window.fullHouse = {
   progress,
   settings,
   start,
-  set(g) { token++; game = g; busy = false; picked = null; theirPick = null; theirDice = false; open('game'); showDice(); render(); if (g.turn === 'them') theirTurn(); },
+  set(g) { token++; game = g; busy = false; picked = null; theirPick = null; theirDice = false; open('game', { focus: false }); showDice(); render(); if (g.turn === 'them') theirTurn(); }, // as a saved game comes back
 };

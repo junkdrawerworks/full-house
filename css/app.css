@@ -342,13 +342,13 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 .rolls i.used { background: var(--accent); }
 .roll {
   flex: 1;
-  min-height: 50px;
-  padding: 6px 10px;
+  min-height: 50px; /* "Roll again (2 left)" in bigger text takes two lines */
+  padding: 1px 10px;
   border: 0;
   border-radius: 14px;
   background: var(--accent);
   color: var(--accent-ink);
-  font: 700 19px/1.1 var(--cond); /* "Roll again (2 left)" in bigger text takes two lines */
+  font: 700 19px var(--cond);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   cursor: pointer;
