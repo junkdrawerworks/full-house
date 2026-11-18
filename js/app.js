@@ -34,6 +34,8 @@ const where = g => (g.table === null ? 'Quick game' : `Table ${g.table + 1}: ${g
 // A name inside a sentence: "against the Dealer". At the start of one, and on the pad and the tour, it keeps its capital.
 const mid = name => name.replace(/^The /, 'the ');
 const die = () => 1 + Math.floor(Math.random() * 6);
+// Quick or Just their score: the opponent plays faster, and your own dice land sooner too.
+const quick = () => settings.pace !== 'normal';
 
 // ---- your turn ----
 
@@ -61,7 +63,7 @@ function roll() {
     const left = g.board.rolls - g.rolls;
     const five = /^Five of a kind/.test($('status').textContent) ? ` ${$('status').textContent}` : ''; // the first or another
     say(`You rolled ${g.dice.join(', ')}. ${left ? `${left} roll${left === 1 ? '' : 's'} left.` : 'No rolls left.'}${five}`);
-  }, settings.fast ? 450 : 750);
+  }, quick() ? 450 : 750);
 }
 
 function toggle(i) {
@@ -100,7 +102,7 @@ function pick(id) {
   const line = `You score ${option.score} in ${boxLabel(option.box)}${option.extra ? `, plus ${g.board.extra} extra` : ''}${made ? `, and the ${g.board.bonus.worth}\u00a0bonus` : ''}.`;
   status(line);
   say(line);
-  setTimeout(theirTurn, settings.fast ? 300 : 650);
+  setTimeout(theirTurn, quick() ? 300 : 650);
 }
 
 // Whether writing in this score brings the top section up to the bonus. ("The\u00a0bonus" keeps together at the end of a line.)
@@ -108,8 +110,13 @@ const makesBonus = (board, card, option) => !totals(board, card).bonus && !!tota
 
 // ---- the opponent's turn ----
 
-// `tumble` is how long thrown dice take to land (--tumble in css/app.css).
-const PACE = { normal: { roll: 800, think: 650, choose: 850, tumble: 700 }, fast: { roll: 420, think: 280, choose: 420, tumble: 380 } };
+// `tumble` is how long thrown dice take to land (--tumble in css/app.css). At Just their score only `choose` is waited
+// for: the score shows, with their dice where they ended up, for about a second before it's written in.
+const PACE = {
+  normal: { roll: 800, think: 650, choose: 850, tumble: 700 },
+  quick: { roll: 420, think: 280, choose: 420, tumble: 380 },
+  score: { roll: 0, think: 0, choose: 1000, tumble: 380 },
+};
 
 // Until the dice in the tray have landed: their own animations, which a busy phone can start a frame or two late, so
 // not a clock. At most `cap` ms, in case a tab out of sight holds them back.
@@ -133,7 +140,8 @@ async function theirTurn() {
   // A game saved while two copies of a turn ran at once can have the opponent's card full already.
   if (filled(g.board, g.them)) { if (filled(g.board, g.you)) finish(); else yourTurn(g); return; }
   const still = () => t === token && game === g;
-  const pace = PACE[settings.fast ? 'fast' : 'normal'], name = who(g).name, b = g.board;
+  const pace = PACE[settings.pace], name = who(g).name, b = g.board;
+  const glance = settings.pace === 'score', final = turnsLeft(b, g.them) === 1; // Just their score: no rolls played out
   const opp = new Opponent(TABLES[g.opp].play);
   // Their dice and slips come from the game's seed and the turn number, so a turn cut short by a reload (or a phone
   // closing the tab) plays out the same way again, instead of giving them another go.
@@ -145,28 +153,36 @@ async function theirTurn() {
   g.held = [false, false, false, false, false];
   g.dice = g.dice.map(roll);
   g.rolls = 1;
-  status(`${turnsLeft(b, g.them) === 1 ? 'Last turn. ' : ''}${name} rolls.`);
-  showDice([0, 1, 2, 3, 4]);
-  render();
-  await wait(pace.roll);
-  if (!still()) return;
+  if (!glance) {
+    status(`${final ? 'Last turn. ' : ''}${name} rolls.`);
+    showDice([0, 1, 2, 3, 4]);
+    render();
+    await wait(pace.roll);
+    if (!still()) return;
+  }
 
+  // At Just their score the same rolls and keeps are made, from the same seed, only none of them is shown.
   for (let left = b.rolls - 1; left > 0; left--) {
     const keep = opp.keep(b, g.them, g.dice, left, rand);
     if (!keep) break;
     g.held = keep;
     const n = keep.filter(Boolean).length;
-    status(n ? `${name} holds ${n === 1 ? 'one' : ['', '', 'two', 'three', 'four'][n]} and rolls again.` : `${name} rolls them all again.`);
-    showDice();
-    await wait(pace.think);
-    if (!still()) return;
+    if (!glance) {
+      status(n ? `${name} holds ${n === 1 ? 'one' : ['', '', 'two', 'three', 'four'][n]} and rolls again.` : `${name} rolls them all again.`);
+      showDice();
+      await wait(pace.think);
+      if (!still()) return;
+    }
     const rolled = [];
     g.dice = g.dice.map((d, i) => (keep[i] ? d : (rolled.push(i), roll())));
     g.rolls++;
-    showDice(rolled);
-    await wait(pace.roll);
-    if (!still()) return;
+    if (!glance) {
+      showDice(rolled);
+      await wait(pace.roll);
+      if (!still()) return;
+    }
   }
+  if (glance) showDice(); // where they ended up, landed, with their last keep held
 
   // Hurried, the rolls go by before the dice land, but the turn ends on landed dice and a score you can read.
   if (hurry) {
@@ -176,7 +192,7 @@ async function theirTurn() {
   const option = opp.box(b, g.them, g.dice, rand), made = makesBonus(b, g.them, option);
   const what = `${option.score} in ${boxLabel(option.box)}${option.extra ? `, plus ${b.extra} extra` : ''}${made ? ', and the\u00a0bonus' : ''}.`;
   theirPick = { id: option.box.id, score: option.score };
-  status(`${name} scores ${what}`);
+  status(`${glance && final ? 'Last turn. ' : ''}${name} scores ${what}`);
   render();
   pad.reveal(option.box.id); // on a short screen the box may be scrolled out of sight; your own turn moves the pad only to show a box you can score
   await wait(pace.choose, 450);
@@ -327,7 +343,7 @@ function showDice(rolled = []) {
     theirs: !mine && theirDice,
     idle: mine && g.rolls === 0,
     canHold: mine && !busy && g.rolls > 0 && g.rolls < g.board.rolls,
-    quick: settings.fast, // the dice land before roll() and PACE move on
+    quick: quick(), // the dice land before roll() and PACE move on
     name: who(g).name,
     wild: !!g.board.wild,
   });
@@ -567,8 +583,10 @@ function read() {
 }
 // Settings and progress from a save, with anything missing filled in. The game only ever saves these whole,
 // but a save damaged some other way shouldn't stop it from starting.
+// A save from before the three paces has a Quick opponents switch (fast) in place of the pace: on is Quick.
 function settingsFrom(s) {
-  return { fast: false, hints: true, ...s };
+  const { fast, ...rest } = s && typeof s === 'object' ? s : {};
+  return { hints: true, ...rest, pace: ['normal', 'quick', 'score'].includes(rest.pace) ? rest.pace : fast ? 'quick' : 'normal' };
 }
 function progressFrom(p) {
   const out = { beaten: [], best: [], played: [], won: [], quick: { played: 0, won: 0 }, ...p };
@@ -638,11 +656,15 @@ $('b-menu').addEventListener('click', showMenu);
 $('b-where').addEventListener('click', showMenu);
 $('b-concede').addEventListener('click', giveUp);
 document.querySelectorAll('[data-close]').forEach(el => el.addEventListener('click', dismiss));
-const TOGGLES = [['fast', 'o-fast'], ['hints', 'o-hints']];
+const TOGGLES = [['hints', 'o-hints']];
 for (const [k, id] of TOGGLES) {
   $(id).checked = settings[k];
   $(id).addEventListener('change', e => { settings[k] = e.target.checked; save(); showDice(); render(); });
 }
+const paces = [...document.querySelectorAll('input[name="pace"]')];
+const showPace = () => paces.forEach(r => { r.checked = r.value === settings.pace; });
+showPace();
+for (const r of paces) r.addEventListener('change', () => { if (r.checked) { settings.pace = r.value; save(); showDice(); render(); } });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { dismiss(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return; // the browser's shortcuts, like Ctrl+R to reload
@@ -673,6 +695,7 @@ addEventListener('storage', e => {
   if (next.settings && typeof next.settings === 'object') Object.assign(settings, settingsFrom(next.settings));
   if (next.progress && typeof next.progress === 'object') Object.assign(progress, progressFrom(next.progress));
   for (const [k, id] of TOGGLES) $(id).checked = settings[k];
+  showPace();
   showDice();
   const theirs = whole(next.game) ? next.game : null, ours = game && !game.over ? game : null;
   if (JSON.stringify(theirs) !== JSON.stringify(ours) && !keepOurs(ours, theirs)) adopt(theirs);

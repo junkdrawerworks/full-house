@@ -667,6 +667,17 @@ body[data-screen='home'] .toast { top: auto; bottom: calc(16px + env(safe-area-i
 .toggle input:checked { background: var(--accent); }
 .toggle input:checked::after { transform: translateX(18px); }
 .toggle input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pace { min-width: 0; margin: 0; padding: 8px 0; border: 0; font-size: 14.5px; line-height: 1.4; color: var(--muted); }
+.pace legend { padding: 0; margin-bottom: 8px; }
+.pace legend b { color: var(--ink); font-size: 15.5px; font-weight: 600; }
+.panel .pace p { margin: 8px 0 0; }
+/* Three choices side by side, the one chosen filled in. */
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; padding: 3px; border-radius: 12px; background: var(--line); }
+.seg label { position: relative; display: grid; cursor: pointer; }
+.seg input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.seg span { display: grid; place-items: center; min-height: 42px; padding: 4px 6px; border-radius: 9px; text-align: center; font-weight: 600; line-height: 1.15; color: var(--ink); }
+.seg input:checked + span { background: var(--accent); color: var(--accent-ink); }
+.seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 .rules { margin: 0; padding-left: 20px; font-size: 15px; line-height: 1.5; }
 .rules li { margin: 6px 0; }
 .rules .keys { display: none; }
@@ -691,6 +702,8 @@ body[data-screen='home'] .toast { top: auto; bottom: calc(16px + env(safe-area-i
   .pad tr.picked th small, .pad tr.picked td.you span { color: HighlightText; }
   .toggle input { appearance: auto; -webkit-appearance: auto; width: 20px; height: 20px; margin-top: 2px; }
   .toggle input::after { display: none; }
+  .seg span { border: 1px solid ButtonText; }
+  .seg input:checked + span { forced-color-adjust: none; background: Highlight; color: HighlightText; }
   .panel, .toast { border: 2px solid CanvasText; }
   .tables .beaten .n { forced-color-adjust: none; }
   .mult { border: 1px solid CanvasText; }

@@ -59,7 +59,7 @@ async function lastTurn({ page, myTurn, settled }) {
     const g = structuredClone(window.fullHouse.game);
     for (const b of g.board.boxes) { g.you[b.id] = b.id === 'chance' ? null : 20; g.them[b.id] = b.id === 'chance' ? null : 5; }
     Object.assign(g, { number: 13, rolls: 0, turn: 'you' });
-    window.fullHouse.settings.fast = true;
+    window.fullHouse.settings.pace = 'quick';
     window.fullHouse.set(g);
   });
   await myTurn();
@@ -94,7 +94,7 @@ try {
     assert.match(await page.textContent('#intro-title'), /Classic/);
     await page.click('#b-sit');
     assert.equal(await page.evaluate(() => document.body.dataset.screen), 'game');
-    await page.evaluate(() => { window.fullHouse.settings.fast = true; });
+    await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
 
     // Roll, hold two dice, roll again: the held dice stay put.
     await page.click('#b-roll');
@@ -139,7 +139,7 @@ try {
       for (const id of ids.slice(0, 12)) { g.you[id] = 20; g.them[id] = 5; }
       g.you.chance = null; g.them.chance = null;
       g.number = 13; g.rolls = 0; g.turn = 'you';
-      window.fullHouse.settings.fast = true;
+      window.fullHouse.settings.pace = 'quick';
       window.fullHouse.set(g);
     });
     await myTurn();
@@ -194,7 +194,7 @@ try {
   await step('the opponent plays one turn, even after back and carry on while the turn passes', async ({ page, game, myTurn, settled }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
-    await page.evaluate(() => { window.fullHouse.settings.fast = true; });
+    await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
     await page.click('#b-roll');
     await settled();
     // Score a box, then back to the tour and carry on, all before the opponent has started.
@@ -266,7 +266,7 @@ try {
     await page.evaluate(() => {
       const g = structuredClone(window.fullHouse.game);
       Object.assign(g, { rolls: 1, dice: [6, 6, 6, 6, 6] });
-      window.fullHouse.settings.fast = true;
+      window.fullHouse.settings.pace = 'quick';
       window.fullHouse.set(g);
     });
     await page.click('tr[data-box="five"]');
@@ -455,7 +455,7 @@ try {
     const status = () => page.textContent('#status');
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
-    await page.evaluate(() => { window.fullHouse.settings.fast = true; });
+    await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
     assert.equal(await status(), 'Your turn. Roll the dice.');
     await page.click('#b-roll');
     await settled();
@@ -555,18 +555,22 @@ try {
     await myTurn();
   });
 
-  await step('the dice have landed by the time their scores show, at either pace', async ({ page, myTurn }) => {
+  await step('the dice have landed by the time their scores show, at every pace', async ({ page, myTurn }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
-    // The dice still moving at the moment something turns true, looked for every few milliseconds.
-    const moving = when => page.evaluate(when => new Promise(resolve => {
+    // The dice still moving at the moment something turns true, looked for every few milliseconds. With `thrown`, only
+    // dice in the air: at Just their score the opponent's dice appear as their score does, the held ones lifting.
+    let thrown = false;
+    const moving = when => page.evaluate(([when, thrown]) => new Promise(resolve => {
       const test = new Function(`return ${when}`);
-      const look = () => (test() ? resolve(document.getAnimations().filter(a => a.playState === 'running' && a.effect.target.closest('#tray')).length) : setTimeout(look, 4));
+      const air = a => !thrown || a.animationName === 'hop' || a.effect.target.classList.contains('cube');
+      const look = () => (test() ? resolve(document.getAnimations().filter(a => a.playState === 'running' && a.effect.target.closest('#tray') && air(a)).length) : setTimeout(look, 4));
       look();
-    }), when);
-    for (const fast of [false, true]) {
-      await page.evaluate(fast => { if (document.getElementById('o-fast').checked !== fast) document.getElementById('o-fast').click(); }, fast);
-      const pace = fast ? 'with quick opponents' : 'at the usual pace';
+    }), [when, thrown]);
+    for (const choice of ['normal', 'quick', 'score']) {
+      await page.evaluate(choice => document.querySelector(`input[name="pace"][value="${choice}"]`).click(), choice);
+      const pace = { normal: 'at the usual pace', quick: 'with quick opponents', score: 'with just their score' }[choice];
+      thrown = choice === 'score';
       await myTurn();
       const offered = moving(`!!document.querySelector('#pad tr.can')`);
       await page.click('#b-roll');
@@ -600,6 +604,7 @@ try {
       const up = await upFor;
       assert.ok(up >= 400, `${pace}, hurried along, the opponent's score is up for only ${Math.round(up)} ms`);
     }
+    thrown = false;
     // Asked for less motion, the dice don't tumble at all.
     await myTurn();
     await page.waitForTimeout(500); // the opponent's held dice have dropped back
@@ -609,10 +614,63 @@ try {
     assert.equal(await moving('true'), 0, 'the dice tumble though less motion was asked for');
   });
 
+  await step('at Just their score the opponent’s dice show where they ended up and the score goes in in about a second, the same turn as at any pace', async ({ page, myTurn }) => {
+    // An old save's Quick opponents switch, on, comes up as Quick.
+    await page.evaluate(() => localStorage.setItem('full-house.v1', JSON.stringify({ settings: { fast: true, hints: true } })));
+    await page.reload();
+    assert.equal(await page.evaluate(() => window.fullHouse.settings.pace), 'quick');
+    await page.evaluate(() => window.fullHouse.start(2)); // Triple Sixes, against Bea
+    await page.click('#b-menu');
+    assert.equal(await page.isChecked('input[name="pace"][value="quick"]'), true);
+    await page.click('.seg label:nth-child(3)'); // Just their score
+    await page.keyboard.press('Escape');
+    assert.equal(JSON.parse(await page.evaluate(() => localStorage.getItem('full-house.v1'))).settings.pace, 'score', 'the pace was not saved');
+    // Bea's turn 12 of 13, then her last, from one game's seed: everything the page shows during each, and how long it took.
+    const ready = await page.evaluate(() => {
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) { g.you[b.id] = b.id === 'f5' ? null : 10; g.them[b.id] = ['chance', 'f6'].includes(b.id) ? null : 10; }
+      return Object.assign(g, { number: 12, rolls: 0, turn: 'them', seed: 1234, held: [false, false, false, false, false] });
+    });
+    const watch = (g, pace) => page.evaluate(([g, pace]) => new Promise(resolve => {
+      window.fullHouse.settings.pace = pace;
+      const lines = [], t0 = performance.now();
+      let moved = 0;
+      const look = () => {
+        const line = document.getElementById('status').textContent;
+        if (lines.at(-1) !== line) lines.push(line);
+        moved += document.getAnimations().filter(a => a.playState === 'running' && (a.animationName === 'hop' || a.effect.target.classList.contains('cube'))).length; // a throw, not a die lifting as it's held
+        const now = window.fullHouse.game;
+        if (now.turn === 'you' && !window.fullHouse.busy) resolve({ lines, moved, ms: performance.now() - t0, them: now.them, dice: now.dice });
+        else setTimeout(look, 10);
+      };
+      window.fullHouse.set(g);
+      look();
+    }), [g, pace]);
+    const glance = await watch(ready, 'score');
+    assert.equal(glance.moved, 0, 'a die tumbled at Just their score');
+    assert.deepEqual(glance.lines.filter(l => /rolls|holds/.test(l)), [], `a roll was played out: ${glance.lines}`);
+    assert.ok(glance.lines.some(l => /^Bea scores \d+ in /.test(l)), `her score was not shown: ${glance.lines}`);
+    assert.ok(glance.ms >= 900 && glance.ms < 2500, `her turn took ${Math.round(glance.ms)} ms`);
+    const usual = await watch(ready, 'quick');
+    assert.deepEqual([usual.them, usual.dice], [glance.them, glance.dice], 'the same turn came out differently at another pace');
+    assert.ok(usual.lines.some(l => /^Bea (rolls|holds)/.test(l)));
+    assert.ok(usual.moved > 0, 'the check for tumbling dice sees none at Quick either');
+    // Her last turn says so, though there is no "Bea rolls." line to say it on.
+    const last = { ...structuredClone(ready), them: glance.them, number: 13 };
+    const end = await page.evaluate(([g]) => new Promise(resolve => {
+      window.fullHouse.settings.pace = 'score';
+      window.fullHouse.set(g);
+      const look = () => (/scores/.test(document.getElementById('status').textContent) ? resolve(document.getElementById('status').textContent) : setTimeout(look, 10));
+      look();
+    }), [last]);
+    assert.match(end, /^Last turn\. Bea scores \d+ in /);
+    await myTurn();
+  });
+
   await step('a message sits over the bar, clear of the dice, and doesn’t outlast its game', async t => {
     const { page } = t;
     await pipBeaten(page);
-    await page.evaluate(() => { window.fullHouse.settings.fast = true; window.fullHouse.start(7); });
+    await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; window.fullHouse.start(7); });
     // The longest one there is, on a small phone, a phone, a phone held sideways and a desktop.
     for (const [width, height] of [[320, 568], [390, 844], [844, 390], [1280, 800]]) {
       await page.setViewportSize({ width, height });
@@ -677,7 +735,7 @@ try {
       for (const b of g.board.boxes) { g.you[b.id] = b.id === 'chance' ? null : 20; g.them[b.id] = b.id === 'chance' ? null : 12; }
       g.you.extras = g.them.extras = 1;
       Object.assign(g, { number: 13, rolls: 1, turn: 'you' });
-      window.fullHouse.settings.fast = true;
+      window.fullHouse.settings.pace = 'quick';
       window.fullHouse.set(g);
     });
     const ink = sel => page.evaluate(sel => getComputedStyle(document.querySelector(sel)).color, sel);
@@ -720,7 +778,7 @@ try {
       const g = structuredClone(window.fullHouse.game);
       for (const b of g.board.boxes) { g.you[b.id] = b.id === 'large' || b.id === 'chance' ? null : 1; g.them[b.id] = b.id === 'chance' ? null : 20; }
       Object.assign(g, { number: 12, rolls: 1, turn: 'you', dice: [2, 2, 2, 3, 3] });
-      window.fullHouse.settings.fast = true;
+      window.fullHouse.settings.pace = 'quick';
       window.fullHouse.set(g);
     });
     // Until it's picked it shows a light dash, not a 0 that looks like a score; picked, the 0 it would write in.
@@ -754,7 +812,7 @@ try {
     await page.reload();
     // Beat Wren at table 7: table 8 opens, against the Dealer.
     await page.evaluate(() => {
-      window.fullHouse.settings.fast = true;
+      window.fullHouse.settings.pace = 'quick';
       window.fullHouse.start(6);
       const g = structuredClone(window.fullHouse.game);
       for (const b of g.board.boxes) { g.you[b.id] = b.id === 'low' ? null : 20; g.them[b.id] = b.id === 'low' ? null : b.id === 'five' ? 0 : 5; }
@@ -816,7 +874,7 @@ try {
       Object.assign(g, { number: 13, rolls: 0, turn: 'them' });
       const { option } = playTurn(new Opponent(TABLES[0].play), g.board, g.them, mulberry32((g.seed ^ Math.imul(13, 0x9E3779B1)) >>> 0));
       g.you.chance = R.totals(g.board, R.mark(g.them, option)).total;
-      window.fullHouse.settings.fast = true;
+      window.fullHouse.settings.pace = 'quick';
       window.fullHouse.set(g);
       return g.you.chance;
     });
@@ -840,7 +898,7 @@ try {
       const g = structuredClone(window.fullHouse.game);
       for (const b of g.board.boxes) { g.you[b.id] = b.id in you ? you[b.id] : null; g.them[b.id] = b.id in them ? them[b.id] : null; }
       Object.assign(g, { number: 2, rolls: 1, turn: 'you', dice, held: [false, false, false, false, false] }, more);
-      window.fullHouse.settings.fast = true;
+      window.fullHouse.settings.pace = 'quick';
       window.fullHouse.set(g);
     }, [you, dice, more, them]);
     const status = () => page.textContent('#status');
@@ -971,7 +1029,7 @@ try {
     // Pip) earns them no extra 100 to win a game the test means you to win.
     const play = async (table, each) => {
       await page.evaluate(([table, each]) => {
-        window.fullHouse.settings.fast = true;
+        window.fullHouse.settings.pace = 'quick';
         window.fullHouse.start(table, table ?? 0);
         const g = structuredClone(window.fullHouse.game);
         for (const b of g.board.boxes) { g.you[b.id] = b.id === 'chance' ? null : each; g.them[b.id] = b.id === 'chance' ? null : b.id === 'five' ? 0 : 5; }
@@ -1174,7 +1232,7 @@ try {
     await rolled(0, [5, 5, 5, 5, 4]);
     assert.equal(await status(), 'Hold dice and roll again, or pick a box to score.');
     // Rolled for real (with dice that can only come up 5), and heard as well as seen.
-    await page.evaluate(() => { window.fullHouse.settings.fast = true; window.fullHouse.start(0); Math.random = () => 0.7; });
+    await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; window.fullHouse.start(0); Math.random = () => 0.7; });
     await page.click('#b-roll');
     await settled();
     assert.equal(await status(), 'Five of a kind. 50 in its box, if you want it.');
@@ -1189,7 +1247,7 @@ try {
     }, who);
     // Yours: 45 on top with Sixes open, and four sixes rolled.
     await page.evaluate(() => {
-      window.fullHouse.settings.fast = true;
+      window.fullHouse.settings.pace = 'quick';
       window.fullHouse.start(0);
       const g = structuredClone(window.fullHouse.game);
       Object.assign(g.you, { f1: 3, f2: 6, f3: 9, f4: 12, f5: 15 });
@@ -1326,7 +1384,7 @@ try {
 
   await step('after the last roll the Held tags come off, while the opponent’s still show', async ({ page, game, settled, myTurn }) => {
     await page.evaluate(() => window.fullHouse.start(0));
-    await page.evaluate(() => { window.fullHouse.settings.fast = true; });
+    await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
     await page.click('#b-roll');
     await settled();
     await page.click('.die >> nth=0');
@@ -1356,7 +1414,7 @@ try {
         if (keep && keep.some(Boolean) && !keep.every(Boolean)) { g.seed = seed; break; }
       }
       Object.assign(g, { turn: 'them', rolls: 0, held: [false, false, false, false, false] });
-      window.fullHouse.settings.fast = false;
+      window.fullHouse.settings.pace = 'normal';
       window.fullHouse.set(g);
     });
     await page.waitForFunction(rolls => window.fullHouse.game.rolls === rolls && document.querySelector('.tray.theirs .die.held'), (await game()).board.rolls, { timeout: 30000 })
@@ -1409,7 +1467,7 @@ try {
     assert.equal(await page.getAttribute('#status', 'aria-live'), null, 'the line on screen is read out as well');
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
-    await page.evaluate(() => { window.fullHouse.settings.fast = true; });
+    await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
     assert.equal(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight), 0, 'what a screen reader hears makes the page scroll');
     await page.click('#b-roll');
     await settled();
@@ -1448,7 +1506,7 @@ try {
 
   await step('an open box is read out as what it would do, and a picked one as pressed', async ({ page, settled }) => {
     const boxes = () => page.$$eval('tr.can', rows => rows.map(r => ({ id: r.dataset.box, role: r.getAttribute('role'), label: r.getAttribute('aria-label'), pressed: r.getAttribute('aria-pressed'), shows: r.querySelector('td.you span')?.textContent ?? null })));
-    await page.evaluate(() => { window.fullHouse.settings.fast = true; window.fullHouse.start(2); }); // Triple Sixes
+    await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; window.fullHouse.start(2); }); // Triple Sixes
     assert.equal(await page.textContent('#pad caption'), 'Score pad');
     await page.click('#b-roll');
     await settled();
@@ -1484,7 +1542,7 @@ try {
     assert.equal(await page.title(), 'Table 1: Classic · Full House');
     assert.ok(await page.isVisible('main #tray[role="group"][aria-label="Dice"]'));
     assert.deepEqual(await labels(), [1, 2, 3, 4, 5].map(n => `Die ${n}, not rolled`), 'dice not yet rolled are read as numbers');
-    await page.evaluate(() => { window.fullHouse.settings.fast = true; });
+    await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
     await page.click('#b-roll');
     await settled();
     await page.click('.die >> nth=1');
@@ -1500,8 +1558,10 @@ try {
     for (const id of ['b-where', 'b-menu']) assert.equal(await page.getAttribute(`#${id}`, 'aria-haspopup'), 'dialog');
     await page.click('#b-menu');
     assert.equal(await page.getAttribute('#sheet-menu [role="dialog"]', 'aria-describedby'), 'menu-twist');
-    const fast = page.getByRole('switch', { name: 'Quick opponents', exact: true });
-    assert.equal(await fast.count(), 1, 'Quick opponents is not a switch of that name');
+    const pace = page.getByRole('group', { name: 'Opponents’ turns', exact: true });
+    assert.equal(await pace.count(), 1, 'the opponents’ pace is not a group of that name');
+    assert.deepEqual(await pace.getByRole('radio').evaluateAll(rs => rs.map(r => r.labels[0].textContent)), ['Unhurried', 'Quick', 'Just their score']);
+    assert.equal(await pace.getByRole('radio', { name: 'Unhurried', exact: true }).isChecked(), true, 'a new player’s pace is not Unhurried');
     assert.equal(await page.getByRole('switch', { name: 'Show what each box would score', exact: true }).count(), 1);
     await page.keyboard.press('Escape');
     assert.equal(await page.getAttribute('#sheet-result [role="dialog"]', 'aria-describedby'), 'result-line result-scores');
@@ -1511,7 +1571,7 @@ try {
 
   await step('with a contrast theme on, the dice, the used rolls, the picked box and the settings still show', async ({ page, settled }) => {
     await page.emulateMedia({ forcedColors: 'active' });
-    await page.evaluate(() => { window.fullHouse.settings.fast = true; window.fullHouse.start(0); });
+    await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; window.fullHouse.start(0); });
     await page.click('#b-roll');
     await settled();
     await page.locator('tr.can').first().click();
@@ -1531,7 +1591,10 @@ try {
     assert.notEqual(look.picked, look.unpicked, 'the picked box looks like the rest');
     assert.equal(look.roll, 'solid', 'Roll has no edge');
     await page.click('#b-menu');
-    assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById('o-fast')).appearance), 'auto', 'the settings show no control');
+    assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById('o-hints')).appearance), 'auto', 'the settings show no control');
+    const pace = () => page.$$eval('.seg span', ss => ss.map(s => getComputedStyle(s).backgroundColor));
+    const paces = await pace();
+    assert.ok(paces[0] !== paces[1] && paces[1] === paces[2], `the pace chosen looks like the others: ${paces}`);
   });
 
   await step('with the text enlarged, Roll, the Held tag and the bar keep all their words in view', async ({ page, settled }) => {
@@ -1542,7 +1605,7 @@ try {
       const cut = el => el.scrollWidth > el.clientWidth + 1;
       return { roll: w.top >= r.top - 1 && w.bottom <= r.bottom + 1, overDie: Math.round(die.getBoundingClientRect().bottom - tag.top), underTray: Math.round(document.getElementById('tray').getBoundingClientRect().bottom - tag.bottom), bar: [cut(document.getElementById('g-table')), cut(document.getElementById('g-twist'))] };
     });
-    await page.evaluate(() => { window.fullHouse.settings.fast = true; window.fullHouse.start(6); }); // Pairs and the Low Road, the longest name in the bar
+    await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; window.fullHouse.start(6); }); // Pairs and the Low Road, the longest name in the bar
     await page.click('#b-roll');
     await settled();
     await page.click('.die >> nth=0');
@@ -1564,7 +1627,7 @@ try {
   // A small window zoomed in (1024 x 640 at 200%, 1280 x 800 at 300%, 1280 x 1024 at 400%) or a small phone sideways.
   for (const [width, height] of [[512, 320], [568, 320], [427, 267], [320, 256]]) {
     await step(`in a short window (${width} x ${height}) the game scrolls, every box can be reached, and the Total stays at the foot`, async ({ page, settled }) => {
-      await page.evaluate(() => { window.fullHouse.settings.fast = true; window.fullHouse.start(0); });
+      await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; window.fullHouse.start(0); });
       await page.click('#b-roll');
       await settled();
       const look = id => page.evaluate(id => {
@@ -1658,7 +1721,7 @@ try {
     await page.keyboard.press('Enter');
     await page.keyboard.press('Enter'); // Sit down
     assert.equal(await focused(), 'b-roll', 'the focus did not go to Roll as the game began');
-    await page.evaluate(() => { window.fullHouse.settings.fast = true; });
+    await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
     await page.keyboard.press('Enter');
     await settled();
     // One Tab from Roll is the first open box, and the arrows, Home and End go between the open ones.
@@ -1874,7 +1937,7 @@ try {
     await page.click('[data-table="0"]');
     await sitDown('from the tour');
     // From the result of a game won, on to the next table, over the game just played.
-    await t.page.evaluate(() => { window.fullHouse.settings.fast = true; });
+    await t.page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
     await win(t);
     await page.waitForTimeout(900);
     await page.click('#b-next');
@@ -1884,7 +1947,7 @@ try {
   await step('a thrown die stays inside the tray, and its corners show no hole as it turns', async ({ page }) => {
     for (const [width, height] of [[390, 844], [844, 390], [430, 932]]) {
       await page.setViewportSize({ width, height });
-      await page.evaluate(() => { window.fullHouse.start(0); window.fullHouse.settings.fast = false; });
+      await page.evaluate(() => { window.fullHouse.start(0); window.fullHouse.settings.pace = 'normal'; });
       await page.click('#b-roll');
       // Held still, then stepped through the tumble 20 ms at a time.
       const m = await page.evaluate(async () => {
@@ -2128,7 +2191,7 @@ try {
       await page.setViewportSize({ width, height });
       await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { left: inset, right: inset, top: 0, bottom: inset ? 21 : 0 } });
       await page.evaluate(() => window.fullHouse.start(0));
-      await page.evaluate(() => { window.fullHouse.settings.fast = true; });
+      await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
       for (let n = 0; n < 3; n++) { // each roll nudges and tilts the dice a little differently
         await page.evaluate(() => { const g = structuredClone(window.fullHouse.game); g.rolls = 0; window.fullHouse.set(g); });
         await page.click('#b-roll');
@@ -2320,7 +2383,7 @@ try {
       const g = structuredClone(window.fullHouse.game);
       for (const b of g.board.boxes) { g.you[b.id] = b.id === 'three' ? null : 20; g.them[b.id] = open.includes(b.id) ? null : 5; }
       Object.assign(g, { number: 12, rolls: 0, turn: 'them' });
-      window.fullHouse.settings.fast = true;
+      window.fullHouse.settings.pace = 'quick';
       window.fullHouse.set(g);
       document.querySelector('.pad-wrap').scrollTop = scrollTop;
     }, [open, scrollTop]);
@@ -2379,7 +2442,7 @@ try {
       const g = structuredClone(window.fullHouse.game);
       for (const b of g.board.boxes) { g.you[b.id] = open.includes(b.id) ? null : 10; g.them[b.id] = open.includes(b.id) ? null : 8; }
       Object.assign(g, { number: 11, rolls: 0, turn: 'you' });
-      window.fullHouse.settings.fast = true;
+      window.fullHouse.settings.pace = 'quick';
       window.fullHouse.set(g);
       document.querySelector('.pad-wrap').scrollTop = scrollTop;
     }, [open, scrollTop]);
@@ -2500,7 +2563,7 @@ try {
   await step('a second copy plays the opponent’s turn when the first closes part way through it', async ({ page, ctx, settled }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
-    await page.evaluate(() => { window.fullHouse.settings.fast = true; });
+    await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
     const other = await ctx.newPage();
     await other.goto(base); // opens on the game in progress
     await page.click('#b-roll');
@@ -2575,7 +2638,7 @@ try {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
     await page.click('#b-menu');
-    await page.click('#o-fast');
+    await page.click('.seg label:nth-child(2)'); // Quick
     await page.keyboard.press('Escape');
 
     // 1. Lost at Classic, scoring as little as it can, then Play again.
@@ -2735,7 +2798,7 @@ try {
         await page.click('#b-sit');
         assert.equal(await page.evaluate(() => Math.round(document.getElementById('game').getBoundingClientRect().height)), 844, 'the game does not fill the host page');
         assert.ok(await page.locator('.pad tfoot').isVisible(), 'the pad is out of sight');
-        await page.evaluate(() => { window.fullHouse.settings.fast = true; });
+        await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
         await page.click('#b-roll');
         await settled();
         await page.locator('tr.can').first().click();

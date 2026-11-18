@@ -59,7 +59,7 @@ async function midGame(page, turn) {
     const board = boardFor(2, 1);
     const you = { ...blankCard(board), f1: 3, f3: 9, f4: 12, f5: 15, full: 25, small: 30, chance: 23 };
     const them = { ...blankCard(board), f1: 2, f2: 6, f5: 20, three: 24, full: 25, large: 40, chance: 19 };
-    window.fullHouse.settings.fast = false;
+    window.fullHouse.settings.pace = 'normal';
     window.fullHouse.set({
       table: 2, opp: 2, seed, board, you, them, turn, number: 8, rolls: turn === 'you' ? 2 : 0,
       dice: [6, 6, 2, 6, 5], held: turn === 'you' ? [true, true, false, true, false] : [false, false, false, false, false],
@@ -86,7 +86,7 @@ async function midGame(page, turn) {
     Object.assign(g.you, { f2: 6, f6: 54, three: 26, four: 22, large: 40 }); // Five of a kind left open
     Object.assign(g.them, { f3: 9, f4: 12, f6: 36, four: 21, small: 30 });
     g.turn = 'you'; g.rolls = 0; g.number = 13;
-    window.fullHouse.settings.fast = true;
+    window.fullHouse.settings.pace = 'quick';
     window.fullHouse.set(g);
   });
   await page.waitForFunction(() => window.fullHouse.game.turn === 'you' && !window.fullHouse.busy);
