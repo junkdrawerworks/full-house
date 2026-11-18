@@ -53,6 +53,19 @@ export class Pad {
     wrap.scrollTo({ top, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }
 
+  // When none of the boxes you can score shows in the pad's window (the opponent's pick may have left it at the other end),
+  // bring the nearest into view: the first one below the window, or else the last one above it. One that shows already,
+  // even if only one, moves nothing, nor does a window so short that the whole game scrolls.
+  revealOpen() {
+    const wrap = this.el.parentElement, foot = this.el.querySelector('tfoot th'), rows = [...this.el.querySelectorAll('tr.can')];
+    if (!foot || !rows.length || getComputedStyle(wrap).overflowY === 'visible') return;
+    const w = wrap.getBoundingClientRect(), floor = Math.min(w.bottom, foot.getBoundingClientRect().top);
+    const at = rows.map(row => row.getBoundingClientRect());
+    if (at.some(r => r.top >= w.top - 0.5 && r.bottom <= floor + 0.5)) return;
+    const below = rows.find((row, i) => at[i].bottom > floor + 0.5);
+    this.reveal((below || rows[rows.length - 1]).dataset.box);
+  }
+
   // board, both cards, the opponent's name, and on your turn: what each allowed box would score ({ id: score }),
   // which box is picked, and which boxes were just written in (to pencil them in as you watch).
   render({ board, you, them, name, offers = null, picked = null, fresh = {}, hints = true, theirPick = null }) {

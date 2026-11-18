@@ -54,6 +54,7 @@ function roll() {
     showDice();
     render();
     if (game !== g) return;
+    pad.revealOpen(); // the only time your own turn moves the pad: when nothing you can score is in view
     const left = g.board.rolls - g.rolls;
     say(`You rolled ${g.dice.join(', ')}. ${left ? `${left} roll${left === 1 ? '' : 's'} left.` : 'No rolls left.'}${jokerState(g.board, g.you, g.dice) ? ` ${$('status').textContent}` : ''}`);
   }, settings.fast ? 450 : 750);
@@ -168,7 +169,7 @@ async function theirTurn() {
   theirPick = { id: option.box.id, score: option.score };
   status(`${name} scores ${option.score} in ${boxLabel(option.box)}${option.extra ? `, plus ${b.extra} extra` : ''}.`);
   render();
-  pad.reveal(option.box.id); // on a short screen the box may be scrolled out of sight; your own turn never moves the pad
+  pad.reveal(option.box.id); // on a short screen the box may be scrolled out of sight; your own turn moves the pad only to show a box you can score
   await wait(pace.choose, 450);
   if (!still()) return;
 

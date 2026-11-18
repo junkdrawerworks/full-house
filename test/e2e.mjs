@@ -1771,6 +1771,7 @@ try {
       if (id === 'f1') assert.equal(at, 0, 'the pad stopped just short of its top');
       await page.click('#b-roll');
       await page.waitForFunction(() => !window.fullHouse.busy);
+      await page.waitForTimeout(700); // the box you can score shows already, so nothing glides
       assert.equal(await pad(), at, 'the pad moved at the start of your turn');
     }
 
@@ -1788,6 +1789,43 @@ try {
     await page.waitForTimeout(60);
     assert.ok(await shown(id), 'with less motion asked for, the box was not in view straight away');
     assert.equal(await pageMoved(), false, 'the page itself moved');
+  }, { viewport: { width: 360, height: 640 } });
+
+  await step('on a short phone, when no box you can score is in view after a roll, the pad brings the nearest one up', async ({ page }) => {
+    // Late in a game with only bottom boxes open (or only top ones), the pad left at the other end by the opponent's pick.
+    const late = (open, scrollTop) => page.evaluate(([open, scrollTop]) => {
+      window.fullHouse.start(0);
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) { g.you[b.id] = open.includes(b.id) ? null : 10; g.them[b.id] = open.includes(b.id) ? null : 8; }
+      Object.assign(g, { number: 11, rolls: 0, turn: 'you' });
+      window.fullHouse.settings.fast = true;
+      window.fullHouse.set(g);
+      document.querySelector('.pad-wrap').scrollTop = scrollTop;
+    }, [open, scrollTop]);
+    // The open boxes wholly in the pad's window, below its top edge and above the Total.
+    const inView = () => page.evaluate(() => {
+      const w = document.querySelector('.pad-wrap').getBoundingClientRect(), total = document.querySelector('.pad tfoot th').getBoundingClientRect();
+      return [...document.querySelectorAll('tr.can')].filter(tr => { const r = tr.getBoundingClientRect(); return r.top >= w.top - 0.5 && r.bottom <= Math.min(w.bottom, total.top) + 0.5; }).map(tr => tr.dataset.box);
+    });
+    const pad = () => page.evaluate(() => document.querySelector('.pad-wrap').scrollTop);
+    const roll = async () => { await page.click('#b-roll'); await page.waitForFunction(() => !window.fullHouse.busy); };
+    for (const [open, scrollTop, first] of [[['large', 'five', 'chance'], 0, 'large'], [['f1', 'f2'], 9999, 'f2']]) {
+      await late(open, scrollTop);
+      assert.deepEqual(await inView(), [], `with the pad scrolled to ${scrollTop ? 'its end' : 'its top'} an open box shows already, so this checks nothing`);
+      await roll();
+      await page.waitForFunction(() => document.querySelector('tr.can'));
+      await page.waitForFunction(first => {
+        const r = document.querySelector(`tr[data-box="${first}"]`).getBoundingClientRect(), w = document.querySelector('.pad-wrap').getBoundingClientRect();
+        return r.top >= w.top - 0.5 && r.bottom <= Math.min(w.bottom, document.querySelector('.pad tfoot th').getBoundingClientRect().top) + 0.5;
+      }, first, { timeout: 5000 }).catch(() => assert.fail(`after a roll with ${open.join(', ')} open and none in view, ${first} stayed out of sight`));
+      assert.equal(await page.evaluate(() => scrollY || document.querySelector('.game').getBoundingClientRect().top), 0, 'the page itself moved');
+      // Once one is in view, the next roll leaves the pad where it is.
+      await page.waitForTimeout(700);
+      const at = await pad();
+      await roll();
+      await page.waitForTimeout(700);
+      assert.equal(await pad(), at, 'the pad moved with an open box in view');
+    }
   }, { viewport: { width: 360, height: 640 } });
 
   await step('keyboard: a box picked while scrolled out of sight comes into view, and Tab stops clear of the Total', async ({ page, settled }) => {
