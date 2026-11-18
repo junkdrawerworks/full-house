@@ -131,6 +131,8 @@ function cardWith(board, open, top) {
 test('on the last turn the planner keeps dice within half a point of the best play there is', () => {
   // test/exact.mjs works out the best expected final total over every roll and keep, and what the planner's own
   // choices come to, without its slips. Some cards have the top-section bonus at stake on the last box, some don't.
+  // The sharpest opponents work the last two turns out exactly; the judgement every opponent uses before that, and
+  // the others to the end, is checked here too.
   const top = { f1: 3, f2: 6, f3: 9, f4: 12, f5: 15, f6: 18 };
   const cases = [
     [0, 'f6', { ...top, f6: null }], // Classic, 45 on top: Sixes needs three sixes for the bonus
@@ -149,7 +151,7 @@ test('on the last turn the planner keeps dice within half a point of the best pl
   ];
   for (const [t, open, scores] of cases) {
     const board = boardFor(t, 0), card = cardWith(board, [open], scores), right = best(board, card);
-    for (const [who, play] of [['the planner at its best', { patience: 1, bonus: 1, slip: 0 }], [TABLES[t].who.name, { ...TABLES[t].play, slip: 0 }]]) {
+    for (const [who, play] of [['the planner’s judgement at its best', { patience: 1, bonus: 1, endgame: false }], [TABLES[t].who.name, TABLES[t].play]]) {
       if (play.look === false) continue;
       const got = planned(board, card, new Opponent(play));
       assert.ok(got <= right + 1e-9, `the exact check is wrong: ${got} beats the best play, ${right}`);
@@ -159,7 +161,9 @@ test('on the last turn the planner keeps dice within half a point of the best pl
 });
 
 test('an opponent doesn’t spend a box that has more to give on a bonus it would get anyway', () => {
-  // Reaching the top-section bonus with a box counted the whole 35, even when the bonus was in easy reach later.
+  // Reaching the top-section bonus with a box counted the whole 35, even when the bonus was in easy reach later. This
+  // is the judgement an opponent uses with three boxes or more left (and Maud, Bea and Sol to the end), checked on
+  // cards with two left, where the best play there is can be worked out.
   // Wren, two boxes left, 62 of 63 on top: 2 in Twos takes the bonus, but the straight is 40, and one 2 or better in
   // Twos next turn still takes it. The best play there is says the straight, by about 29 points.
   const pairs = TABLES[6].board, noSlip = () => 1;
@@ -168,12 +172,12 @@ test('an opponent doesn’t spend a box that has more to give on a bonus it woul
   // next turn enough for the bonus.
   const classic = cardWith(CLASSIC, ['f5', 'five'], { f1: 3, f2: 6, f3: 9, f4: 12, f6: 23 });
   for (const [who, play, board, card, dice, want] of [
-    ['Wren', TABLES[6].play, pairs, wren, [3, 4, 6, 5, 2], 'large'],
-    ['the planner at its best', { patience: 1, bonus: 1 }, CLASSIC, classic, [5, 5, 5, 5, 5], 'five'],
+    ['Wren', { ...TABLES[6].play, endgame: false }, pairs, wren, [3, 4, 6, 5, 2], 'large'],
+    ['the planner at its best', { patience: 1, bonus: 1, endgame: false }, CLASSIC, classic, [5, 5, 5, 5, 5], 'five'],
   ]) {
     const opts = options(board, card, dice).map(o => ({ id: o.box.id, worth: best(board, mark(card, o)) })).sort((a, b) => b.worth - a.worth);
     assert.equal(opts[0].id, want, `the best play there is takes ${opts[0].id}`);
-    const opp = new Opponent({ ...play, slip: 0 }), got = opp.box(board, card, dice, noSlip).box.id;
+    const opp = new Opponent(play), got = opp.box(board, card, dice, noSlip).box.id;
     assert.equal(got, want, `${who} wrote ${dice.join('-')} in ${got}: ${opts.map(o => `${o.id} leads to ${o.worth.toFixed(1)}`).join(', ')}`);
     // And over the two turns, the planner's own play comes within half a point of the best there is.
     const right = best(board, card), mine = planned(board, card, opp);
@@ -181,12 +185,36 @@ test('an opponent doesn’t spend a box that has more to give on a bonus it woul
   }
 });
 
+test('with two boxes left the sharpest opponents play it out exactly, and don’t hold on to a bonus out of reach', () => {
+  // The Dealer at High Stakes, Fives and Large straight open, 17 needed on top, rolls 2-3-4-4-5. Judging by how near
+  // the bonus is, he crossed out the doubled straight to keep Fives for four 5s; 5 in Fives leaves him the straight
+  // with four rolls, and about 16 points more to expect.
+  const high = TABLES[7].board, noSlip = () => 1, dice = [2, 3, 4, 4, 5];
+  const card = cardWith(high, ['f5', 'large'], { f1: 3, f2: 4, f3: 9, f4: 12, f6: 18, five: 0 });
+  const after = Object.fromEntries(options(high, card, dice).map(o => [o.box.id, best(high, mark(card, o))]));
+  assert.ok(after.f5 > after.large + 10, `the best play there is: ${JSON.stringify(after)}`);
+  const dealer = new Opponent(TABLES[7].play);
+  assert.equal(dealer.box(high, card, dice, noSlip).box.id, 'f5', 'the Dealer crossed out Large straight');
+  // From any card with a box or two left, his play is the best there is, and so is Wren's, Otto's and Jules's.
+  for (const t of [4, 5, 6, 7]) {
+    const opp = new Opponent(TABLES[t].play), board = boardFor(t, 3);
+    assert.ok(opp.p.endgame, `${TABLES[t].who.name} doesn’t work the end out`);
+    const cards = [cardWith(board, ['f6', 'chance'], { f1: 2, f2: 6, f3: 9, f4: 12, f5: 10 }), cardWith(board, ['four'], { f1: 3, f2: 6, f3: 9, f4: 12, f5: 15, f6: 18 })];
+    if (t === 7) cards.push(card);
+    for (const c of cards) {
+      const right = best(board, c), got = planned(board, c, opp);
+      assert.ok(Math.abs(right - got) < 1e-6, `${TABLES[t].who.name} expects ${got.toFixed(3)} from here, the best play ${right.toFixed(3)}`);
+    }
+  }
+  assert.ok(!new Opponent(TABLES[3].play).p.endgame, 'Sol, who slips one time in eight, judges to the end');
+});
+
 test('when rolling again can’t do better than the dice already there, an opponent stands', () => {
   // At Wild Ones 1-1-1-1-2 is already 50 in Five of a kind, and so is anything the 2 could become; Jules held four
   // and rolled the fifth die for the same 50.
   const wild = TABLES[4].board;
   for (const [who, play] of [['Jules', TABLES[4].play], ['the planner at its best', {}]]) {
-    const opp = new Opponent({ ...play, slip: 0 });
+    const opp = new Opponent(play);
     for (const rolls of [1, 2]) assert.equal(opp.keep(wild, blankCard(wild), [1, 1, 1, 1, 2], rolls, () => 1), null, `${who} rolls again with ${rolls} to go`);
   }
 });

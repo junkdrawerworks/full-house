@@ -7,7 +7,7 @@
 // top-section bonus, and doesn't waste a five-of-a-kind box early. Weaker opponents leave some of that out and
 // sometimes take the second-best choice.
 
-import { options, isUpper, totals, turnsLeft } from './rules.js';
+import { options, isUpper, totals, turnsLeft, mark } from './rules.js';
 
 // ---- every roll, and every handful you might keep ----
 
@@ -103,12 +103,47 @@ function valuer(board, card, p) {
   };
 }
 
+// ---- the last two turns, worked out exactly ----
+
+// With two boxes or fewer left, there are few enough ways for the game to go that a sharp opponent works out the
+// best play exactly, instead of going by what a box usually scores and how near the bonus is. That judgement held on
+// to a bonus out of reach: the Dealer at High Stakes, needing 17 with Fives and Large straight open, crossed out the
+// doubled straight to keep Fives for it, and lost about 16 points on what he could expect. Thinking a roll through takes
+// up to about 115 ms on a phone-speed processor (Chromium with its CPU slowed six times; Jules at Wild Ones, the
+// slowest), against up to about 70 ms earlier in a game.
+const expect = (out, v) => { let a = 0; for (const [s, q] of out) a += q * v[s]; return a; };
+
+// What the rest of the game adds to the total with the best play there is. That depends only on which boxes are open,
+// what the top section still needs for the bonus, and what Five of a kind holds, so cards that differ only in what
+// was scored where share the work.
+function toCome(board, card, memo) {
+  const open = board.boxes.filter(b => card[b.id] === null);
+  if (!open.length) return 0;
+  const five = board.boxes.find(b => b.kind === 'five'), need = open.some(isUpper) ? Math.max(0, board.bonus.at - totals(board, card).upper) : 0;
+  const k = `${open.map(b => b.id)}|${need}|${card[five.id]}`;
+  if (memo.has(k)) return memo.get(k);
+  const now = totals(board, card).total;
+  let v = STATES.map(s => { let best = -Infinity; for (const o of options(board, card, s.dice)) { const c = mark(card, o); best = Math.max(best, totals(board, c).total - now + toCome(board, c, memo)); } return best; });
+  for (let r = 1; r < board.rolls; r++) {
+    const kept = OUTCOMES.map(out => expect(out, v));
+    v = SUBSETS.map(subs => { let best = -Infinity; for (const i of subs) if (kept[i] > best) best = kept[i]; return best; });
+  }
+  const res = expect(OUTCOMES[0], v);
+  memo.set(k, res);
+  return res;
+}
+// A box is worth the final total it leads to, played out as well as can be.
+const exactValuer = (board, card, memo = new Map()) => opt => { const c = mark(card, opt); return totals(board, c).total + toCome(board, c, memo); };
+
+// How an opponent values a box this turn: exactly, near the end, if it plays that well; otherwise by judgement.
+const valueFor = (board, card, p) => (p.endgame && turnsLeft(board, card) <= 2 ? exactValuer(board, card) : valuer(board, card, p));
+
 // ---- planning a turn ----
 
 // Best box value for every possible roll, then, working back, what each handful is worth with r rolls to come.
 // (Exported, with the tables above and ranked() below, for the exact check of the endgame in test/exact.mjs.)
 export function plan(board, card, rolls, p) {
-  const value = valuer(board, card, p);
+  const value = valueFor(board, card, p);
   const v0 = STATES.map(s => {
     const opts = options(board, card, s.dice);
     let best = -Infinity;
@@ -139,9 +174,11 @@ export const ranked = (k, s) => [...new Set(SUBSETS[s])].sort((a, b) => (Math.ab
 //   slip      chance of taking the second-best choice at any point
 //   tau       how quickly boxes lose their worth for later as the game runs out
 //   style     { boost: { kind: factor } }, boxes it likes more (or less) than they're worth
+//   endgame   works out the last two turns exactly (see toCome() above); on unless it slips one time in ten or more
 export class Opponent {
   constructor(p) {
     this.p = { look: true, patience: 1, bonus: 1, slip: 0, tau: 6, pull: 4, style: {}, ...p };
+    this.p.endgame ??= this.p.look && this.p.slip < 0.1;
   }
 
   // Which dice to keep before rolling again, as true/false for each die. Null means stop and score now.
@@ -160,7 +197,7 @@ export class Opponent {
   box(board, card, dice, rand = Math.random) {
     const opts = options(board, card, dice);
     // The beginner takes the most points, but would rather not cross out Five of a kind.
-    const value = this.p.look ? valuer(board, card, this.p) : o => o.score + o.extra - (o.box.kind === 'five' && !o.score ? 30 : 0);
+    const value = this.p.look ? valueFor(board, card, this.p) : o => o.score + o.extra - (o.box.kind === 'five' && !o.score ? 30 : 0);
     const ranked = opts.map(o => ({ o, v: value(o) })).sort((a, b) => b.v - a.v);
     return (ranked.length > 1 && rand() < this.p.slip ? ranked[1] : ranked[0]).o;
   }
