@@ -570,12 +570,14 @@ try {
   await step('the result says when you’ve beaten your best at a table, and doesn’t open a table twice', async t => {
     const { page } = t;
     // A game at a table (null for a quick game) with every box but Chance worth `each` to you, played to its result.
+    // The opponent's Five of a kind holds a 0, so a five of a kind on their last turn (about one game in twenty for
+    // Pip) earns them no extra 100 to win a game the test means you to win.
     const play = async (table, each) => {
       await page.evaluate(([table, each]) => {
         window.fullHouse.settings.fast = true;
         window.fullHouse.start(table, table ?? 0);
         const g = structuredClone(window.fullHouse.game);
-        for (const b of g.board.boxes) { g.you[b.id] = b.id === 'chance' ? null : each; g.them[b.id] = b.id === 'chance' ? null : 5; }
+        for (const b of g.board.boxes) { g.you[b.id] = b.id === 'chance' ? null : each; g.them[b.id] = b.id === 'chance' ? null : b.id === 'five' ? 0 : 5; }
         Object.assign(g, { number: 13, rolls: 1, turn: 'you' });
         window.fullHouse.set(g);
       }, [table, each]);
