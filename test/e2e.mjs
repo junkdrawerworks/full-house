@@ -155,6 +155,7 @@ try {
     // Giving up counts as a game played, and goes back to the tour, where table 2 is next.
     await page.click('#b-menu');
     await page.click('#b-concede');
+    await page.click('#b-concede');
     assert.equal(await page.evaluate(() => document.body.dataset.screen), 'home');
     assert.equal((await page.evaluate(() => window.fullHouse.progress)).played[1], 1);
     assert.match(await page.textContent('#tables li:nth-child(2)'), /Next up/);
@@ -261,6 +262,47 @@ try {
     assert.equal((await page.evaluate(() => window.fullHouse.progress)).played[0], 2, 'two games played, no extra loss');
   });
 
+  await step('giving up takes two taps, and the tour says what happened', async ({ page, game, settled }) => {
+    const screen = () => page.evaluate(() => document.body.dataset.screen);
+    const label = () => page.textContent('#b-concede');
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    await page.click('#b-roll');
+    await settled();
+    // One tap asks, and the game is still there.
+    await page.click('#b-menu');
+    assert.equal(await label(), 'Give up this game');
+    await page.click('#b-concede');
+    assert.equal(await label(), 'Tap again to give up. It counts as a loss.');
+    assert.equal(await screen(), 'game');
+    assert.equal((await game()).rolls, 1, 'one tap gave the game up');
+    assert.equal((await page.evaluate(() => window.fullHouse.progress)).played[0], undefined, 'one tap counted the game');
+    // Closing the menu takes the question back, however it's closed: the next tap asks again.
+    for (const close of [() => page.click('#sheet-menu .close'), () => page.keyboard.press('Escape'), () => page.goBack()]) {
+      await close();
+      await page.waitForSelector('#sheet-menu', { state: 'hidden' });
+      await page.click('#b-menu');
+      assert.equal(await label(), 'Give up this game', 'the menu opened with giving up already asked');
+      await page.click('#b-concede');
+      assert.equal(await screen(), 'game');
+      assert.ok(await game(), 'a tap after closing the menu gave the game up');
+    }
+    // The second tap gives up, and the tour says so.
+    await page.click('#b-concede');
+    assert.equal(await screen(), 'home');
+    assert.equal(await game(), null);
+    assert.equal((await page.evaluate(() => window.fullHouse.progress)).played[0], 1);
+    assert.equal(await page.textContent('#toast'), 'You gave up at table 1. Pip takes that one.');
+    assert.ok(await page.isVisible('#toast'));
+    // A quick game has no table to name.
+    await page.click('[data-quick="0"]');
+    await page.click('#b-menu');
+    assert.equal(await label(), 'Give up this game');
+    await page.click('#b-concede');
+    await page.click('#b-concede');
+    assert.equal(await page.textContent('#toast'), 'You gave up. Pip takes that one.');
+  });
+
   await step('giving up while the opponent writes a score leaves no trace in the next game', async ({ page, settled }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
@@ -272,6 +314,7 @@ try {
     await page.waitForFunction(() => {
       if (!/scores \d+ in/.test(document.getElementById('status').textContent)) return false;
       document.getElementById('b-menu').click();
+      document.getElementById('b-concede').click();
       document.getElementById('b-concede').click();
       document.querySelector('[data-quick="0"]').click();
       return true;
@@ -450,6 +493,7 @@ try {
     await page.click('#b-roll');
     await settled();
     await page.click('#b-menu');
+    await page.click('#b-concede');
     await page.click('#b-concede');
     await page.click('[data-quick="0"]');
     // Which face each cube is turned to show, from its rotation.

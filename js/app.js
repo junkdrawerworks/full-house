@@ -20,6 +20,7 @@ let picked = null;     // the box you've tapped once and not yet scored
 let fresh = {};        // boxes just written in, pencilled in as you watch
 let theirPick = null;  // the box the opponent is about to write in
 let token = 0;         // changes whenever a game starts or ends, so a turn being played out knows to stop
+let givingUp = false;  // Give up tapped once in the menu, and not yet again
 let playing = -1;      // the token of the game whose opponent is playing a turn right now, so only one copy runs
 
 const tray = new Tray($('tray'), { onToggle: toggle, onTap: () => { if (busy && game?.turn === 'them') hurry = true; } });
@@ -330,6 +331,7 @@ function openSheet(id, back) {
   keepHistory();
 }
 function closeSheets() {
+  askGiveUp(false);
   const shown = document.querySelectorAll('.sheet:not([hidden])');
   shown.forEach(s => { s.hidden = true; });
   behind().forEach(el => { el.inert = false; }); // before the focus goes back, which it can't to something inert
@@ -409,9 +411,23 @@ const showMenu = () => {
   $('menu-twist').textContent = `${game.board.blurb} You’re playing ${who(game).name}: ${who(game).line.charAt(0).toLowerCase()}${who(game).line.slice(1)}`;
   openSheet('sheet-menu');
 };
+// Giving up takes two taps, as scoring a box does: the first asks, and closing the menu takes the question back.
+function askGiveUp(on) {
+  givingUp = on;
+  $('b-concede').textContent = on ? 'Tap again to give up. It counts as a loss.' : 'Give up this game';
+  $('b-concede').classList.toggle('asked', on);
+}
+function giveUp() {
+  const g = game;
+  if (!g) return;
+  if (g.over) { concede(false); return; } // nothing to lose
+  if (!givingUp) { askGiveUp(true); return; }
+  concede(false);
+  toast(`You gave up${g.table === null ? '' : ` at table ${g.table + 1}`}. ${who(g).name} takes that one.`);
+}
 $('b-menu').addEventListener('click', showMenu);
 $('b-where').addEventListener('click', showMenu);
-$('b-concede').addEventListener('click', () => concede(false));
+$('b-concede').addEventListener('click', giveUp);
 document.querySelectorAll('[data-close]').forEach(el => el.addEventListener('click', closeSheets));
 const TOGGLES = [['fast', 'o-fast'], ['hints', 'o-hints']];
 for (const [k, id] of TOGGLES) {
