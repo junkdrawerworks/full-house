@@ -601,3 +601,22 @@ body[data-screen='home'] .toast { top: auto; bottom: calc(16px + env(safe-area-i
   .cube, .die { transition-duration: 0.01s; }
   .die .hop.go, .pad td.fresh span, .toast, .scrim, .panel { animation: none; }
 }
+
+/* A contrast theme (Windows' High Contrast, say) replaces the colours with the theme's few, and drops backgrounds and
+   shadows, which is how the dice, the switches and the picked box are drawn. The tray keeps its own felt and dice (ivory
+   and red, already high contrast) inside an outline; the rest takes the theme's colours, with borders where a fill went. */
+@media (forced-colors: active) {
+  .tray { forced-color-adjust: none; outline: 2px solid CanvasText; outline-offset: 2px; }
+  .roll, .primary, .continue, .people button { border: 2px solid ButtonText; }
+  .roll[aria-disabled='true'] { border-color: GrayText; color: GrayText; }
+  .rolls i { border-color: CanvasText; }
+  .rolls i.used { forced-color-adjust: none; background: CanvasText; }
+  .pad td.offer span { color: GrayText; } /* what a box would score, not yet written in */
+  .pad tr.picked th[scope='row'], .pad tr.picked td.you { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+  .pad tr.picked th small, .pad tr.picked td.you span { color: HighlightText; }
+  .toggle input { appearance: auto; -webkit-appearance: auto; width: 20px; height: 20px; margin-top: 2px; }
+  .toggle input::after { display: none; }
+  .panel, .toast { border: 2px solid CanvasText; }
+  .tables .beaten .n { forced-color-adjust: none; }
+  .mult { border: 1px solid CanvasText; }
+}

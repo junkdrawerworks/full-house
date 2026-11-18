@@ -1,4 +1,5 @@
-// Quick looks while building:  node dev/shots.mjs [out dir] [only these: phone,desk,dark]
+// Quick looks while building:  node dev/shots.mjs [out dir] [only these: phone,desk,dark,contrast]
+// `contrast` is a Windows contrast theme, as Chromium emulates one (forced colours).
 import { createRequire } from 'node:module';
 import { execSync } from 'node:child_process';
 import { createServer } from 'node:http';
@@ -22,9 +23,9 @@ const server = createServer(async (req, res) => {
 const base = `http://localhost:${server.address().port}/`;
 const browser = await pw.chromium.launch();
 
-for (const [name, vp, scheme] of [['phone', { width: 390, height: 844 }, 'light'], ['desk', { width: 1280, height: 800 }, 'light'], ['dark', { width: 390, height: 844 }, 'dark']]) {
+for (const [name, vp, scheme, forcedColors = 'none'] of [['phone', { width: 390, height: 844 }, 'light'], ['desk', { width: 1280, height: 800 }, 'light'], ['dark', { width: 390, height: 844 }, 'dark'], ['contrast', { width: 390, height: 844 }, 'dark', 'active']]) {
   if (only && !only.split(',').includes(name)) continue;
-  const ctx = await browser.newContext({ viewport: vp, deviceScaleFactor: 2, hasTouch: true, colorScheme: scheme, serviceWorkers: 'block' });
+  const ctx = await browser.newContext({ viewport: vp, deviceScaleFactor: 2, hasTouch: true, colorScheme: scheme, forcedColors, serviceWorkers: 'block' });
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
@@ -32,7 +33,7 @@ for (const [name, vp, scheme] of [['phone', { width: 390, height: 844 }, 'light'
   await page.addInitScript(() => localStorage.setItem('full-house.v1', JSON.stringify({ progress: { beaten: [true, true], best: [212, 238] } })));
   await page.goto(base);
   await page.evaluate(() => document.fonts.ready);
-  await page.screenshot({ path: join(out, `${name}-home.png`), fullPage: true });
+  await page.screenshot({ path: join(out, `${name}-home.png`), fullPage: forcedColors === 'none' }); // a full-page shot drops the forced colours
   await page.click('[data-table="2"]');
   await page.waitForTimeout(400);
   await page.screenshot({ path: join(out, `${name}-intro.png`) });

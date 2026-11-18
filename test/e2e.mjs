@@ -1122,6 +1122,31 @@ try {
     assert.equal(await page.title(), 'Full House');
   });
 
+  await step('with a contrast theme on, the dice, the used rolls, the picked box and the settings still show', async ({ page, settled }) => {
+    await page.emulateMedia({ forcedColors: 'active' });
+    await page.evaluate(() => { window.fullHouse.settings.fast = true; window.fullHouse.start(0); });
+    await page.click('#b-roll');
+    await settled();
+    await page.locator('tr.can').first().click();
+    const look = await page.evaluate(() => {
+      const css = sel => getComputedStyle(document.querySelector(sel));
+      return {
+        face: css('.die .face').forcedColorAdjust, // the dice keep their own colours
+        used: css('.rolls i.used').backgroundColor,
+        open: css('.rolls i:not(.used)').backgroundColor,
+        picked: css('tr.picked td.you').backgroundColor,
+        unpicked: css('tr.can:not(.picked) td.you').backgroundColor,
+        roll: css('#b-roll').borderTopStyle,
+      };
+    });
+    assert.equal(look.face, 'none', 'the dice take the theme’s colours, which leaves them blank');
+    assert.notEqual(look.used, look.open, 'a used roll looks like one still to come');
+    assert.notEqual(look.picked, look.unpicked, 'the picked box looks like the rest');
+    assert.equal(look.roll, 'solid', 'Roll has no edge');
+    await page.click('#b-menu');
+    assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById('o-fast')).appearance), 'auto', 'the settings show no control');
+  });
+
   await step('keyboard: Space or Enter hurries the opponent, and How to play says which keys do what', async ({ page, game, myTurn, settled }) => {
     await page.click('#b-rules');
     assert.ok(await page.isVisible('#rules-list .keys'), 'How to play does not say the keys on a computer');
