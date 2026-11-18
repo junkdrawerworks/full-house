@@ -28,7 +28,7 @@
   6. **Hot Boxes** against Otto: two boxes, picked at random each time you sit down, score three times over; when one is a number box, the bonus rises to match.
   7. **Pairs and the Low Road** against Wren: Two pairs replaces three of a kind, and the Low road (30 for a total of 12 or less) replaces chance.
   8. **High Stakes** against the Dealer: four rolls a turn, and the bottom section scores double.
-- **Opponents who plan.** Five dice can only land 252 different ways, so an opponent works out, for every possible roll, which dice to keep for the best result over the rest of its turn. It values each box by what it scores now, what it might be worth later, and the top-section bonus. The early opponents leave parts of that out and make mistakes on purpose, and some have a style: Jules chases five of a kind, Otto always goes for the bonus. On classic rules Pip averages about 144, and the Dealer about 243 (the best possible play averages about 254).
+- **Opponents who plan.** Five dice can only land 252 different ways, so an opponent works out, for every possible roll, which dice to keep for the best result over the rest of its turn. It values each box by what it scores now, what it might be worth later, and the top-section bonus. The early opponents leave parts of that out and make mistakes on purpose, and some have a style: Jules chases five of a kind, Otto always goes for the bonus. On classic rules Pip averages about 139, and the Dealer about 244 (`node dev/strength.mjs 600 classic`); the best possible play averages 254.59 (Tom Verhoeff, *Optimal Solitaire Yahtzee Player*, Eindhoven University of Technology, 1999).
 - **Watch them play.** Their red dice tumble in your tray and their scores go into the pad in red pencil. Tap the dice to hurry them along, or turn on quick opponents.
 - **Quick game.** Classic rules against anyone you've met on the tour.
 - **Your progress.** The tables you've beaten and your best score at each. Giving up part way counts as a loss.
@@ -46,7 +46,7 @@ npm test                       # the rules and the opponents in Node, then the g
 node tools/screenshots.mjs     # redraws docs/*.png and og.png
 node tools/make-icons.mjs      # redraws the PNG icons from icon.svg, the same to the byte every time
 npm run build                  # bundles everything into dist/full-house.html, one file you can send around, and dist/artifact.html
-node dev/strength.mjs 300 all  # how each opponent scores at its own table, against the best settings, each mean with its 95% margin
+node dev/strength.mjs 300 all  # how each opponent scores at its own table, against the best settings, each mean with its 95% margin; classic in place of all plays every opponent on classic rules
 npm run sim                    # how often a rule-of-thumb player and the best planner beat each table's opponent
 ```
 
