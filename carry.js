@@ -6,13 +6,17 @@
 // saves, writes any it doesn't already have, and loads the page again. After that it does nothing, and it never
 // does anything away from https://*.junkdrawer.works (a local copy, an Artifact, the tests).
 (() => {
-  const HOME = 'https://junkdrawer.works', DONE = 'junkdrawer.carried', TRIES = 'junkdrawer.carry-tries';
+  const HOME = 'https://junkdrawer.works', DONE = 'junkdrawer.carried', TRIES = 'junkdrawer.carry-tries', PROBE = 'junkdrawer.carry-probe';
   let local, session;
   try {
     if (location.protocol !== 'https:' || !/^[a-z0-9-]+\.junkdrawer\.works$/.test(location.hostname)) return;
     local = localStorage;
     session = sessionStorage;
     if (local.getItem(DONE) || session.getItem(DONE)) return;
+    // Storage that can be read but not written (full, or blocked for writing) has nowhere to put saves either, and
+    // nowhere to note this was done: stopping the page would only start it again, and again, for ever.
+    local.setItem(PROBE, '1');
+    local.removeItem(PROBE);
   } catch { return; } // storage is blocked, so there's nowhere to put saves anyway
 
   window.stop();
@@ -20,6 +24,8 @@
   const finish = carried => {
     if (finished) return;
     finished = true;
+    // This tab's marker first, on its own, so that the page loaded again plays whatever happens to the writes below.
+    try { session.setItem(DONE, carried ? 'carried' : 'later'); } catch { /* the lasting marker below still stops it */ }
     try {
       if (carried) local.setItem(DONE, new Date().toISOString());
       else {
@@ -27,9 +33,8 @@
         const tries = Number(local.getItem(TRIES) || 0) + 1;
         local.setItem(TRIES, String(tries));
         if (tries >= 3) local.setItem(DONE, 'gave up');
-        session.setItem(DONE, 'later');
       }
-    } catch { /* storage full: the reload plays on regardless */ }
+    } catch { /* storage full: the reload plays on regardless, kept from coming back here by the marker above */ }
     location.reload();
   };
   let timer = setTimeout(() => finish(false), 8000);
