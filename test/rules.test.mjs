@@ -1,7 +1,7 @@
 // The rules, the tables and the opponents, checked in Node:  node --test test/
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { score, options, blankCard, mark, totals, filled, fiveOf, boxHint } from '../js/rules.js';
+import { score, options, jokerState, blankCard, mark, totals, filled, fiveOf, boxHint } from '../js/rules.js';
 import { TABLES, CLASSIC, boardFor } from '../js/tour.js';
 import { Opponent, playTurn } from '../js/ai.js';
 import { mulberry32 } from '../js/rng.js';
@@ -118,21 +118,25 @@ test('a first-turn five of a kind goes in Five of a kind for 50, not in its numb
   }
 });
 
-test('the opponents get better as the tour goes on', () => {
-  const avg = (play, games = 60) => {
-    const rand = mulberry32(11), opp = new Opponent(play);
+test('the opponents get better as the tour goes on, each one on classic rules', () => {
+  // Each opponent's average over the same 600 games' worth of dice (game g rolls from its own seed). At 3,000 games
+  // the steps between neighbours are 4 to 12 points; at 600 from these seeds they're 3.4 or more, enough to stay
+  // in order without the test taking long (about 50 seconds).
+  const avg = play => {
+    const opp = new Opponent(play);
     let sum = 0;
-    for (let g = 0; g < games; g++) {
+    for (let g = 0; g < 600; g++) {
+      const rand = mulberry32(2 * 100003 + g);
       let card = blankCard(CLASSIC);
       while (!filled(CLASSIC, card)) card = mark(card, playTurn(opp, CLASSIC, card, rand).option);
       sum += totals(CLASSIC, card).total;
     }
-    return sum / games;
+    return sum / 600;
   };
-  const pip = avg(TABLES[0].play), maud = avg(TABLES[1].play), dealer = avg(TABLES[7].play);
-  assert.ok(pip < maud && maud < dealer, `${pip} < ${maud} < ${dealer}`);
-  assert.ok(dealer > 220, `the Dealer averages ${dealer}`);
-  assert.ok(pip < 170, `Pip averages ${pip}`);
+  const means = TABLES.map(t => avg(t.play)), line = TABLES.map((t, i) => `${t.who.name} ${means[i].toFixed(1)}`).join(', ');
+  for (let i = 1; i < means.length; i++) assert.ok(means[i] > means[i - 1], `the ladder doesn't climb: ${line}`);
+  assert.ok(means[7] > 220, `the Dealer averages ${means[7]}`);
+  assert.ok(means[0] < 170, `Pip averages ${means[0]}`);
 });
 
 test('a box’s hint on the pad says what it pays at that table', () => {
@@ -168,4 +172,162 @@ test('a box’s hint on the pad says what it pays at that table', () => {
   assert.equal(boxHint(box(high, 'chance'), high), 'Total of all dice, doubled');
   assert.equal(boxHint(box(TABLES[2].board, 'f6'), TABLES[2].board), 'Three times the sixes');
   assert.equal(boxHint(box(TABLES[4].board, 'three'), TABLES[4].board), 'Total of all dice, 1s wild');
+});
+
+// ---- the rules against a second reading of them ----
+
+// An independent scorer, written from the README and How to play rather than from js/rules.js: each box's score by
+// brute force (a wild 1 tried as every number), and where a second five of a kind may go.
+const ORACLE = (() => {
+  const upper = b => ['face', 'evens', 'odds'].includes(b.kind);
+  const raw = (b, d) => {
+    const c = [0, 0, 0, 0, 0, 0, 0];
+    d.forEach(x => c[x]++);
+    const tot = d.reduce((a, x) => a + x, 0), most = Math.max(...c), has = (...fs) => fs.every(f => c[f]);
+    const pairs = [6, 5, 4, 3, 2, 1].filter(f => c[f] >= 2);
+    return {
+      face: () => c[b.face] * b.face, evens: () => d.filter(x => x % 2 === 0).reduce((a, x) => a + x, 0), odds: () => d.filter(x => x % 2).reduce((a, x) => a + x, 0),
+      three: () => (most >= 3 ? tot : 0), four: () => (most >= 4 ? tot : 0),
+      full: () => ([...c].filter(n => n).sort().join() === '2,3' ? 25 : 0),
+      small: () => (has(1, 2, 3, 4) || has(2, 3, 4, 5) || has(3, 4, 5, 6) ? 30 : 0), large: () => (has(1, 2, 3, 4, 5) || has(2, 3, 4, 5, 6) ? 40 : 0),
+      five: () => (most === 5 ? 50 : 0), chance: () => tot, pairs: () => (pairs.length >= 2 ? 2 * (pairs[0] + pairs[1]) : 0), low: () => (tot <= 12 ? 30 : 0),
+    }[b.kind]();
+  };
+  const score = (board, b, d) => {
+    let best = raw(b, d);
+    if (board.wild && !upper(b)) {
+      const ones = d.map((x, i) => (x === 1 ? i : -1)).filter(i => i >= 0);
+      for (let m = 0; m < 6 ** ones.length; m++) {
+        const e = d.slice();
+        ones.forEach((i, k) => { e[i] = 1 + (Math.floor(m / 6 ** k) % 6); });
+        best = Math.max(best, raw(b, e));
+      }
+    }
+    return best * (b.mult || 1);
+  };
+  const options = (board, card, d) => {
+    const open = board.boxes.filter(b => card[b.id] === null), fiveBox = board.boxes.find(b => b.kind === 'five');
+    const all = (bs, extra, s = b => score(board, b, d)) => bs.map(b => `${b.id}:${s(b)}:${extra}`).sort().join();
+    if (!(d.every(x => x === d[0]) && card[fiveBox.id] !== null)) return all(open, 0);
+    const extra = card[fiveBox.id] > 0 ? board.extra : 0, own = open.find(b => b.kind === 'face' && b.face === d[0]);
+    if (own) return all([own], extra);
+    const low = open.filter(b => !upper(b)), whole = { full: 25, small: 30, large: 40, pairs: 4 * d[0] };
+    if (low.length) return all(low, extra, b => (b.kind in whole ? whole[b.kind] * (b.mult || 1) : score(board, b, d)));
+    return all(open, extra);
+  };
+  const most = b => ({ face: 5 * b.face, evens: 30, odds: 25, three: 30, four: 30, full: 25, small: 30, large: 40, five: 50, chance: 30, pairs: 24, low: 30 })[b.kind] * (b.mult || 1);
+  return { score, options, most };
+})();
+const ROLLS = [];
+for (let a = 1; a <= 6; a++) for (let b = a; b <= 6; b++) for (let c = b; c <= 6; c++) for (let d = c; d <= 6; d++) for (let e = d; e <= 6; e++) ROLLS.push([a, b, c, d, e]);
+
+test('the boxes on offer and their scores agree with a second reading of the rules, on part-filled cards at every table', () => {
+  assert.equal(ROLLS.length, 252);
+  const rand = mulberry32(42);
+  let jokers = 0;
+  for (let t = 0; t < TABLES.length; t++) {
+    for (let n = 0; n < 40; n++) {
+      const board = boardFor(t, (rand() * 2 ** 31) | 0), card = blankCard(board), p = rand();
+      for (const b of board.boxes) if (rand() < p) card[b.id] = rand() < 0.3 ? 0 : Math.floor(rand() * (ORACLE.most(b) + 1));
+      if (filled(board, card)) card[board.boxes[Math.floor(rand() * 13)].id] = null;
+      if (n % 4 === 0) card.five = rand() < 0.5 ? 0 : board.boxes.find(b => b.id === 'five').mult * 50; // plenty of second fives
+      for (const d of ROLLS) {
+        const got = options(board, card, d);
+        assert.equal(got.map(o => `${o.box.id}:${o.score}:${o.extra}`).sort().join(), ORACLE.options(board, card, d), `${board.name}, ${d.join('')}, card ${JSON.stringify(card)}`);
+        if (d[0] === d[4] && card.five !== null) jokers++;
+      }
+    }
+  }
+  assert.ok(jokers > 300, `only ${jokers} second fives tried`);
+  // And every box's score for every roll the dice can make, in any order, at every table.
+  for (let t = 0; t < TABLES.length; t++) {
+    const board = boardFor(t, 5);
+    for (let m = 0; m < 7776; m++) {
+      const d = [0, 1, 2, 3, 4].map(i => 1 + (Math.floor(m / 6 ** i) % 6));
+      for (const b of board.boxes) if (score(board, b, d) !== ORACLE.score(board, b, d)) assert.fail(`${board.name}, ${b.id}, ${d.join('')}: ${score(board, b, d)}, not ${ORACLE.score(board, b, d)}`);
+    }
+  }
+});
+
+test('an opponent’s turn comes out the same from the same seed and turn number', () => {
+  // A game in progress saves only its seed and turn number for the opponent's dice and slips (js/app.js), so a turn
+  // cut short by a reload plays out again the same way. These are each opponent's turns in a game with this seed,
+  // played on its own card. If this fails, a change to js/ai.js, js/rng.js or the rules has changed what a seed
+  // produces: an opponent's turn in a game someone has in progress would now play out differently. If that's meant,
+  // say so in the commit and write the new turns in here.
+  const seed = 20261118;
+  const want = [
+    'f5 10, three 9, chance 24, f4 8, f6 12, four 11, f3 9, f2 0, full 0, small 0, f1 0, large 0, five 0',
+    'small 30, chance 17, evens 18, f3 6, f6 12, f2 4, f4 4, full 25, four 23, three 27, five 0, f5 10, large 0',
+    'small 30, chance 20, three 27, f1 0, f6 36, f2 4, f4 8, full 25, four 23, f5 15, f3 3, large 40, five 0',
+    'small 30, chance 17, f1 1, f2 4, f6 12, f3 6, f5 5, full 25, four 23, three 26, f4 4, five 0, large 0',
+    'three 23, five 50, four 29, small 30, chance 20, full 25, large 40, f5 15, f1 0, f6 18, f4 8, f3 6, f2 4',
+    'small 30, f2 8, three 27, full 25, chance 21, four 0, f3 27, f5 15, five 0, f6 18, f4 8, f1 9, large 0',
+    'small 30, low 30, f6 18, pairs 12, f2 8, large 40, full 25, f5 15, four 23, f4 12, f1 2, f3 9, five 0',
+    'large 80, four 26, three 54, small 60, f1 2, chance 48, full 50, f5 15, f2 2, f6 18, f4 8, f3 9, five 0',
+  ];
+  TABLES.forEach((t, i) => {
+    const board = boardFor(i, seed), opp = new Opponent(t.play), got = [];
+    let card = blankCard(board);
+    for (let n = 1; n <= 13; n++) {
+      const { option } = playTurn(opp, board, card, mulberry32((seed ^ Math.imul(n, 0x9E3779B1)) >>> 0)); // as js/app.js seeds a turn
+      card = mark(card, option);
+      got.push(`${option.box.id} ${option.score}${option.extra ? `+${option.extra}` : ''}`);
+    }
+    assert.equal(got.join(', '), want[i], `${t.who.name}'s turns from seed ${seed} have changed: a game in progress would replay them differently (see the comment above)`);
+  });
+});
+
+test('Hot Boxes: two boxes three times over, never Five of a kind, and a bonus three of each number still earns', () => {
+  const pairs = new Set();
+  for (let seed = 0; seed < 2000; seed++) {
+    const board = boardFor(5, seed), hot = board.boxes.filter(b => b.mult > 1);
+    assert.equal(board.boxes.length, 13);
+    assert.equal(hot.length, 2, `seed ${seed}`);
+    assert.ok(hot.every(b => b.mult === 3 && b.kind !== 'five'), `seed ${seed}: ${hot.map(b => b.id)}`);
+    assert.equal(board.bonus.at, 63 + hot.filter(b => b.kind === 'face').reduce((a, b) => a + 6 * b.face, 0), `seed ${seed}`);
+    const top = board.boxes.filter(b => b.kind === 'face');
+    assert.equal(3 * top.reduce((a, b) => a + b.face * b.mult, 0), board.bonus.at, `seed ${seed}: three of each doesn't earn the bonus`);
+    pairs.add(hot.map(b => b.id).join('+'));
+  }
+  assert.equal(pairs.size, 66, 'every pair of the twelve boxes comes up');
+});
+
+test('the joker rules in the corners: a full bottom section, multiplied boxes, Two pairs, Evens and wild ones', () => {
+  const opts = (board, card, dice) => options(board, card, dice).map(o => `${o.box.id} ${o.score}${o.extra ? `+${o.extra}` : ''}`).join(', ');
+  const card = (board, filledIn) => Object.assign(blankCard(board), filledIn);
+  const bottom = { three: 10, four: 0, full: 25, small: 30, large: 0, chance: 20 };
+  // Its own box and the whole bottom filled: a 0 in any open top box, with the extra all the same.
+  assert.equal(opts(CLASSIC, card(CLASSIC, { five: 50, f4: 8, ...bottom }), [4, 4, 4, 4, 4]), 'f1 0+100, f2 0+100, f3 0+100, f5 0+100, f6 0+100');
+  // On boxes that score double (High Stakes) the full house and straights count in full at double; the extra stays 100.
+  const high = TABLES[7].board;
+  assert.equal(opts(high, card(high, { five: 100, f4: 8 }), [4, 4, 4, 4, 4]), 'three 40+100, four 40+100, full 50+100, small 60+100, large 80+100, chance 40+100');
+  // A hot full house at Hot Boxes: 75.
+  let seed = 0;
+  while (!boardFor(5, seed).boxes.some(b => b.id === 'full' && b.mult === 3)) seed++;
+  const hot = boardFor(5, seed);
+  assert.match(opts(hot, card(hot, { five: 50, f2: 4 }), [2, 2, 2, 2, 2]), /full 75\+100/);
+  // Two pairs: four 6s alone score 0, and a first five 6s too, but a second five 6s counts as two pairs of 6s: 24.
+  const pairs = TABLES[6].board;
+  assert.equal(s('pairs', [6, 6, 6, 6, 2], pairs), 0);
+  assert.equal(s('pairs', [6, 6, 6, 6, 6], pairs), 0);
+  assert.equal(opts(pairs, card(pairs, { five: 50, f6: 18 }), [6, 6, 6, 6, 6]), 'pairs 24+100, four 30+100, full 25+100, small 30+100, large 40+100, low 0+100');
+  // Evens has no Ones box, so five 1s open the bottom section straight away; five 4s go in Fours, not Evens.
+  const evens = TABLES[1].board;
+  assert.equal(opts(evens, card(evens, { five: 50 }), [1, 1, 1, 1, 1]), 'three 5+100, four 5+100, full 25+100, small 30+100, large 40+100, chance 5+100');
+  assert.equal(opts(evens, card(evens, { five: 50 }), [4, 4, 4, 4, 4]), 'f4 20+100');
+  assert.equal(opts(evens, card(evens, { five: 50, f4: 8, ...bottom }), [4, 4, 4, 4, 4]), 'evens 20+100, f2 0+100, f3 0+100, f5 0+100, f6 0+100');
+  // Wild ones: five 1s read as whatever scores best, each 1 on its own.
+  const wild = TABLES[4].board;
+  assert.equal(opts(wild, blankCard(wild), [1, 1, 1, 1, 1]), 'f1 5, f2 0, f3 0, f4 0, f5 0, f6 0, three 30, four 30, full 25, small 30, large 40, five 50, chance 30');
+  assert.equal(s('full', [1, 6, 6, 6, 6], wild), 0, 'no reading of 1-6-6-6-6 is a full house');
+  assert.equal(s('five', [1, 6, 6, 6, 6], wild), 50);
+  // A natural five 1s with Five of a kind filled goes in Ones; with Ones filled too, the bottom opens.
+  assert.equal(opts(wild, card(wild, { five: 50 }), [1, 1, 1, 1, 1]), 'f1 5+100');
+  assert.equal(opts(wild, card(wild, { five: 50, f1: 3 }), [1, 1, 1, 1, 1]), 'three 30+100, four 30+100, full 25+100, small 30+100, large 40+100, chance 30+100');
+  // jokerState says the same as the boxes on offer.
+  assert.deepEqual(jokerState(CLASSIC, card(CLASSIC, { five: 0 }), [3, 3, 3, 3, 3]), { face: 3, extra: 0, forced: box(CLASSIC, 'f3'), lower: [], topOnly: false });
+  assert.equal(jokerState(CLASSIC, blankCard(CLASSIC), [3, 3, 3, 3, 3]), null, 'a first five of a kind is no joker');
+  assert.equal(jokerState(wild, card(wild, { five: 50 }), [1, 6, 6, 6, 6]), null, 'nor a wild one');
+  assert.equal(jokerState(CLASSIC, card(CLASSIC, { five: 50, f4: 8, ...bottom }), [4, 4, 4, 4, 4]).topOnly, true);
 });

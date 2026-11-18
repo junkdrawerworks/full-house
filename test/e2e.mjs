@@ -508,6 +508,32 @@ try {
     assert.equal(await page.textContent('#b-next'), 'Play again');
   });
 
+  await step('a tie says so, and counts as a game played but not won', async ({ page }) => {
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    // The last turn is Pip's, from the game's seed: work out what Pip will score, and give yourself the same total.
+    const total = await page.evaluate(async () => {
+      const [{ Opponent, playTurn }, { TABLES }, R, { mulberry32 }] = await Promise.all(['./js/ai.js', './js/tour.js', './js/rules.js', './js/rng.js'].map(u => import(u)));
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) { g.them[b.id] = b.id === 'chance' ? null : b.id === 'five' ? 0 : 5; g.you[b.id] = 0; }
+      Object.assign(g, { number: 13, rolls: 0, turn: 'them' });
+      const { option } = playTurn(new Opponent(TABLES[0].play), g.board, g.them, mulberry32((g.seed ^ Math.imul(13, 0x9E3779B1)) >>> 0));
+      g.you.chance = R.totals(g.board, R.mark(g.them, option)).total;
+      window.fullHouse.settings.fast = true;
+      window.fullHouse.set(g);
+      return g.you.chance;
+    });
+    await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
+    assert.equal(await page.textContent('#result-title'), 'A tie');
+    assert.equal(await page.textContent('#result-line'), 'Play it again to settle it.');
+    assert.equal(await page.textContent('#result-scores'), `You${total}Pip${total}`);
+    assert.equal(await page.textContent('#b-next'), 'Play again');
+    assert.equal(await page.textContent('#status'), 'A tie.');
+    const p = await page.evaluate(() => window.fullHouse.progress);
+    assert.equal(p.played[0], 1);
+    assert.ok(!p.won[0] && !p.beaten[0], 'a tie counted as a win');
+  });
+
   await step('a second five of a kind says where it has to go and what it earns, in two lines on a small phone', async t => {
     const { page } = t;
     await page.setViewportSize({ width: 320, height: 568 });
