@@ -28,6 +28,8 @@ let playing = -1;      // the token of the game whose opponent is playing a turn
 const tray = new Tray($('tray'), { onToggle: toggle, onTap: () => { if (busy && game?.turn === 'them') hurry = true; } });
 const pad = new Pad($('pad'), { onPick: pick });
 const who = g => TABLES[g.opp].who;
+// A name inside a sentence: "against the Dealer". At the start of one, and on the pad and the tour, it keeps its capital.
+const mid = name => name.replace(/^The /, 'the ');
 const die = () => 1 + Math.floor(Math.random() * 6);
 
 // ---- your turn ----
@@ -232,14 +234,14 @@ function finish() {
   if (document.body.dataset.screen === 'home') renderHome(); // it ended behind the tour: Carry on goes, and a table may open
   status(won ? 'You win.' : tie ? 'A tie.' : `${name} wins.`);
 
-  $('result-title').textContent = won ? `You beat ${name}` : tie ? 'A tie' : `${name} wins`;
+  $('result-title').textContent = won ? `You beat ${mid(name)}` : tie ? 'A tie' : `${name} wins`;
   const last = g.table === TABLES.length - 1;
   const onward = won && g.table !== null && !last && !(before && progress.beaten[g.table + 1]); // a table to send you on to
   $('result-line').textContent = won
-    ? g.table === null ? (progress.beaten[g.opp] ? 'A good game.' : `A good game. It doesn’t count on the tour: ${name} is waiting at table ${g.opp + 1}.`)
-      : last ? (before ? `You’ve beaten ${name} before. That’s still the whole tour.` : 'That’s the whole tour. Nobody at these tables has anything left to teach you.')
-      : before ? (onward ? `You’ve beaten ${name} before; table ${g.table + 2} is still open.` : `You’ve beaten ${name} before.`)
-      : `Table ${g.table + 2} is open: ${TABLES[g.table + 1].board.name}, against ${TABLES[g.table + 1].who.name}.`
+    ? g.table === null ? (progress.beaten[g.opp] ? 'A good game.' : `A good game. It doesn’t count on the tour: ${mid(name)} is waiting at table ${g.opp + 1}.`)
+      : last ? (before ? `You’ve beaten ${mid(name)} before. That’s still the whole tour.` : 'That’s the whole tour. Nobody at these tables has anything left to teach you.')
+      : before ? (onward ? `You’ve beaten ${mid(name)} before; table ${g.table + 2} is still open.` : `You’ve beaten ${mid(name)} before.`)
+      : `Table ${g.table + 2} is open: ${TABLES[g.table + 1].board.name}, against ${mid(TABLES[g.table + 1].who.name)}.`
     : tie ? 'Play it again to settle it.' : 'The dice owe you one.';
   $('result-scores').innerHTML = `<div><span>You</span><b>${you}</b></div><div class="them"><span>${escape(name)}</span><b>${them}</b></div>`;
   $('result-best').textContent = best;
@@ -298,7 +300,7 @@ function render() {
   const b = g.board, opp = who(g), mine = g.turn === 'you' && !g.over;
   const turns = b.boxes.length;
   $('g-table').textContent = g.table === null ? 'Quick game' : `Table ${g.table + 1}: ${b.name}`;
-  $('g-twist').textContent = `against ${opp.name} · turn ${Math.min(g.number, turns)} of ${turns}`;
+  $('g-twist').textContent = `against ${mid(opp.name)} · turn ${Math.min(g.number, turns)} of ${turns}`;
   document.documentElement.style.setProperty('--them-colour', opp.colour);
 
   const opts = mine && g.rolls > 0 && !busy ? options(b, g.you, g.dice) : null;
@@ -362,7 +364,7 @@ function renderHome() {
   $('people').innerHTML = met.map(({ t, i }) => `<button type="button" data-quick="${i}"><i class="dot" style="--c:${t.who.colour}"></i>${t.who.name}</button>`).join('');
   const c = $('b-continue'), going = game && !game.over;
   c.hidden = !going;
-  if (going) c.innerHTML = `<b>Carry on</b><span>${game.table === null ? 'Quick game' : `Table ${game.table + 1}: ${game.board.name}`}, against ${who(game).name}. Turn ${Math.min(game.number, game.board.boxes.length)} of ${game.board.boxes.length}.</span>`;
+  if (going) c.innerHTML = `<b>Carry on</b><span>${game.table === null ? 'Quick game' : `Table ${game.table + 1}: ${game.board.name}`}, against ${mid(who(game).name)}. Turn ${Math.min(game.number, game.board.boxes.length)} of ${game.board.boxes.length}.</span>`;
 }
 
 function open(screen) {
@@ -529,7 +531,7 @@ $('b-menu-rules').addEventListener('click', () => { showRules(game?.board || CLA
 const showMenu = () => {
   if (!game) return;
   $('menu-title').textContent = game.table === null ? 'Quick game' : `Table ${game.table + 1}: ${game.board.name}`;
-  $('menu-twist').textContent = `${game.board.blurb}${hotNames(game.board) ? ` This time it’s ${hotNames(game.board)}.` : ''} Against ${who(game).name}. ${who(game).line}`;
+  $('menu-twist').textContent = `${game.board.blurb}${hotNames(game.board) ? ` This time it’s ${hotNames(game.board)}.` : ''} Against ${mid(who(game).name)}. ${who(game).line}`;
   openSheet('sheet-menu');
 };
 // Giving up takes two taps, as scoring a box does: the first asks, and closing the menu takes the question back.

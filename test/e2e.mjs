@@ -686,6 +686,50 @@ try {
     assert.equal(await page.textContent('#b-next'), 'Play again');
   });
 
+  await step('the Dealer has a small “the” inside a sentence, and keeps his capital at the start of one', async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem('full-house.v1', JSON.stringify({ progress: { beaten: [true, true, true, true, true, true], best: [200, 200, 200, 200, 200, 200] } })));
+    await page.reload();
+    // Beat Wren at table 7: table 8 opens, against the Dealer.
+    await page.evaluate(() => {
+      window.fullHouse.settings.fast = true;
+      window.fullHouse.start(6);
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) { g.you[b.id] = b.id === 'low' ? null : 20; g.them[b.id] = b.id === 'low' ? null : b.id === 'five' ? 0 : 5; }
+      Object.assign(g, { number: 13, rolls: 1, turn: 'you' });
+      window.fullHouse.set(g);
+    });
+    await page.click('tr[data-box="low"]');
+    await page.click('tr[data-box="low"]');
+    await page.click('#tray');
+    await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
+    assert.equal(await page.textContent('#result-line'), 'Table 8 is open: High Stakes, against the Dealer.');
+    // At his table: the bar, the menu and Carry on.
+    await page.click('#b-next');
+    await page.click('#b-sit');
+    assert.equal(await page.textContent('#g-twist'), 'against the Dealer · turn 1 of 13');
+    assert.equal(await page.textContent('.pad thead .them'), 'The Dealer');
+    await page.click('#b-menu');
+    assert.match(await page.textContent('#menu-twist'), / Against the Dealer\. Hasn’t lost a game in years\.$/);
+    await page.keyboard.press('Escape');
+    await page.click('#b-home');
+    assert.equal(await page.textContent('#b-continue span'), 'Table 8: High Stakes, against the Dealer. Turn 1 of 13.');
+    assert.match(await page.textContent('#tables li:nth-child(8)'), /The Dealer/);
+    // Beat him, and the result's title has the small "the" too; his own turn starts with the capital.
+    await page.click('#b-continue');
+    await page.evaluate(() => {
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) { g.you[b.id] = b.id === 'chance' ? null : 20; g.them[b.id] = b.id === 'chance' ? null : b.id === 'five' ? 0 : 5; }
+      Object.assign(g, { number: 13, rolls: 1, turn: 'you' });
+      window.fullHouse.set(g);
+    });
+    await page.click('tr[data-box="chance"]');
+    await page.click('tr[data-box="chance"]');
+    await page.waitForFunction(() => /^The Dealer rolls\.$/.test(document.getElementById('status').textContent));
+    await page.click('#tray');
+    await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
+    assert.equal(await page.textContent('#result-title'), 'You beat the Dealer');
+  });
+
   await step('a tie says so, and counts as a game played but not won', async ({ page }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
@@ -821,7 +865,7 @@ try {
     // The last table, beaten a second time.
     await page.evaluate(() => { for (let i = 0; i < 8; i++) window.fullHouse.progress.beaten[i] = true; });
     const dealer = await play(7, 20);
-    assert.equal(dealer.line, 'You’ve beaten The Dealer before. That’s still the whole tour.');
+    assert.equal(dealer.line, 'You’ve beaten the Dealer before. That’s still the whole tour.');
     assert.equal(dealer.next, 'Play again');
     // Table 1 again, with table 2 beaten too: nothing to send you on to, so the button plays it again.
     const again = await play(0, 20);
