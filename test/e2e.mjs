@@ -963,6 +963,31 @@ try {
     assert.equal(them[0][1], +/scores (\d+) in/.exec(before)[1], 'the opponent wrote a different score from the one it said');
   });
 
+  await step('back in a game during the opponent’s turn, the line says whose turn it is and their pips start empty', async ({ page, myTurn, settled }) => {
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    await page.click('#b-roll');
+    await settled();
+    await page.locator('tr.can').first().click();
+    await page.locator('tr.can').first().click();
+    await page.waitForFunction(() => /^Pip /.test(document.getElementById('status').textContent));
+    // Straight after the page opens, before their turn starts over half a second later.
+    const opened = async () => {
+      const h = await page.waitForFunction(() => window.fullHouse && {
+        said: document.getElementById('status').textContent,
+        used: document.querySelectorAll('#rolls i.used').length,
+        started: document.getElementById('tray').classList.contains('theirs'),
+      }, null, { polling: 'raf' });
+      return h.jsonValue();
+    };
+    await page.reload({ waitUntil: 'commit' });
+    const at = await opened();
+    assert.equal(at.started, false, 'their turn had started over already');
+    assert.equal(at.said, 'Pip’s turn.', 'the line under the dice after a reload');
+    assert.equal(at.used, 0, 'the pips show your own rolls on their turn');
+    await myTurn();
+  });
+
   await step('with all five dice held there is nothing to roll', async ({ page, game, settled }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');

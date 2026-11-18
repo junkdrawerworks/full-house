@@ -338,7 +338,8 @@ function render() {
   fresh = {};
 
   const left = b.rolls - g.rolls;
-  $('rolls').innerHTML = Array.from({ length: b.rolls }, (_, i) => `<i class="${i < g.rolls && (mine || g.turn === 'them') ? 'used' : ''}"></i>`).join('');
+  // On the opponent's turn the pips are theirs, empty until they roll: the save still holds your rolls till then.
+  $('rolls').innerHTML = Array.from({ length: b.rolls }, (_, i) => `<i class="${i < g.rolls && (mine || theirDice) ? 'used' : ''}"></i>`).join('');
   // Not `disabled`, which would throw the keyboard's focus off the button while the dice are in the air: it stays put,
   // reads out whose turn it is, and roll() turns down a press it can't take.
   const button = $('b-roll');
@@ -676,7 +677,7 @@ function adopt(g) {
   if (!g) { closeSheets(); open('home'); return; }
   showDice();
   // As after a reload: the opponent's turn plays out here as well, the same way, since it comes from the game's seed.
-  if (g.turn === 'them') { busy = true; setTimeout(theirTurn, 500); }
+  if (g.turn === 'them') { busy = true; status(`${who(g).name}’s turn.`); setTimeout(theirTurn, 500); }
 }
 
 // ---- the back button ----
@@ -732,7 +733,7 @@ if (game) {
   open('game', { focus: false });
   showDice();
   render();
-  if (game.turn === 'them') { busy = true; setTimeout(theirTurn, 500); }
+  if (game.turn === 'them') { busy = true; status(`${who(game).name}’s turn.`); setTimeout(theirTurn, 500); }
 }
 
 // For the tests and the screenshot tool.
