@@ -440,24 +440,31 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 
 /* ---- sheets and messages ---- */
 
+/* A message lies over the game's bar (on the tour, at the top of the page): on two lines it still stops short of the
+   dice, which are often what it's about. */
 .toast {
   position: fixed;
   left: 50%;
-  top: calc(64px + env(safe-area-inset-top));
+  top: calc(6px + env(safe-area-inset-top));
   transform: translateX(-50%);
+  display: grid;
+  align-items: center;
+  min-height: 40px;
   max-width: min(92vw, 420px);
   width: max-content;
-  padding: 10px 16px;
+  padding: 4px 16px;
   border-radius: 14px;
   background: var(--ink);
   color: var(--table);
   font-weight: 600;
-  font-size: 15px;
+  font-size: 14.5px;
+  line-height: 1.2;
   text-align: center;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
   z-index: 40;
   animation: drop 0.25s ease;
 }
+body[data-screen='home'] .toast { top: auto; bottom: calc(16px + env(safe-area-inset-bottom)); } /* clear of the masthead */
 .toast[hidden] { display: none; }
 @keyframes drop { from { opacity: 0; translate: 0 -8px; } }
 
@@ -517,7 +524,7 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 .plain:hover { background: var(--line); }
 .plain[hidden] { display: none; }
 .plain.warn { margin-top: 18px; color: var(--muted); }
-.plain.warn.asked { color: var(--accent-text); }
+.plain.warn.asked { background: var(--line); color: var(--accent-text); }
 .scores { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 6px 0 4px; }
 .scores div { display: grid; justify-items: center; padding: 10px; border-radius: 14px; background: var(--line); }
 .scores span { font: 700 13px var(--cond); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
@@ -547,5 +554,5 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 
 @media (prefers-reduced-motion: reduce) {
   .cube, .die { transition-duration: 0.01s; }
-  .die .hop.go, .pad td.fresh span { animation: none; }
+  .die .hop.go, .pad td.fresh span, .toast, .scrim, .panel { animation: none; }
 }

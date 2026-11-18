@@ -42,6 +42,7 @@ const swaps = [
   ['html, body { margin: 0; min-height: 100%; }', 'html, body { margin: 0; height: 100%; }'],
   ['height: 100vh;\n  height: 100dvh;', 'height: 100%;'],
   ['padding: calc(6px + env(safe-area-inset-top)) ', 'padding: 6px '],
+  ['top: calc(6px + env(safe-area-inset-top));', 'top: 6px;'],
   ['padding: calc(28px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));', 'padding: 28px 16px 24px;'],
   ['padding: 12px 12px calc(14px + env(safe-area-inset-bottom));', 'padding: 12px 12px 14px;'],
 ];

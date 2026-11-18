@@ -183,6 +183,7 @@ function start(table, opp = table) {
   picked = null;
   theirPick = null;
   theirDice = false;
+  hideToast();
   closeSheets();
   open('game');
   save();
@@ -231,6 +232,7 @@ function finish() {
 function showResult() {
   if (!game?.over || !$('sheet-result').hidden) return;
   resultSeen = true;
+  hideToast();
   openSheet('sheet-result');
 }
 
@@ -371,6 +373,11 @@ function toast(text) {
   t.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { t.hidden = true; }, 3200);
+}
+// A message is about the game it came up in: it goes when that game's result shows, or another game starts.
+function hideToast() {
+  clearTimeout(toastTimer);
+  $('toast').hidden = true;
 }
 
 const escape = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);

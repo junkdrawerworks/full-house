@@ -381,6 +381,58 @@ try {
     assert.equal(await moving('true'), 0, 'the dice tumble though less motion was asked for');
   });
 
+  await step('a message sits over the bar, clear of the dice, and doesn’t outlast its game', async t => {
+    const { page } = t;
+    await page.evaluate(() => { window.fullHouse.settings.fast = true; window.fullHouse.start(7); });
+    // The longest one there is, on a small phone, a phone, a phone held sideways and a desktop.
+    for (const [width, height] of [[320, 568], [390, 844], [844, 390], [1280, 800]]) {
+      await page.setViewportSize({ width, height });
+      const m = await page.evaluate(async () => {
+        const toast = document.getElementById('toast');
+        toast.textContent = 'The Dealer rolls another five of a kind: 100 extra points.';
+        toast.hidden = false;
+        await Promise.all(toast.getAnimations().map(a => a.finished)); // once it has dropped into place
+        const r = toast.getBoundingClientRect(), out = { top: r.top, bottom: r.bottom, left: r.left, right: r.right, tray: document.getElementById('tray').getBoundingClientRect().top };
+        toast.hidden = true;
+        return out;
+      });
+      assert.ok(m.bottom <= m.tray, `at ${width} x ${height} a message reaches ${m.bottom}px, over the dice tray at ${m.tray}px`);
+      assert.ok(m.top >= 0 && m.left >= 0 && m.right <= width, `at ${width} x ${height} a message runs off the screen`);
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    // Five of a kind on the last turn: its message is gone by the time the result is up.
+    await page.evaluate(() => {
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) { g.you[b.id] = b.id === 'five' ? null : 20; g.them[b.id] = b.id === 'five' ? null : 5; }
+      Object.assign(g, { number: 13, rolls: 1, turn: 'you', dice: [6, 6, 6, 6, 6] });
+      window.fullHouse.set(g);
+    });
+    await page.click('tr[data-box="five"]');
+    await page.click('tr[data-box="five"]');
+    assert.match(await page.textContent('#toast'), /^Five of a kind/);
+    assert.ok(await page.isVisible('#toast'));
+    await page.waitForFunction(() => /rolls\.$/.test(document.getElementById('status').textContent));
+    await page.click('#tray'); // hurry them along, so the result comes while the message would still be up
+    await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
+    assert.ok(await page.isHidden('#toast'), 'a message from the game is still up over its result');
+    // And a message doesn't carry into a new game.
+    await page.click('#b-tour');
+    await page.evaluate(() => window.fullHouse.start(0));
+    await page.click('#b-menu');
+    await page.click('#b-concede');
+    await page.click('#b-concede');
+    assert.ok(await page.isVisible('#toast'));
+    await page.click('[data-quick="0"]');
+    assert.ok(await page.isHidden('#toast'), 'the message about the last game is up over the new one');
+    // Asked for less motion, messages and sheets appear without sliding in.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.click('#b-menu');
+    await page.click('#b-concede');
+    await page.click('#b-concede');
+    await page.click('#b-rules');
+    assert.equal(await page.evaluate(() => document.getAnimations().length), 0, 'something still slides in though less motion was asked for');
+  });
+
   await step('giving up takes two taps, and the tour says what happened', async ({ page, game, settled }) => {
     const screen = () => page.evaluate(() => document.body.dataset.screen);
     const label = () => page.textContent('#b-concede');
