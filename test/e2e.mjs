@@ -1593,6 +1593,110 @@ try {
     assert.equal(Object.values(g.them).filter(v => v !== null).length - 1, 1, 'the opponent filled one box');
   });
 
+  await step('three games in a row each end clean', async ({ page, game, myTurn, settled }) => {
+    const progress = () => page.evaluate(() => structuredClone(window.fullHouse.progress));
+    const tapDice = async () => {
+      const die = await page.locator('.die >> nth=2').boundingBox();
+      await page.touchscreen.tap(die.x + die.width / 2, die.y + die.height / 2);
+    };
+    // One turn by taps: roll once, score the box that pays least (or the first), and tap the dice to hurry them along.
+    const turn = async (least = false) => {
+      await page.click('#b-roll');
+      await settled();
+      const rows = await page.$$eval('tr.can', rows => rows.map(r => ({ id: r.dataset.box, score: +r.querySelector('td.you').textContent || 0 })));
+      const id = least ? rows.reduce((a, b) => (b.score < a.score ? b : a)).id : rows[0].id;
+      await page.click(`tr[data-box="${id}"]`);
+      await page.click(`tr[data-box="${id}"]`);
+      await tapDice();
+      await page.waitForFunction(() => window.fullHouse.game?.over || (window.fullHouse.game?.turn === 'you' && !window.fullHouse.busy), null, { timeout: 30000 });
+    };
+    // A game that has just opened: nothing left over from the last one, on the pad, in the tray, on the line or in a
+    // message; then their first turn starts with nothing held.
+    const opensClean = async (name, label) => {
+      const s = await page.evaluate(() => ({
+        cells: [...document.querySelectorAll('#pad tbody tr[data-box] td')].map(td => td.textContent.trim()).filter(Boolean),
+        totals: [...document.querySelectorAll('#pad tfoot td')].map(td => td.textContent),
+        marks: document.querySelectorAll('#pad .fresh, #pad .offer, #pad tr.picked, #pad tr.can').length,
+        held: document.querySelectorAll('.die.held').length,
+        toast: document.getElementById('toast').hidden,
+        status: document.getElementById('status').textContent,
+        pips: document.querySelectorAll('#rolls i.used').length,
+        table: document.getElementById('g-table').textContent,
+        sheets: document.querySelectorAll('.sheet:not([hidden])').length,
+      }));
+      assert.deepEqual(s, { cells: [], totals: ['0', '0'], marks: 0, held: 0, toast: true, status: 'Your turn. Roll the dice.', pips: 0, table: label, sheets: 0 }, `${label} did not open clean`);
+      const g = await game();
+      assert.deepEqual([g.number, g.rolls, g.turn, g.held, g.last], [1, 0, 'you', [false, false, false, false, false], null]);
+      // Their first turn: the line says they roll, and nothing of theirs is held yet.
+      const first = page.waitForFunction(name => {
+        const said = document.getElementById('status').textContent;
+        return said.endsWith(' rolls.') && { said, held: document.querySelectorAll('.die.held').length + window.fullHouse.game.held.filter(Boolean).length };
+      }, name, { polling: 5, timeout: 30000 }).then(h => h.jsonValue());
+      first.catch(() => {});
+      await turn(true);
+      assert.deepEqual(await first, { said: `${name} rolls.`, held: 0 });
+    };
+    // A finished game: the result is the pad's totals, and the progress moved by this one game at this table only.
+    const endsClean = async (before, table, won) => {
+      await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
+      const r = await page.evaluate(() => ({
+        result: [...document.querySelectorAll('#result-scores b')].map(b => +b.textContent),
+        pad: [...document.querySelectorAll('#pad tfoot td')].map(td => +td.textContent),
+      }));
+      assert.deepEqual(r.result, r.pad, 'the result is not what the pad adds up to');
+      assert.equal(r.result[0] > r.result[1], won, won ? 'meant to win this one' : 'meant to lose this one');
+      const want = structuredClone(before);
+      want.played[table] = (want.played[table] || 0) + 1;
+      if (won) { want.won[table] = (want.won[table] || 0) + 1; want.beaten[table] = true; }
+      want.best[table] = Math.max(want.best[table] || 0, r.result[0]);
+      assert.deepEqual(await progress(), want, 'the progress moved by more than this game');
+    };
+
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    await page.click('#b-menu');
+    await page.click('#o-fast');
+    await page.keyboard.press('Escape');
+
+    // 1. Lost at Classic, scoring as little as it can, then Play again.
+    let before = await progress();
+    await opensClean('Pip', 'Table 1: Classic');
+    while (!(await game()).over) await turn(true);
+    await endsClean(before, 0, false);
+    assert.equal(await page.textContent('#b-next'), 'Play again');
+    await page.click('#b-next');
+
+    // 2. Given up part way: one game played, nothing more.
+    before = await progress();
+    await opensClean('Pip', 'Table 1: Classic');
+    await turn();
+    await page.click('#b-menu');
+    await page.click('#b-concede');
+    await page.click('#b-concede');
+    const want = structuredClone(before);
+    want.played[0] = (want.played[0] || 0) + 1;
+    assert.deepEqual(await progress(), want, 'giving up moved the progress by more than one game played');
+    assert.ok(await page.isVisible('#toast'), 'the tour says nothing about giving up');
+
+    // 3. Won, from one turn before the end, then on to table 2.
+    before = await progress();
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    await opensClean('Pip', 'Table 1: Classic');
+    await page.evaluate(() => {
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) { g.you[b.id] = b.id === 'chance' ? null : 20; g.them[b.id] = b.id === 'chance' ? null : b.id === 'five' ? 0 : 5; }
+      Object.assign(g, { number: 13, rolls: 0, turn: 'you' });
+      window.fullHouse.set(g);
+    });
+    await myTurn();
+    await turn();
+    await endsClean(before, 0, true);
+    await page.click('#b-next');
+    await page.click('#b-sit');
+    await opensClean('Maud', 'Table 2: Evens');
+  });
+
   await step('the back button closes a sheet, or goes from a game to the tour, and leaves from the tour', async t => {
     const { page } = t;
     await page.goto('about:blank'); // come from somewhere, so that leaving has somewhere to go
