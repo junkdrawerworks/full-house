@@ -125,8 +125,10 @@ export function plan(board, card, rolls, p) {
   return keepValues;
 }
 
-// Every handful that could be kept from roll s, best first by what plan() says each is worth (k).
-export const ranked = (k, s) => [...new Set(SUBSETS[s])].sort((a, b) => k[b] - k[a]);
+// Every handful that could be kept from roll s, best first by what plan() says each is worth (k). Between two worth
+// the same, the one keeping more dice comes first, so when rolling again can't do better it stands: the smaller
+// handfuls are listed first, and 1-1-1-1-2 at Wild Ones, already 50 in Five of a kind, held four 1s and rolled for 50.
+export const ranked = (k, s) => [...new Set(SUBSETS[s])].sort((a, b) => (Math.abs(k[b] - k[a]) > 1e-9 ? k[b] - k[a] : KEEPS[b].size - KEEPS[a].size));
 
 // ---- the opponents ----
 

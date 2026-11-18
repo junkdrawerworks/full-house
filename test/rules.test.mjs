@@ -181,6 +181,16 @@ test('an opponent doesn’t spend a box that has more to give on a bonus it woul
   }
 });
 
+test('when rolling again can’t do better than the dice already there, an opponent stands', () => {
+  // At Wild Ones 1-1-1-1-2 is already 50 in Five of a kind, and so is anything the 2 could become; Jules held four
+  // and rolled the fifth die for the same 50.
+  const wild = TABLES[4].board;
+  for (const [who, play] of [['Jules', TABLES[4].play], ['the planner at its best', {}]]) {
+    const opp = new Opponent({ ...play, slip: 0 });
+    for (const rolls of [1, 2]) assert.equal(opp.keep(wild, blankCard(wild), [1, 1, 1, 1, 2], rolls, () => 1), null, `${who} rolls again with ${rolls} to go`);
+  }
+});
+
 test('the opponents get better as the tour goes on, each one on classic rules', () => {
   // Each opponent's average over the same 600 games' worth of dice (game g rolls from its own seed). At 3,000 games
   // the steps between neighbours are 4 to 12 points; at 600 from these seeds they're 3.4 or more, enough to stay
@@ -323,7 +333,7 @@ test('an opponent’s turn comes out the same from the same seed and turn number
     'f5 10, three 9, chance 24, f4 8, f6 12, four 11, f3 9, f2 0, full 0, small 0, f1 0, large 0, five 0',
     'small 30, chance 17, evens 18, f3 6, f6 12, f2 4, f4 4, full 25, four 23, three 27, five 0, f5 10, large 0',
     'small 30, chance 20, three 27, f1 0, f6 36, f2 4, f4 8, full 25, four 23, f5 15, f3 3, large 40, five 0',
-    'small 30, chance 17, f1 1, f2 4, f6 12, f3 6, f5 5, full 25, four 23, three 26, f4 4, five 0, large 0',
+    'small 30, chance 17, f1 1, f2 4, f6 12, f3 6, f5 5, full 25, four 23, three 26, f4 4, five 0, large 40',
     'three 23, five 50, four 29, small 30, chance 20, full 25, large 40, f5 15, f1 0, f6 18, f4 8, f3 6, f2 4',
     'small 30, f2 8, three 27, full 25, chance 21, four 0, f3 27, f5 15, five 0, f6 18, f4 8, f1 9, large 0',
     'small 30, low 30, f6 18, pairs 12, f2 8, large 40, full 25, f5 15, four 23, f4 12, f1 2, f3 9, five 0',
