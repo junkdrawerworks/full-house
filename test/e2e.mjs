@@ -776,6 +776,18 @@ try {
     await page.click('#tray');
     await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
     assert.equal(await page.textContent('#result-title'), 'You beat the Dealer');
+    // Beaten, his line is in the past tense: on his card on the tour, in a quick game's, and in the menu at his table.
+    await page.click('#b-tour');
+    await page.click('[data-table="7"]');
+    assert.equal(await page.textContent('#intro-who span'), 'Hadn’t lost a game in years.');
+    await page.click('#b-sit');
+    await page.click('#b-menu');
+    assert.match(await page.textContent('#menu-twist'), / Against the Dealer\. Hadn’t lost a game in years\.$/);
+    await page.keyboard.press('Escape');
+    await page.click('#b-home');
+    await page.click('#people [data-quick="7"]');
+    assert.equal(await page.textContent('#intro-who span'), 'Hadn’t lost a game in years.');
+    await page.keyboard.press('Escape');
   });
 
   await step('a tie says so, and counts as a game played but not won', async ({ page }) => {

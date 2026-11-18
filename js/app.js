@@ -28,6 +28,8 @@ let playing = -1;      // the token of the game whose opponent is playing a turn
 const tray = new Tray($('tray'), { onToggle: toggle, onTap: () => { if (busy && game?.turn === 'them') hurry = true; } });
 const pad = new Pad($('pad'), { onPick: pick });
 const who = g => TABLES[g.opp].who;
+// What's said of the opponent from table i: the Dealer's line changes once you've beaten him.
+const lineOf = i => (progress.beaten[i] && TABLES[i].who.beaten) || TABLES[i].who.line;
 const where = g => (g.table === null ? 'Quick game' : `Table ${g.table + 1}: ${g.board.name}`); // "Table 3: Triple Sixes"
 // A name inside a sentence: "against the Dealer". At the start of one, and on the pad and the tour, it keeps its capital.
 const mid = name => name.replace(/^The /, 'the ');
@@ -464,7 +466,7 @@ function intro(table, opp = table) {
   $('intro-n').textContent = table === null ? 'Quick game' : `Table ${table + 1} of ${TABLES.length}`;
   $('intro-title').textContent = board.name;
   $('intro-blurb').textContent = board.blurb;
-  $('intro-who').innerHTML = `<i class="dot big" aria-hidden="true" style="--c:${t.who.colour}">${t.who.name.replace(/^The /, '')[0]}</i><div><b>${t.who.name}</b><span>${t.who.line}</span>${game && !game.over ? '<em>Sitting down here ends the game you’re in. It counts as a\u00a0loss.</em>' : ''}</div>`;
+  $('intro-who').innerHTML = `<i class="dot big" aria-hidden="true" style="--c:${t.who.colour}">${t.who.name.replace(/^The /, '')[0]}</i><div><b>${t.who.name}</b><span>${lineOf(opp)}</span>${game && !game.over ? '<em>Sitting down here ends the game you’re in. It counts as a\u00a0loss.</em>' : ''}</div>`;
   $('b-sit').onclick = () => start(table, opp);
   openSheet('sheet-intro');
 }
@@ -612,7 +614,7 @@ $('b-menu-rules').addEventListener('click', () => { showRules(game?.board || CLA
 const showMenu = () => {
   if (!game) return;
   $('menu-title').textContent = where(game);
-  $('menu-twist').textContent = `${game.board.blurb}${hotNames(game.board) ? ` This time it’s ${hotNames(game.board)}.` : ''} Against ${mid(who(game).name)}. ${who(game).line}`;
+  $('menu-twist').textContent = `${game.board.blurb}${hotNames(game.board) ? ` This time it’s ${hotNames(game.board)}.` : ''} Against ${mid(who(game).name)}. ${lineOf(game.opp)}`;
   openSheet('sheet-menu');
 };
 // Giving up takes two taps, as scoring a box does: the first asks, and closing the menu takes the question back.

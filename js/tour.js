@@ -1,5 +1,6 @@
 // The tour: eight tables, each with its own twist on the rules and a sharper opponent than the last.
-// Beat an opponent to move on to the next table.
+// Beat an opponent to move on to the next table. An opponent's `beaten` line, if it has one, replaces its `line` once
+// you've beaten it at its table.
 
 import { mulberry32 } from './rng.js';
 
@@ -104,7 +105,7 @@ export const TABLES = [
       boxes: boxes(Object.fromEntries(['three', 'four', 'full', 'small', 'large', 'five', 'chance'].map(id => [id, { mult: 2 }]))),
       rolls: 4,
     },
-    who: { name: 'The Dealer', line: 'Hasn’t lost a game in years.', colour: '#3a3a44' },
+    who: { name: 'The Dealer', line: 'Hasn’t lost a game in years.', beaten: 'Hadn’t lost a game in years.', colour: '#3a3a44' },
     play: { patience: 1, bonus: 1, slip: 0, endgame: true },
   },
 ];
