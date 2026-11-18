@@ -98,7 +98,10 @@ export class Pad {
         <th scope="row"><b>${boxLabel(b)}${mult}</b>${hint ? `<small>${hint}</small>` : ''}</th>${cell(you, b, 'you')}${cell(them, b, 'them')}</tr>`;
     };
     const upper = board.boxes.filter(isUpper), lower = board.boxes.filter(b => !isUpper(b));
-    const bonusCell = (t, who) => `<td class="${who}">${t.bonus ? t.bonus : t.upper >= 0 ? `<small>${t.upper}/${board.bonus.at}</small>` : ''}</td>`;
+    // The bonus, once made, is pencilled in like a box: as you watch, when the score that made it has just gone in.
+    const bonusCell = (t, who) => (t.bonus
+      ? `<td class="${who}${fresh.bonus === who ? ' fresh' : ''}"><span>${t.bonus}</span></td>`
+      : `<td class="${who}">${t.upper >= 0 ? `<small>${t.upper}/${board.bonus.at}</small>` : ''}</td>`);
     const anyExtras = you.extras || them.extras;
     this.el.classList.toggle('long', name.length > 6); // the Dealer: see css/app.css
     this.el.innerHTML = `

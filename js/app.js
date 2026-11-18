@@ -81,8 +81,9 @@ function pick(id) {
   if (picked !== id) { picked = id; render(); say($('status').textContent); return; }
   const option = options(g.board, g.you, g.dice).find(o => o.box.id === id);
   if (!option) return;
+  const made = makesBonus(g.board, g.you, option);
   g.you = mark(g.you, option);
-  fresh = { you: id };
+  fresh = { you: id, bonus: made ? 'you' : null };
   picked = null;
   if (option.extra) toast(`Another five of a kind: ${g.board.extra} extra points.`);
   else if (option.box.kind === 'five' && option.score) toast('Five of a kind.');
@@ -94,11 +95,14 @@ function pick(id) {
   render();
   showDice(); // still yours, until the opponent rolls
   $('b-roll').focus({ preventScroll: true }); // the box picked from the keyboard has gone: Roll says whose turn it is, then yours
-  const line = `You score ${option.score} in ${boxLabel(option.box)}${option.extra ? `, plus ${g.board.extra} extra` : ''}.`;
+  const line = `You score ${option.score} in ${boxLabel(option.box)}${option.extra ? `, plus ${g.board.extra} extra` : ''}${made ? `, and the ${g.board.bonus.worth}\u00a0bonus` : ''}.`;
   status(line);
   say(line);
   setTimeout(theirTurn, settings.fast ? 300 : 650);
 }
+
+// Whether writing in this score brings the top section up to the bonus. ("The\u00a0bonus" keeps together at the end of a line.)
+const makesBonus = (board, card, option) => !totals(board, card).bonus && !!totals(board, mark(card, option)).bonus;
 
 // ---- the opponent's turn ----
 
@@ -167,23 +171,24 @@ async function theirTurn() {
     await landed(pace.tumble + 300);
     if (!still()) return;
   }
-  const option = opp.box(b, g.them, g.dice, rand);
+  const option = opp.box(b, g.them, g.dice, rand), made = makesBonus(b, g.them, option);
+  const what = `${option.score} in ${boxLabel(option.box)}${option.extra ? `, plus ${b.extra} extra` : ''}${made ? ', and the\u00a0bonus' : ''}.`;
   theirPick = { id: option.box.id, score: option.score };
-  status(`${name} scores ${option.score} in ${boxLabel(option.box)}${option.extra ? `, plus ${b.extra} extra` : ''}.`);
+  status(`${name} scores ${what}`);
   render();
   pad.reveal(option.box.id); // on a short screen the box may be scrolled out of sight; your own turn moves the pad only to show a box you can score
   await wait(pace.choose, 450);
   if (!still()) return;
 
   g.them = mark(g.them, option);
-  g.last = { id: option.box.id, score: option.score, extra: option.extra ? b.extra : 0 }; // for your turn's line, after a reload or Carry on as well
+  g.last = { id: option.box.id, score: option.score, extra: option.extra ? b.extra : 0, bonus: made }; // for your turn's line, after a reload or Carry on as well
   theirPick = null;
-  fresh = { them: option.box.id };
+  fresh = { them: option.box.id, bonus: made ? 'them' : null };
   if (option.extra) toast(`${name} rolls another five of a kind: ${b.extra} extra points.`);
   else if (option.box.kind === 'five' && option.score) toast(`${name} rolls five of a kind.`);
 
   // Heard once, at the end of their turn, rather than as each line goes by: what they scored and where it leaves you.
-  const scored = `${name} scored ${option.score} in ${boxLabel(option.box)}${option.extra ? `, plus ${b.extra} extra` : ''}.`;
+  const scored = `${name} scored ${what}`;
   if (filled(b, g.you) && filled(b, g.them)) { finish(scored); return; }
   say(`${scored} You ${totals(b, g.you).total}, ${mid(name)} ${totals(b, g.them).total}. Your turn.`);
   yourTurn(g);
@@ -351,8 +356,8 @@ function render() {
   if (mine && !busy) {
     const joker = g.rolls > 0 && jokerState(b, g.you, g.dice), five = offers && b.boxes.find(x => x.kind === 'five');
     if (picked) {
-      const o = opts?.find(x => x.box.id === picked);
-      status(`Tap ${boxLabel(b.boxes.find(x => x.id === picked))} again to ${!o?.score ? 'write in a 0' : `score ${o.score}`}${o?.extra ? `, plus ${o.extra} extra` : ''}.`);
+      const o = opts?.find(x => x.box.id === picked), made = o && makesBonus(b, g.you, o);
+      status(`Tap ${boxLabel(b.boxes.find(x => x.id === picked))} again to ${!o?.score ? 'write in a 0' : `score ${o.score}`}${o?.extra ? `, plus ${o.extra} extra${made ? ',' : ''}` : ''}${made ? ' and make the\u00a0bonus' : ''}.`);
     } else if (g.rolls === 0) status(firstLine(g));
     else if (joker) status(jokerLine(b, joker, opts));
     else if (left > 0 && allHeld(g)) status('All five held. Let one go to roll again, or pick a box to score in.');
@@ -382,7 +387,8 @@ function jokerLine(b, joker, opts) {
 function firstLine(g) {
   const b = g.board, last = g.number > 1 && g.last && b.boxes.find(x => x.id === g.last.id), final = turnsLeft(b, g.you) === 1;
   const turn = final ? 'Last turn.' : 'Your turn.';
-  if (last) return `${turn} ${who(g).name} scored ${g.last.score} in ${boxLabel(last)}${g.last.extra ? `, plus ${g.last.extra} extra` : ''}.`;
+  const extra = g.last?.extra ? `, plus ${g.last.extra} extra${g.last.bonus ? ',' : ''}` : '';
+  if (last) return `${turn} ${who(g).name} scored ${g.last.score} in ${boxLabel(last)}${extra}${g.last.bonus ? ' and made the\u00a0bonus' : ''}.`;
   if (final) return 'Last turn. Roll the dice.';
   if (g.number > 1) return 'Your turn.';
   return hotNames(b) ? `Hot this time: ${hotNames(b)}. Roll the dice.` : 'Your turn. Roll the dice.';

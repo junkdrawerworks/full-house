@@ -1096,6 +1096,72 @@ try {
     assert.equal(await page.textContent('#said'), 'You rolled 5, 5, 5, 5, 5. 2 rolls left. Five of a kind. 50 in its box, if you want it.');
   });
 
+  await step('reaching the bonus says so, and the bonus is pencilled in', async ({ page, myTurn }) => {
+    const status = () => page.textContent('#status');
+    const bonus = who => page.evaluate(who => {
+      const td = document.querySelector(`#pad tr.sub td.${who}`), span = td.querySelector('span');
+      return { text: td.textContent, fresh: td.classList.contains('fresh'), drawn: span ? getComputedStyle(span).animationName : null };
+    }, who);
+    // Yours: 45 on top with Sixes open, and four sixes rolled.
+    await page.evaluate(() => {
+      window.fullHouse.settings.fast = true;
+      window.fullHouse.start(0);
+      const g = structuredClone(window.fullHouse.game);
+      Object.assign(g.you, { f1: 3, f2: 6, f3: 9, f4: 12, f5: 15 });
+      Object.assign(g, { number: 6, rolls: 1, dice: [6, 6, 6, 6, 2] });
+      window.fullHouse.set(g);
+    });
+    assert.match((await bonus('you')).text, /^45\/63$/);
+    await page.click('tr[data-box="f6"]');
+    assert.equal(await status(), 'Tap Sixes again to score 24 and make the\u00a0bonus.');
+    await page.click('tr[data-box="f6"]');
+    assert.equal(await status(), 'You score 24 in Sixes, and the 35\u00a0bonus.');
+    assert.deepEqual(await bonus('you'), { text: '35', fresh: true, drawn: 'write' }, 'the bonus is not pencilled in as you watch');
+    // A box that doesn't make it says nothing of the bonus.
+    await page.evaluate(() => {
+      const g = structuredClone(window.fullHouse.game);
+      Object.assign(g.you, { f6: null, f5: null });
+      Object.assign(g, { turn: 'you', rolls: 1, dice: [5, 2, 3, 4, 1] });
+      window.fullHouse.set(g);
+    });
+    await page.click('tr[data-box="f5"]');
+    assert.equal(await status(), 'Tap Fives again to score 5.');
+    // The opponent's: Pip has 62 on top with Ones the only box left, at a seed where Pip rolls at least one 1.
+    await page.evaluate(async () => {
+      const [{ Opponent, playTurn }, { TABLES }, { mulberry32 }] = await Promise.all(['./js/ai.js', './js/tour.js', './js/rng.js'].map(u => import(u)));
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) { g.you[b.id] = b.id === 'chance' || b.id === 'large' ? null : 10; g.them[b.id] = b.id === 'f1' ? null : 10; }
+      Object.assign(g.them, { f2: 10, f3: 12, f4: 12, f5: 13, f6: 15 }); // 62
+      Object.assign(g, { number: 11, rolls: 0, turn: 'them', held: [false, false, false, false, false] });
+      for (g.seed = 1; ; g.seed++) {
+        const { option } = playTurn(new Opponent(TABLES[0].play), g.board, g.them, mulberry32((g.seed ^ Math.imul(g.number, 0x9E3779B1)) >>> 0));
+        if (option.score > 0) break;
+      }
+      window.fullHouse.set(g);
+    });
+    await page.waitForFunction(() => /scores/.test(document.getElementById('status').textContent), null, { timeout: 15000 });
+    assert.match(await status(), /^Pip scores \d in Ones, and the\u00a0bonus\.$/);
+    await myTurn();
+    assert.match(await status(), /^Your turn\. Pip scored \d in Ones and made the\u00a0bonus\.$/);
+    assert.deepEqual(await bonus('them'), { text: '35', fresh: true, drawn: 'write' });
+    await page.reload();
+    await myTurn();
+    assert.match(await status(), /^Your turn\. Pip scored \d in Ones and made the\u00a0bonus\.$/, 'after a reload');
+    assert.equal((await bonus('them')).fresh, false);
+    // Asked for less motion, it's simply there.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.evaluate(() => {
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) g.you[b.id] = b.id === 'chance' ? null : 10;
+      Object.assign(g.you, { f1: null, f2: 10, f3: 12, f4: 12, f5: 13, f6: 15 });
+      Object.assign(g, { rolls: 1, dice: [1, 1, 2, 3, 4] });
+      window.fullHouse.set(g);
+    });
+    await page.click('tr[data-box="f1"]');
+    await page.click('tr[data-box="f1"]');
+    assert.deepEqual(await bonus('you'), { text: '35', fresh: true, drawn: 'none' });
+  });
+
   await step('with all five dice held there is nothing to roll', async ({ page, game, settled }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
