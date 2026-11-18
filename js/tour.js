@@ -62,8 +62,9 @@ export const TABLES = [
   {
     board: {
       ...base, id: 'two-rolls', name: 'Two Rolls',
-      blurb: 'Only two rolls a turn instead of three. Every keep counts.',
+      blurb: 'Only two rolls a turn instead of three. Every keep counts. The top-section bonus needs 52.',
       boxes: boxes(), rolls: 2,
+      bonus: { at: 52, worth: 35 },
     },
     who: { name: 'Sol', line: 'Quick hands. Loves a big Chance.', colour: '#3f6f9a' },
     play: { patience: 0.8, bonus: 0.8, slip: 0.12, style: { boost: { chance: 0.7 } } },

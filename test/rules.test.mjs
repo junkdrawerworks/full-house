@@ -80,6 +80,8 @@ test('every table is a complete board; the twists are what they say', () => {
   assert.equal(s('f6', [6, 6, 1, 2, 3], TABLES[2].board), 36, 'triple sixes');
   assert.match(TABLES[2].board.blurb, /bonus needs 99: three of each number still earns it/, 'the table says what 99 is');
   assert.equal(TABLES[3].board.rolls, 2);
+  assert.equal(TABLES[3].board.bonus.at, 52, 'two rolls: the bonus needs 52, a real target in two-roll turns');
+  assert.match(TABLES[3].board.blurb, /The top-section bonus needs 52\./, 'the table says so when you sit down');
   const pairs = TABLES[6].board;
   assert.equal(s('pairs', [5, 5, 3, 3, 1], pairs), 16);
   assert.equal(s('pairs', [5, 5, 5, 3, 1], pairs), 0);
@@ -362,7 +364,7 @@ test('an opponent’s turn comes out the same from the same seed and turn number
     'f5 10, three 9, chance 24, f4 8, f6 12, four 11, f3 9, f2 0, full 0, small 0, f1 0, large 0, five 0',
     'small 30, chance 17, evens 18, f3 6, f6 12, f2 4, f4 4, full 25, four 23, three 27, five 0, f5 10, large 0',
     'small 30, chance 20, three 27, f1 0, f6 36, f2 4, f4 8, full 25, four 23, f5 15, f3 3, large 40, five 0',
-    'small 30, chance 17, f1 1, f2 4, f6 12, f3 6, f5 5, full 25, four 23, three 26, f4 4, five 0, large 40',
+    'small 30, chance 17, f1 1, f2 4, four 0, three 13, f3 9, full 25, f5 20, f6 18, f4 4, five 0, large 40',
     'three 23, five 50, four 29, small 30, chance 20, full 25, large 40, f5 15, f1 0, f6 18, f4 8, f3 6, f2 4',
     'small 30, f2 8, three 27, full 25, chance 21, four 0, f3 27, f5 15, five 0, f6 18, f4 8, f1 9, large 0',
     'small 30, low 30, f6 18, pairs 12, f2 8, large 40, full 25, f5 15, four 23, f4 12, f1 2, f3 9, five 0',
