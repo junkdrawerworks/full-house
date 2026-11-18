@@ -5,7 +5,7 @@
 **A five-dice game against a ladder of eight opponents, each sharper than the last, on tables that change the rules.** Roll in the felt tray, hold what you like, and pencil your score into the pad beside your opponent's. Beat an opponent to move up a table: Evens in place of Ones, Sixes that score three times over, two-roll turns, wild ones, and on up to the Dealer.
 
 <p align="center">
-  <img src="docs/phone-tour.png" alt="The tour: eight tables listed on a paper card, Classic and Evens beaten with best scores of 231 and 247, Triple Sixes against Bea next up, and the rest locked, with a quick game against Pip, Maud or Bea below" width="250">
+  <img src="docs/phone-tour.png" alt="The tour: eight tables listed on a paper card, Classic and Evens beaten with best scores of 231 and 247, Triple Sixes against Bea next up, and the rest locked" width="250">
   &nbsp;
   <img src="docs/phone-play.png" alt="Turn 8 at Triple Sixes: three sixes held in the felt tray after two rolls, the Sixes box marked times three and picked on the pad, and the line Tap Sixes again to score 54" width="250">
 </p>
