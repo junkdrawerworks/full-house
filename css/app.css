@@ -398,7 +398,8 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 /* A long name (the Dealer's) is set a little tighter, over two slightly wider columns, to stay on one line. */
 .pad.long thead th { padding: 7px 2px; font-size: 12px; line-height: 16px; letter-spacing: 0.02em; }
 .pad.long td { width: 74px; }
-.pad thead th.them::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; background: var(--them-colour); box-shadow: 0 0 0 1.5px var(--paper); }
+/* The opponent's colour as a dot on a small paper disc, so a dark one (the Dealer's) shows on the navy as well as any. */
+.pad thead th.them::before { content: ''; display: inline-block; width: 11px; height: 11px; margin: 0 5px 0 -1.5px; border-radius: 50%; background: radial-gradient(circle closest-side, var(--them-colour) 52%, var(--paper) 58%); vertical-align: -1px; }
 .pad th[scope='row'] { padding: 3px 6px 3px 12px; text-align: left; font-weight: 400; }
 .pad th[scope='row'] b { display: block; font: 700 15px/1.05 var(--cond); letter-spacing: 0.03em; text-transform: uppercase; }
 .pad th[scope='row'] small { display: block; font: 400 12.5px/1.05 var(--text); color: var(--small-print); } /* a line no taller than it was at 11.5px */
