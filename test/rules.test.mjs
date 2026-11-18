@@ -82,6 +82,8 @@ test('every table is a complete board; the twists are what they say', () => {
   assert.equal(TABLES[3].board.rolls, 2);
   assert.equal(TABLES[3].board.bonus.at, 52, 'two rolls: the bonus needs 52, a real target in two-roll turns');
   assert.match(TABLES[3].board.blurb, /The top-section bonus needs 52\./, 'the table says so when you sit down');
+  assert.equal(TABLES[7].board.extra, 100, 'high stakes: the extra for another five of a kind is not doubled');
+  assert.match(TABLES[7].board.blurb, /The extra for another five of a kind stays at 100\./, 'and the table says so');
   const pairs = TABLES[6].board;
   assert.equal(s('pairs', [5, 5, 3, 3, 1], pairs), 16);
   assert.equal(s('pairs', [5, 5, 5, 3, 1], pairs), 0);

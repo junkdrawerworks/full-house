@@ -100,7 +100,7 @@ export const TABLES = [
   {
     board: {
       ...base, id: 'high', name: 'High Stakes',
-      blurb: 'Four rolls a turn, and every box in the bottom section scores double.',
+      blurb: 'Four rolls a turn, and every box in the bottom section scores double. The extra for another five of a kind stays at 100.',
       boxes: boxes(Object.fromEntries(['three', 'four', 'full', 'small', 'large', 'five', 'chance'].map(id => [id, { mult: 2 }]))),
       rolls: 4,
     },

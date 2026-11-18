@@ -27,7 +27,7 @@
   5. **Wild Ones** against Jules: in the bottom section, a 1 counts as whatever number scores best, though the extra 100 for another five of a kind needs five dice showing the same number.
   6. **Hot Boxes** against Otto: two boxes, picked at random each time you sit down (never Ones or Five of a kind), score three times over; when one is a number box, the bonus rises to match.
   7. **Pairs and the Low Road** against Wren: Two pairs (four of one number count) replaces three of a kind, and the Low road (30 for a total of 12 or less) replaces chance.
-  8. **High Stakes** against the Dealer: four rolls a turn, and the bottom section scores double.
+  8. **High Stakes** against the Dealer: four rolls a turn, and the bottom section scores double, though the extra for another five of a kind stays at 100.
 - **Opponents who plan.** Five dice can only land 252 different ways, so an opponent works out, for every possible roll, which dice to keep for the best result over the rest of its turn. It values each box by what it scores now, what it might be worth later, and the top-section bonus. The early opponents leave parts of that out and make mistakes on purpose, and some have a style: Jules chases five of a kind, Otto always goes for the bonus. On classic rules Pip averages about 139, and the Dealer about 244 (`node dev/strength.mjs 600 classic`); the best possible play averages 254.59 (Tom Verhoeff, *Optimal Solitaire Yahtzee Player*, Eindhoven University of Technology, 1999).
 - **Watch them play.** Their red dice tumble in your tray and their scores go into the pad in red pencil. Tap the dice to hurry them along, or turn on quick opponents.
 - **Quick game.** Classic rules against anyone you've met on the tour.
