@@ -525,6 +525,8 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
      keep it off the wood. */
   .play { padding: 12px 0 0 calc(12px + env(safe-area-inset-left)); container-type: inline-size; }
   .tray { --gap: 12px; --d: min(56px, calc((100cqw - 42px - 4 * var(--gap)) / 5 - 2px)); height: calc(var(--d) + 20px + 1.75em); gap: var(--gap); }
+  /* A browser too old for the column's width (Safari before 16) would have no size for the dice at all: the screen's. */
+  @supports not (width: 1cqw) { .tray { --d: min(7vw, 56px); gap: min(1.8vw, 14px); } }
   .pad-wrap { padding: 4px calc(12px + env(safe-area-inset-right)) 0 0; }
   .pad { margin-bottom: 10px; }
 }
