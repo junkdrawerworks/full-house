@@ -46,7 +46,7 @@ npm test                       # the rules and the opponents in Node, then the g
 node tools/screenshots.mjs     # redraws docs/*.png and og.png
 node tools/make-icons.mjs      # redraws the PNG icons from icon.svg, the same to the byte every time
 npm run build                  # bundles everything into dist/full-house.html, one file you can send around, and dist/artifact.html
-node dev/strength.mjs 300 all  # how each opponent scores at its own table, against the best settings
+node dev/strength.mjs 300 all  # how each opponent scores at its own table, against the best settings, each mean with its 95% margin
 npm run sim                    # how often a rule-of-thumb player and the best planner beat each table's opponent
 ```
 
