@@ -1568,6 +1568,34 @@ try {
     }
   }, { viewport: { width: 844, height: 390 } });
 
+  await step('sideways on a phone with a notch, every die lands on the felt, clear of the wooden frame', async ({ page, ctx }) => {
+    const cdp = await ctx.newCDPSession(page);
+    // iPhones held sideways (the notch's inset each side), then small phones with none.
+    for (const [width, height, inset] of [[852, 393, 59], [844, 390, 47], [812, 375, 44], [640, 360, 0], [667, 375, 0]]) {
+      await page.setViewportSize({ width, height });
+      await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { left: inset, right: inset, top: 0, bottom: inset ? 21 : 0 } });
+      await page.evaluate(() => window.fullHouse.start(0));
+      await page.evaluate(() => { window.fullHouse.settings.fast = true; });
+      for (let n = 0; n < 3; n++) { // each roll nudges and tilts the dice a little differently
+        await page.evaluate(() => { const g = structuredClone(window.fullHouse.game); g.rolls = 0; window.fullHouse.set(g); });
+        await page.click('#b-roll');
+        await page.waitForFunction(() => !window.fullHouse.busy);
+        await page.waitForTimeout(500); // settled from their nudge and tilt
+        const m = await page.evaluate(() => {
+          const t = document.querySelector('.tray').getBoundingClientRect(), felt = { left: t.left + 9, right: t.right - 9 }; // inside the 9px frame
+          const dice = [...document.querySelectorAll('.die')].map(d => d.getBoundingClientRect());
+          const laid = [...document.querySelectorAll('.die')].map(d => ({ left: d.offsetLeft, right: d.offsetLeft + d.offsetWidth })); // before the nudge and tilt
+          return { felt, first: dice[0].left, last: dice[4].right, apart: Math.min(...laid.slice(1).map((d, i) => d.left - laid[i].right)), d: laid[0].right - laid[0].left };
+        });
+        const size = `at ${width} x ${height} with ${inset}px for the notch`;
+        assert.ok(m.first >= m.felt.left, `${size} the first die is ${(m.felt.left - m.first).toFixed(1)}px onto the frame`);
+        assert.ok(m.last <= m.felt.right, `${size} the last die is ${(m.last - m.felt.right).toFixed(1)}px onto the frame`);
+        assert.ok(m.apart >= 8, `${size} the dice are only ${m.apart.toFixed(1)}px apart`);
+        assert.ok(m.d >= 40, `${size} the dice are only ${m.d}px wide`);
+      }
+    }
+  }, { viewport: { width: 852, height: 393 } });
+
   await step('the Dealer’s name fits on one line of the pad, and a box marked ×2 is no taller than any other', async ({ page }) => {
     const sizes = table => page.evaluate(table => {
       window.fullHouse.start(table);

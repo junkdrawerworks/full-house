@@ -483,8 +483,11 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 /* Sideways, the screen is short and not so wide: a smaller tray, and half the width each, clear of a notch on either side. */
 @media (orientation: landscape) and (max-height: 500px) and (min-width: 640px) {
   .game { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 16px; }
-  .play { padding: 12px 0 0 calc(12px + env(safe-area-inset-left)); }
-  .tray { --d: min(7vw, 56px); height: calc(var(--d) + 20px + 1.75em); gap: min(1.8vw, 14px); }
+  /* The dice go by the column's width, not the screen's, which counts the notch's inset that .play keeps clear: five dice
+     and their gaps, with 9px to spare each side inside the tray's padding and 2px a die more, so a die's nudge and tilt
+     keep it off the wood. */
+  .play { padding: 12px 0 0 calc(12px + env(safe-area-inset-left)); container-type: inline-size; }
+  .tray { --gap: 12px; --d: min(56px, calc((100cqw - 42px - 4 * var(--gap)) / 5 - 2px)); height: calc(var(--d) + 20px + 1.75em); gap: var(--gap); }
   .pad-wrap { padding: 4px calc(12px + env(safe-area-inset-right)) 0 0; }
   .pad { margin-bottom: 10px; }
 }
