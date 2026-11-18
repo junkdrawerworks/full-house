@@ -594,6 +594,8 @@ body[data-screen='home'] .toast { top: auto; bottom: calc(16px + env(safe-area-i
 .toggle input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .rules { margin: 0; padding-left: 20px; font-size: 15px; line-height: 1.5; }
 .rules li { margin: 6px 0; }
+.rules .keys { display: none; }
+@media (hover: hover) and (pointer: fine) { .rules .keys { display: list-item; } } /* a mouse, so most likely a keyboard */
 
 @media (prefers-reduced-motion: reduce) {
   .cube, .die { transition-duration: 0.01s; }

@@ -433,10 +433,14 @@ function showRules(board, here) {
     lower.map(b => box[b.kind](b)).filter(Boolean).join(' '),
     `Once the Five of a kind box is filled, another five of a kind has to go in its own number’s box if that’s open. If not, it goes in any open box in the bottom section, where ${of('pairs') ? 'a full house, a straight or two pairs' : 'a full house or a straight'} counts in full. If the bottom is full too, it scores 0 in a top box${evens ? ` (or what the even dice add up to, in ${boxLabel(evens)})` : ''}. It also earns ${board.extra} extra, unless the Five of a kind box holds a 0.`,
     'You and your opponent take turns until every box is filled. The higher total wins.',
+    KEYS,
     !here && 'Some tables change these; each says how when you sit down.',
   ];
-  $('rules-list').innerHTML = items.filter(Boolean).map(t => `<li>${t}</li>`).join('');
+  $('rules-list').innerHTML = items.filter(Boolean).map(t => (t === KEYS ? `<li class="keys">${t}</li>` : `<li>${t}</li>`)).join('');
 }
+
+// Shown where there's a mouse, and so most likely a keyboard: see css/app.css.
+const KEYS = 'On a keyboard: Space or R rolls and 1 to 5 hold the dice. Tab to a box and press Enter to pick it, then Enter again to score it. Space or Enter hurries the opponent along.';
 
 let opener = null;
 let under = null; // the sheet this one was opened from, to go back to if it's turned down
@@ -570,6 +574,13 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { dismiss(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return; // the browser's shortcuts, like Ctrl+R to reload
   if (document.body.dataset.screen !== 'game' || document.querySelector('.sheet:not([hidden])')) return;
+  // On the opponent's turn, Space or Enter hurries them along, as a tap on the dice does: from Roll, where a score leaves
+  // the focus, or from nowhere. Kept from Roll itself, so a Space let go as your turn comes doesn't roll for you.
+  if ((e.key === ' ' || e.key === 'Enter') && game?.turn === 'them' && busy && (e.target === document.body || e.target.id === 'b-roll')) {
+    e.preventDefault();
+    hurry = true;
+    return;
+  }
   // R rolls wherever the focus is; Space only when nothing has it, since Space presses the button in focus. Once the
   // game is over, they open its result, as the button does.
   if (e.key.toLowerCase() === 'r' || (e.key === ' ' && e.target === document.body)) { e.preventDefault(); if (game?.over) showResult(); else roll(); }
@@ -682,6 +693,7 @@ if (game) {
 window.fullHouse = {
   get game() { return game; },
   get busy() { return busy; },
+  get hurry() { return hurry; },
   progress,
   settings,
   start,

@@ -1016,6 +1016,38 @@ try {
     assert.equal((await game()).rolls, 2, 'R did nothing with a die focused');
   }, { desktop: true });
 
+  await step('keyboard: Space or Enter hurries the opponent, and How to play says which keys do what', async ({ page, game, myTurn, settled }) => {
+    await page.click('#b-rules');
+    assert.ok(await page.isVisible('#rules-list .keys'), 'How to play does not say the keys on a computer');
+    assert.match(await page.textContent('#rules-list .keys'), /^On a keyboard: Space or R rolls/);
+    await page.keyboard.press('Escape');
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    for (const key of ['Enter', ' ']) {
+      await page.keyboard.press('r');
+      await settled();
+      await page.focus('tr.can >> nth=0');
+      await page.keyboard.press('Enter');
+      await page.keyboard.press('Enter'); // scored: the focus is on Roll, and the opponent is about to play
+      assert.equal(await page.evaluate(() => window.fullHouse.hurry), false);
+      await page.keyboard.press(key);
+      assert.equal(await page.evaluate(() => window.fullHouse.hurry), true, `${JSON.stringify(key)} did not hurry the opponent`);
+      await myTurn();
+      assert.equal((await game()).rolls, 0, `${JSON.stringify(key)} rolled your dice as well`);
+    }
+    // Held down past the end of their turn, Space doesn't roll for you as it's let go.
+    await page.keyboard.press('r');
+    await settled();
+    await page.focus('tr.can >> nth=0');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    await page.keyboard.down(' ');
+    await myTurn();
+    await page.keyboard.up(' ');
+    await page.waitForTimeout(100);
+    assert.equal((await game()).rolls, 0, 'letting go of Space rolled for you');
+  }, { desktop: true });
+
   await step('keyboard: Roll keeps the focus, so Enter on it rolls each time', async ({ page, game, settled }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
@@ -1286,6 +1318,8 @@ try {
     // From the tour: the classic numbers, and a word that tables change them.
     await page.click('#b-rules');
     let text = await sheet();
+    assert.ok(await page.isVisible('#rules-list li >> nth=0'));
+    assert.ok(await page.isHidden('#rules-list .keys'), 'a phone is told about the keyboard');
     await page.keyboard.press('Escape');
     assert.match(text.join(' '), /Reach 63 across the six boxes for a 35-point bonus \(three of each number gets you there\)/);
     assert.match(text.join(' '), /You get three rolls\./);
