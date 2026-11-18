@@ -511,6 +511,41 @@ try {
     }
   });
 
+  await step('the last turn says so, yours and the opponent’s', async ({ page, myTurn }) => {
+    const status = () => page.textContent('#status');
+    await page.evaluate(() => window.fullHouse.start(0));
+    // Your last box, Chance, with Pip's last score to report, then with nothing to report.
+    const last = (them, more) => page.evaluate(([them, more]) => {
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) { g.you[b.id] = b.id === 'chance' ? null : 10; g.them[b.id] = b.id in them ? them[b.id] : 10; }
+      Object.assign(g, { number: 13, rolls: 0, turn: 'you', held: [false, false, false, false, false] }, more);
+      window.fullHouse.set(g);
+    }, [them, more]);
+    await last({ five: 0 }, { last: { id: 'five', score: 0, extra: 0 } });
+    assert.equal(await status(), 'Last turn. Pip scored 0 in Five of a kind.');
+    await last({}, { last: null });
+    assert.equal(await status(), 'Last turn. Roll the dice.');
+    // The turn before isn't the last: the usual lines.
+    await last({}, { number: 12, last: { id: 'five', score: 10, extra: 0 } });
+    await page.evaluate(() => { const g = structuredClone(window.fullHouse.game); g.you.f1 = null; window.fullHouse.set(g); });
+    assert.equal(await status(), 'Your turn. Pip scored 10 in Five of a kind.');
+    // Pip's last go, and the one before it.
+    const theirs = async open => {
+      await page.evaluate(open => {
+        const g = structuredClone(window.fullHouse.game);
+        for (const b of g.board.boxes) { g.you[b.id] = 10; g.them[b.id] = open.includes(b.id) ? null : 10; }
+        g.you.chance = null;
+        Object.assign(g, { number: 12, rolls: 0, turn: 'them', held: [false, false, false, false, false] });
+        window.fullHouse.set(g);
+      }, open);
+      return status();
+    };
+    assert.equal(await theirs(['chance']), 'Last turn. Pip rolls.');
+    await myTurn();
+    assert.equal(await theirs(['chance', 'f1']), 'Pip rolls.');
+    await myTurn();
+  });
+
   await step('the dice have landed by the time their scores show, at either pace', async ({ page, myTurn }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
@@ -736,7 +771,7 @@ try {
     });
     await page.click('tr[data-box="chance"]');
     await page.click('tr[data-box="chance"]');
-    await page.waitForFunction(() => /^The Dealer rolls\.$/.test(document.getElementById('status').textContent));
+    await page.waitForFunction(() => /^Last turn\. The Dealer rolls\.$/.test(document.getElementById('status').textContent));
     await page.click('#tray');
     await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
     assert.equal(await page.textContent('#result-title'), 'You beat the Dealer');

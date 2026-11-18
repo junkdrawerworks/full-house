@@ -1,6 +1,6 @@
 // Full House: the tour, a game in progress, and the opponent's turns played out on the table.
 
-import { blankCard, options, jokerState, mark, totals, filled, boxLabel, isUpper } from './rules.js';
+import { blankCard, options, jokerState, mark, totals, filled, turnsLeft, boxLabel, isUpper } from './rules.js';
 import { TABLES, boardFor, CLASSIC } from './tour.js';
 import { Opponent } from './ai.js';
 import { Tray } from './dice.js';
@@ -138,7 +138,7 @@ async function theirTurn() {
   g.held = [false, false, false, false, false];
   g.dice = g.dice.map(roll);
   g.rolls = 1;
-  status(`${name} rolls.`);
+  status(`${turnsLeft(b, g.them) === 1 ? 'Last turn. ' : ''}${name} rolls.`);
   showDice([0, 1, 2, 3, 4]);
   render();
   await wait(pace.roll);
@@ -376,9 +376,12 @@ function jokerLine(b, joker, opts) {
 }
 
 // Before your first roll: what the opponent just scored, or, as a game starts at Hot Boxes, which boxes are hot.
+// Your last box starts with Last turn.
 function firstLine(g) {
-  const b = g.board, last = g.number > 1 && g.last && b.boxes.find(x => x.id === g.last.id);
-  if (last) return `Your turn. ${who(g).name} scored ${g.last.score} in ${boxLabel(last)}${g.last.extra ? `, plus ${g.last.extra} extra` : ''}.`;
+  const b = g.board, last = g.number > 1 && g.last && b.boxes.find(x => x.id === g.last.id), final = turnsLeft(b, g.you) === 1;
+  const turn = final ? 'Last turn.' : 'Your turn.';
+  if (last) return `${turn} ${who(g).name} scored ${g.last.score} in ${boxLabel(last)}${g.last.extra ? `, plus ${g.last.extra} extra` : ''}.`;
+  if (final) return 'Last turn. Roll the dice.';
   if (g.number > 1) return 'Your turn.';
   return hotNames(b) ? `Hot this time: ${hotNames(b)}. Roll the dice.` : 'Your turn. Roll the dice.';
 }
