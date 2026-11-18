@@ -30,9 +30,11 @@ async function save(shot, path) {
   await writeFile(path, Buffer.from(UPNG.encode(UPNG.toRGBA8(img), img.width, img.height, 256)));
 }
 
-async function open(viewport, deviceScaleFactor) {
+// `clock`: the page's timers wait to be moved on by hand (page.clock), so a turn can be stopped at a chosen moment.
+async function open(viewport, deviceScaleFactor, { clock = false } = {}) {
   const ctx = await browser.newContext({ viewport, deviceScaleFactor, hasTouch: true, serviceWorkers: 'block', colorScheme: 'light' });
   const page = await ctx.newPage();
+  if (clock) await page.clock.install();
   await page.addInitScript(() => {
     let a = 9; // mulberry32
     Math.random = () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
@@ -43,9 +45,15 @@ async function open(viewport, deviceScaleFactor) {
   return page;
 }
 
+// The game's seed, which deals Bea's dice. With this one her turn 8 starts 6-3-6-4-6 and she holds the three sixes,
+// her best keep (no slip), as the README's picture of her turn says.
+const SEED = 34;
+// Once every die has finished moving: tumbling, settling, or lifting as it's held.
+const still = page => page.waitForFunction(() => document.getAnimations().every(a => a.playState !== 'running'), null, { timeout: 15000 });
+
 // Part way through a game at Triple Sixes against Bea: your turn, three sixes held after two rolls.
 async function midGame(page, turn) {
-  await page.evaluate(async turn => {
+  await page.evaluate(async ([turn, seed]) => {
     const { blankCard } = await import('./js/rules.js');
     const { boardFor } = await import('./js/tour.js');
     const board = boardFor(2, 1);
@@ -53,10 +61,10 @@ async function midGame(page, turn) {
     const them = { ...blankCard(board), f1: 2, f2: 6, f5: 20, three: 24, full: 25, large: 40, chance: 19 };
     window.fullHouse.settings.fast = false;
     window.fullHouse.set({
-      table: 2, opp: 2, seed: 1, board, you, them, turn, number: 8, rolls: turn === 'you' ? 2 : 0,
+      table: 2, opp: 2, seed, board, you, them, turn, number: 8, rolls: turn === 'you' ? 2 : 0,
       dice: [6, 6, 2, 6, 5], held: turn === 'you' ? [true, true, false, true, false] : [false, false, false, false, false],
     });
-  }, turn);
+  }, [turn, SEED]);
   await page.waitForTimeout(400);
 }
 
@@ -70,12 +78,9 @@ async function midGame(page, turn) {
   await page.waitForTimeout(300);
   await save(await page.screenshot(), join(root, 'docs/phone-play.png'));
 
+  // Bea plays her turn 8 (pictured below, on a page of its own), then the last turn of a game you're ahead in.
   await midGame(page, 'them');
-  await page.waitForFunction(() => window.fullHouse.game.held.some(Boolean), null, { timeout: 15000 });
-  await page.waitForTimeout(250);
-  await save(await page.screenshot(), join(root, 'docs/phone-theirs.png'));
-
-  // The last turn of a game you're ahead in.
+  await page.waitForFunction(() => window.fullHouse.game.turn === 'you' && !window.fullHouse.busy, null, { timeout: 30000 });
   await page.evaluate(async () => {
     const g = structuredClone(window.fullHouse.game);
     Object.assign(g.you, { f2: 6, f6: 54, three: 26, four: 22, large: 40 }); // Five of a kind left open
@@ -91,8 +96,23 @@ async function midGame(page, turn) {
   await page.locator('tr.can').first().click();
   await page.click('#tray');
   await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
-  await page.waitForTimeout(500);
+  await still(page);
   await save(await page.screenshot(), join(root, 'docs/phone-won.png'));
+  await page.context().close();
+}
+
+// Bea's turn, held still where she has kept her first dice: the game's clock stops there, so the dice can finish
+// settling and the picture is the same every time. It has to show what the README says it does.
+{
+  const page = await open({ width: 390, height: 844 }, 2, { clock: true });
+  await midGame(page, 'them');
+  for (let i = 0; i < 200 && !(await page.evaluate(() => window.fullHouse.game.held.some(Boolean))); i++) await page.clock.runFor(50);
+  await still(page);
+  const shown = await page.evaluate(() => ({ dice: window.fullHouse.game.dice, held: window.fullHouse.game.held, line: document.getElementById('status').textContent }));
+  if (shown.held.join() !== shown.dice.map(d => d === 6).join() || shown.held.filter(Boolean).length !== 3 || shown.line !== 'Bea holds three and rolls again.') {
+    throw new Error(`Bea's turn isn't the one the README describes (three sixes held, 'Bea holds three and rolls again.'): ${JSON.stringify(shown)}`);
+  }
+  await save(await page.screenshot(), join(root, 'docs/phone-theirs.png'));
   await page.context().close();
 }
 

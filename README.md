@@ -10,9 +10,9 @@
   <img src="docs/phone-play.png" alt="Turn 8 at Triple Sixes: three sixes held in the felt tray after two rolls, the Sixes box marked times three and picked on the pad, and the line Tap Sixes again to score 54" width="250">
 </p>
 <p align="center">
-  <img src="docs/phone-theirs.png" alt="Bea's turn: her red dice in the tray with one six held, the line Bea holds one and rolls again, and both columns of pencilled scores on the pad" width="250">
+  <img src="docs/phone-theirs.png" alt="Bea's turn: her red dice in the tray with three sixes held, the line Bea holds three and rolls again, and both columns of pencilled scores on the pad" width="250">
   &nbsp;
-  <img src="docs/phone-won.png" alt="The end of the game: You beat Bea, 300 to 244, and table 4, Two Rolls against Sol, is open" width="250">
+  <img src="docs/phone-won.png" alt="The end of the game: You beat Bea, 300 to 294, and table 4, Two Rolls against Sol, is open" width="250">
 </p>
 
 ## How it plays
