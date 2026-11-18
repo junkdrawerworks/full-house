@@ -1016,6 +1016,49 @@ try {
     assert.equal((await game()).rolls, 2, 'R did nothing with a die focused');
   }, { desktop: true });
 
+  await step('a screen reader hears the roll, the holds, the pick, the opponent’s turn and the result', async t => {
+    const { page, game, myTurn, settled } = t;
+    const said = () => page.evaluate(() => document.getElementById('said').textContent.trim());
+    assert.equal(await page.getAttribute('#said', 'aria-live'), 'polite');
+    assert.equal(await page.getAttribute('#status', 'aria-live'), null, 'the line on screen is read out as well');
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    await page.evaluate(() => { window.fullHouse.settings.fast = true; });
+    await page.click('#b-roll');
+    await settled();
+    let g = await game();
+    assert.equal(await said(), `You rolled ${g.dice.join(', ')}. 2 rolls left.`);
+    await page.click('.die >> nth=0');
+    await page.click('.die >> nth=2');
+    assert.equal(await said(), `Holding ${g.dice[0]}, ${g.dice[2]}.`);
+    await page.click('.die >> nth=0');
+    await page.click('.die >> nth=2');
+    assert.equal(await said(), 'Holding none.');
+    const row = page.locator('tr.can').first();
+    await row.click();
+    assert.match(await said(), /^Tap .+ again to (score \d+|write in a 0)\.$/);
+    assert.equal(await said(), await page.textContent('#status'));
+    await row.click();
+    assert.match(await said(), /^You score \d+ in /);
+    await page.click('#tray');
+    await myTurn();
+    g = await game();
+    const [id, score] = Object.entries(g.them).find(([k, v]) => k !== 'extras' && v !== null);
+    const you = Object.entries(g.you).filter(([k, v]) => k !== 'extras' && v !== null)[0][1];
+    assert.equal(await said(), `Pip scored ${score} in ${await page.textContent(`tr[data-box="${id}"] th b`)}. You ${you}, Pip ${score}. Your turn.`);
+    // The last turn: what they scored, then who won and by how much.
+    await win(t);
+    const [mine, theirs] = await page.$$eval('#pad tfoot td', tds => tds.map(td => +td.textContent));
+    assert.match(await said(), new RegExp(`^Pip scored \\d+ in Chance\\. You win, ${mine} to ${theirs}\\.$`));
+    // A message is heard too.
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => window.fullHouse.start(0));
+    await page.click('#b-menu');
+    await page.click('#b-concede');
+    await page.click('#b-concede');
+    assert.equal(await said(), 'You gave up at table 1. Pip takes that one.');
+  });
+
   await step('keyboard: Space or Enter hurries the opponent, and How to play says which keys do what', async ({ page, game, myTurn, settled }) => {
     await page.click('#b-rules');
     assert.ok(await page.isVisible('#rules-list .keys'), 'How to play does not say the keys on a computer');

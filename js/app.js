@@ -48,7 +48,14 @@ function roll() {
   showDice(rolled);
   render();
   save();
-  setTimeout(() => { busy = false; showDice(); render(); }, settings.fast ? 450 : 750);
+  setTimeout(() => {
+    busy = false;
+    showDice();
+    render();
+    if (game !== g) return;
+    const left = g.board.rolls - g.rolls;
+    say(`You rolled ${g.dice.join(', ')}. ${left ? `${left} roll${left === 1 ? '' : 's'} left.` : 'No rolls left.'}${jokerState(g.board, g.you, g.dice) ? ` ${$('status').textContent}` : ''}`);
+  }, settings.fast ? 450 : 750);
 }
 
 function toggle(i) {
@@ -59,13 +66,15 @@ function toggle(i) {
   showDice();
   render();
   save();
+  const kept = g.dice.filter((d, k) => g.held[k]);
+  say(kept.length ? `Holding ${kept.join(', ')}.` : 'Holding none.');
 }
 
 // Tap a box once to pick it, again to score it.
 function pick(id) {
   const g = game;
   if (!g || busy || g.turn !== 'you' || g.rolls === 0) return;
-  if (picked !== id) { picked = id; render(); return; }
+  if (picked !== id) { picked = id; render(); say($('status').textContent); return; }
   const option = options(g.board, g.you, g.dice).find(o => o.box.id === id);
   if (!option) return;
   g.you = mark(g.you, option);
@@ -81,7 +90,9 @@ function pick(id) {
   render();
   showDice(); // still yours, until the opponent rolls
   $('b-roll').focus({ preventScroll: true }); // the box picked from the keyboard has gone: Roll says whose turn it is, then yours
-  status(`You score ${option.score} in ${boxLabel(option.box)}${option.extra ? `, plus ${g.board.extra} extra` : ''}.`);
+  const line = `You score ${option.score} in ${boxLabel(option.box)}${option.extra ? `, plus ${g.board.extra} extra` : ''}.`;
+  status(line);
+  say(line);
   setTimeout(theirTurn, settings.fast ? 300 : 650);
 }
 
@@ -163,7 +174,10 @@ async function theirTurn() {
   if (option.extra) toast(`${name} rolls another five of a kind: ${b.extra} extra points.`);
   else if (option.box.kind === 'five' && option.score) toast(`${name} rolls five of a kind.`);
 
-  if (filled(b, g.you) && filled(b, g.them)) { finish(); return; }
+  // Heard once, at the end of their turn, rather than as each line goes by: what they scored and where it leaves you.
+  const scored = `${name} scored ${option.score} in ${boxLabel(option.box)}${option.extra ? `, plus ${b.extra} extra` : ''}.`;
+  if (filled(b, g.you) && filled(b, g.them)) { finish(scored); return; }
+  say(`${scored} You ${totals(b, g.you).total}, ${mid(name)} ${totals(b, g.them).total}. Your turn.`);
   yourTurn(g);
 }
 
@@ -206,9 +220,11 @@ function start(table, opp = table) {
   save();
   showDice();
   render();
+  say($('status').textContent); // "Your turn. Roll the dice.", or which boxes are hot
 }
 
-function finish() {
+// `lead`: what the opponent just scored, said before who won.
+function finish(lead = '') {
   const g = game, b = g.board;
   token++;
   busy = false;
@@ -234,6 +250,7 @@ function finish() {
   showDice();
   if (document.body.dataset.screen === 'home') renderHome(); // it ended behind the tour: Carry on goes, and a table may open
   status(won ? 'You win.' : tie ? 'A tie.' : `${name} wins.`);
+  say(`${lead ? `${lead} ` : ''}${won ? `You win, ${you} to ${them}.` : tie ? `A tie, ${you} all.` : `${name} wins, ${them} to ${you}.`}`);
 
   $('result-title').textContent = won ? `You beat ${mid(name)}` : tie ? 'A tie' : `${name} wins`;
   const last = g.table === TABLES.length - 1;
@@ -350,7 +367,23 @@ function firstLine(g) {
 // The boxes that score three times over at a Hot Boxes table, drawn when you sat down: "Ones and Threes".
 const hotNames = board => (board.hot ? board.boxes.filter(x => x.mult > 1).map(boxLabel).join(' and ') : '');
 
-function status(text) { $('status').textContent = text; }
+// The line under the dice. Written only when it changes.
+function status(text) { if ($('status').textContent !== text) $('status').textContent = text; }
+
+// What a screen reader hears, in a live region of its own (the line on screen isn't one): whole sentences at the moments
+// that matter, rather than every line as it goes by. Things said at the same moment go out together, so that one doesn't
+// cut the other off, and the same words again are still read out.
+let saying = [];
+function say(text) {
+  if (!saying.length) {
+    queueMicrotask(() => {
+      const el = $('said'), next = saying.join(' ');
+      saying = [];
+      el.textContent = el.textContent === next ? `${next}\u00a0` : next;
+    });
+  }
+  saying.push(text);
+}
 
 function renderHome() {
   const list = $('tables');
@@ -475,6 +508,7 @@ let toastTimer = 0;
 function toast(text) {
   const t = $('toast');
   t.textContent = text;
+  say(text);
   t.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { t.hidden = true; }, 3200);
