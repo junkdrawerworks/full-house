@@ -102,6 +102,13 @@ function pick(id) {
 // `tumble` is how long thrown dice take to land (--tumble in css/app.css).
 const PACE = { normal: { roll: 800, think: 650, choose: 850, tumble: 700 }, fast: { roll: 420, think: 280, choose: 420, tumble: 380 } };
 
+// Until the dice in the tray have landed: their own animations, which a busy phone can start a frame or two late, so
+// not a clock. At most `cap` ms, in case a tab out of sight holds them back.
+function landed(cap) {
+  const going = $('tray').getAnimations({ subtree: true }).map(a => a.finished.catch(() => {})); // a throw cut short cancels
+  return Promise.race([Promise.all(going), new Promise(resolve => setTimeout(resolve, cap))]);
+}
+
 // A pause in the opponent's turn, cut to `hurried` ms (or less) once you tap to hurry them along.
 function wait(ms, hurried = 140) {
   return new Promise(resolve => {
@@ -131,7 +138,6 @@ async function theirTurn() {
   g.rolls = 1;
   status(`${name} rolls.`);
   showDice([0, 1, 2, 3, 4]);
-  let thrown = performance.now(); // when the dice last left their hand
   render();
   await wait(pace.roll);
   if (!still()) return;
@@ -149,15 +155,13 @@ async function theirTurn() {
     g.dice = g.dice.map((d, i) => (keep[i] ? d : (rolled.push(i), roll())));
     g.rolls++;
     showDice(rolled);
-    if (rolled.length) thrown = performance.now();
     await wait(pace.roll);
     if (!still()) return;
   }
 
   // Hurried, the rolls go by before the dice land, but the turn ends on landed dice and a score you can read.
-  const landing = pace.tumble + 40 - (performance.now() - thrown); // and a frame or two for the browser to draw them landed
-  if (hurry && landing > 0 && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    await new Promise(resolve => setTimeout(resolve, landing));
+  if (hurry) {
+    await landed(pace.tumble + 300);
     if (!still()) return;
   }
   const option = opp.box(b, g.them, g.dice, rand);
