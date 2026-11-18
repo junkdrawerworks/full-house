@@ -2636,6 +2636,116 @@ try {
     await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 15000 });
     assert.match(await page.textContent('#result-title'), /You beat Pip/);
   });
+
+  // carry.js, which brings saves over from the game's old address, junkdrawer.works/full-house/, the first time it
+  // opens at its own. It does nothing away from https://*.junkdrawer.works, so both addresses are routed to stand-ins
+  // here: this game's files, and a carry.html that answers the way the live one does. (Not in step(), which would count
+  // every request to them as leaving the site.) A stopped page fires no load event, so loads are counted as requests.
+  const NEW = 'https://full-house.junkdrawer.works/', OLD = 'https://junkdrawer.works/';
+  const standIn = `<!doctype html><title>junkdrawer.works</title><script>
+    addEventListener('message', e => {
+      if (e.origin !== 'https://full-house.junkdrawer.works' || !e.data || e.data.carry !== true) return;
+      const local = {};
+      for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith('full-house.')) local[k] = localStorage.getItem(k); }
+      e.source.postMessage({ carried: { local, idb: [] } }, e.origin);
+    });
+  </script>`;
+  const oldSave = JSON.stringify({ settings: { fast: true }, progress: { beaten: [true, true, true], best: [231, 247, 260], played: [2, 1, 3], won: [1, 1, 1] }, game: null });
+  async function carrying(name, fn, { home = true, init } = {}) {
+    if (only && !name.includes(only)) return;
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, serviceWorkers: 'block' });
+    const problems = [];
+    try {
+      if (init) await ctx.addInitScript(init);
+      await ctx.route(NEW + '**', async r => {
+        let path = decodeURIComponent(new URL(r.request().url()).pathname);
+        if (path === '/blank.html') return r.fulfill({ body: '<title>blank</title>', contentType: 'text/html' }); // somewhere to write a save first
+        if (path.endsWith('/')) path += 'index.html';
+        try { await r.fulfill({ body: await readFile(join(root, path)), contentType: TYPES[extname(path)] || 'text/html' }); } catch { await r.fulfill({ status: 404, body: '' }); }
+      });
+      await ctx.route(OLD + '**', r => {
+        const path = new URL(r.request().url()).pathname;
+        if (path === '/carry.html' && home) return r.fulfill({ body: standIn, contentType: 'text/html' });
+        if (path === '/full-house/') return r.fulfill({ body: '<title>Full House</title>', contentType: 'text/html' }); // the old address
+        return r.fulfill({ status: 404, body: 'Not found', contentType: 'text/html' });
+      });
+      ctx.on('request', r => { if (!r.url().startsWith(NEW) && !r.url().startsWith(OLD) && !r.url().startsWith('data:')) problems.push('left the site: ' + r.url()); });
+      // A visit in a new tab: how long until the game opened, and how many times the page loaded to get there.
+      const visit = async (at = NEW) => {
+        const page = await ctx.newPage();
+        page.on('pageerror', e => problems.push(e.message));
+        let loads = 0;
+        page.on('request', r => { if (r.isNavigationRequest() && r.frame() === page.mainFrame()) loads++; });
+        const t0 = Date.now();
+        await page.goto(at, { waitUntil: 'commit' }).catch(() => {}); // carry.js stops the first load
+        if (at === NEW) await page.waitForFunction(() => window.fullHouse, null, { timeout: 12000 }).catch(() => assert.fail(`the game never opened: the page loaded ${loads} times in 12 s`));
+        const took = Date.now() - t0;
+        await page.waitForTimeout(500); // and nothing loads it again after
+        return { page, took, loads: () => loads };
+      };
+      const storage = page => page.evaluate(() => ({ ...localStorage }));
+      await fn({ visit, storage });
+      assert.deepEqual(problems, [], `problems while carrying: ${name}`);
+    } finally {
+      await ctx.close();
+    }
+    console.log(`ok  ${name}`);
+  }
+
+  await carrying('carry.js: a save at the old address comes over in one reload, and the tour shows it', async ({ visit, storage }) => {
+    const old = await visit(OLD + 'full-house/');
+    await old.page.evaluate(save => { localStorage.setItem('full-house.v1', save); }, oldSave);
+    const first = await visit();
+    assert.equal(first.loads(), 2, 'the page loaded more than once again to carry the save');
+    const kept = await storage(first.page);
+    assert.equal(kept['full-house.v1'], oldSave, 'the save did not come over');
+    assert.match(kept['junkdrawer.carried'], /^\d{4}-/, 'carrying was not noted as done');
+    assert.equal(await first.page.locator('#tables li.beaten').count(), 3, 'the tour does not show the tables beaten at the old address');
+    assert.match(await first.page.textContent('#tables li:nth-child(2)'), /your best 247/);
+    const again = await visit();
+    assert.equal(again.loads(), 1, 'the next visit tried to carry the save again');
+  });
+
+  await carrying('carry.js: with nothing at the old address to answer, the game opens in a few seconds, and gives up after three visits', async ({ visit, storage }) => {
+    const first = await visit();
+    assert.ok(first.took < 5000, `the game took ${first.took} ms to open`);
+    assert.equal(first.loads(), 2);
+    assert.equal((await storage(first.page))['junkdrawer.carry-tries'], '1');
+    // A reload in the same tab plays on without asking again; the next visit, in a new tab, tries again.
+    await first.page.reload();
+    await first.page.waitForFunction(() => window.fullHouse);
+    assert.equal(first.loads(), 3, 'a reload in the same tab tried again');
+    const second = await visit();
+    assert.equal(second.loads(), 2);
+    assert.equal((await storage(second.page))['junkdrawer.carry-tries'], '2');
+    const third = await visit();
+    assert.equal(third.loads(), 2);
+    const kept = await storage(third.page);
+    assert.equal(kept['junkdrawer.carry-tries'], '3');
+    assert.equal(kept['junkdrawer.carried'], 'gave up');
+    assert.equal((await visit()).loads(), 1, 'it tried again after giving up');
+  }, { home: false });
+
+  await carrying('carry.js: with storage that can be read but not written, the game opens at once, loading only once', async ({ visit }) => {
+    const first = await visit();
+    assert.equal(first.loads(), 1, 'the page was stopped and loaded again, with nowhere to put a save or note that it had');
+    assert.equal(await first.page.locator('#tables li').count(), 8);
+  }, { init: () => { Storage.prototype.setItem = () => { throw new DOMException('The quota has been exceeded.', 'QuotaExceededError'); }; } });
+
+  await carrying('carry.js: a save already at the new address is kept, not written over by the old one', async ({ visit, storage }) => {
+    const old = await visit(OLD + 'full-house/');
+    await old.page.evaluate(save => { localStorage.setItem('full-house.v1', save); }, oldSave);
+    const mine = JSON.stringify({ settings: { fast: false }, progress: { beaten: [true], best: [199], played: [1], won: [1] }, game: null });
+    const blank = await visit(NEW + 'blank.html');
+    await blank.page.evaluate(save => { localStorage.setItem('full-house.v1', save); }, mine);
+    const first = await visit();
+    assert.equal(first.loads(), 2);
+    const kept = await storage(first.page);
+    assert.equal(kept['full-house.v1'], mine, 'the old save wrote over the one already here');
+    assert.ok(kept['junkdrawer.carried'], 'carrying was not noted as done');
+    assert.equal(await first.page.locator('#tables li.beaten').count(), 1);
+  });
+
   // Offline, checked the junkdrawer house kit's way, from a server that answers like GitHub Pages: a browser may keep
 // each file for ten minutes, and asks again by its ETag. `net` is the connection: 'up', 'down' (the server drops every
 // connection) or 'stalled' (a plane's or a train's wifi: it takes each request and holds on to it). With `release`
