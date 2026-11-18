@@ -1,6 +1,6 @@
 // Full House: the tour, a game in progress, and the opponent's turns played out on the table.
 
-import { blankCard, options, jokerState, mark, totals, filled, boxLabel } from './rules.js';
+import { blankCard, options, jokerState, mark, totals, filled, boxLabel, isUpper } from './rules.js';
 import { TABLES, boardFor, CLASSIC } from './tour.js';
 import { Opponent } from './ai.js';
 import { Tray } from './dice.js';
@@ -360,6 +360,43 @@ function intro(table, opp = table) {
   openSheet('sheet-intro');
 }
 
+// How to play, as a table plays it. Opened from a game: the table's own twist first, and its numbers throughout (the
+// bonus, the rolls, what each box pays). Opened from the tour: the game as it comes in the box, and a word that some
+// tables change it.
+function showRules(board, here) {
+  const COUNT = ['', 'one', 'two', 'three', 'four', 'five'], OVER = { 2: ', doubled', 3: ', three times over' };
+  const lower = board.boxes.filter(b => !isUpper(b)), top = board.boxes.filter(b => b.kind === 'face');
+  const of = kind => lower.find(b => b.kind === kind);
+  const pays = (n, b) => n * (b.mult || 1), over = b => OVER[b.mult] || '';
+  const total = b => `the total of all five dice${board.wild ? ', 1s wild' : ''}${over(b)}`;
+  const box = {
+    three: b => (of('four')?.mult === b.mult ? `<b>Three or four of a kind:</b> ${total(b)}.` : `<b>Three of a kind:</b> ${total(b)}.`),
+    four: b => (of('three')?.mult === b.mult ? '' : `<b>Four of a kind:</b> ${total(b)}.`),
+    pairs: b => `<b>Two pairs:</b> the four paired dice added up${over(b)}.`,
+    full: b => `<b>Full house</b>, three of one number and two of another: ${pays(25, b)}.`,
+    small: b => `<b>Small straight</b>, four in a row: ${pays(30, b)}.`,
+    large: b => `<b>Large straight</b>, five in a row: ${pays(40, b)}.`,
+    five: b => `<b>Five of a kind:</b> ${pays(50, b)}.`,
+    chance: b => `<b>Chance:</b> ${total(b).replace('the total of all five dice', 'the total, whatever the dice')}.`,
+    low: b => `<b>Low road:</b> ${pays(30, b)} if the dice total 12 or less.`,
+  };
+  // Three of each number earns the bonus on a board where it adds up to the target exactly: not at Evens.
+  const threeEach = top.length === 6 && 3 * top.reduce((a, b) => a + b.face * (b.mult || 1), 0) === board.bonus.at;
+  const hot = board.hot ? board.boxes.filter(b => b.mult > 1).map(boxLabel) : [];
+  const evens = board.boxes.find(b => b.kind === 'evens');
+  const items = [
+    here && `<b>At this table:</b> ${escape(board.blurb)}${hot.length ? ` This time it’s ${hot.join(' and ')}.` : ''}`,
+    `On your turn, roll all five dice. Tap any dice you want to hold, then roll the rest. You get ${COUNT[board.rolls]} rolls.`,
+    'After any roll you can stop and score: tap a box on the pad, then tap it again to write the score in. Every turn fills one box, even if it scores nothing.',
+    `<b>Top section:</b> add up the dice showing that number. Reach ${board.bonus.at} across the six boxes for a ${board.bonus.worth}-point bonus${threeEach ? ' (three of each number gets you there)' : ''}.`,
+    lower.map(b => box[b.kind](b)).filter(Boolean).join(' '),
+    `Once the Five of a kind box is filled, another five of a kind has to go in its own number’s box if that’s open. If not, it goes in any open box in the bottom section, where ${of('pairs') ? 'a full house, a straight or two pairs' : 'a full house or a straight'} counts in full. If the bottom is full too, it scores 0 in a top box${evens ? ` (or what the even dice add up to, in ${boxLabel(evens)})` : ''}. It also earns ${board.extra} extra, unless the Five of a kind box holds a 0.`,
+    'You and your opponent take turns until every box is filled. The higher total wins.',
+    !here && 'Some tables change these; each says how when you sit down.',
+  ];
+  $('rules-list').innerHTML = items.filter(Boolean).map(t => `<li>${t}</li>`).join('');
+}
+
 let opener = null;
 let under = null; // the sheet this one was opened from, to go back to if it's turned down
 const behind = () => [$('home'), $('game')]; // the screens under a sheet, out of reach while it's open
@@ -456,9 +493,9 @@ $('people').addEventListener('click', e => {
 });
 $('b-tour').addEventListener('click', () => { closeSheets(); game = null; save(); open('home'); });
 $('b-again').addEventListener('click', () => start(game.table, game.opp));
-$('b-rules').addEventListener('click', () => openSheet('sheet-rules'));
+$('b-rules').addEventListener('click', () => { showRules(CLASSIC, false); openSheet('sheet-rules'); });
 // From the menu, which closes as How to play opens: afterwards the focus goes back to the menu button.
-$('b-menu-rules').addEventListener('click', () => openSheet('sheet-rules', $('b-menu')));
+$('b-menu-rules').addEventListener('click', () => { showRules(game?.board || CLASSIC, !!game); openSheet('sheet-rules', $('b-menu')); });
 const showMenu = () => {
   if (!game) return;
   $('menu-title').textContent = game.table === null ? 'Quick game' : `Table ${game.table + 1}: ${game.board.name}`;

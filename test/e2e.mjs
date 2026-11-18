@@ -941,6 +941,47 @@ try {
     assert.equal(await focused(), 'b-menu', 'the focus was lost after How to play from the menu');
   });
 
+  await step('How to play tells the table’s own rules from a game, and the boxed game’s from the tour', async ({ page }) => {
+    const sheet = () => page.$$eval('#rules-list li', l => l.map(li => li.textContent));
+    const fromGame = async table => {
+      await page.evaluate(table => window.fullHouse.start(table), table);
+      await page.click('#b-menu');
+      await page.click('#b-menu-rules');
+      const text = await sheet();
+      await page.keyboard.press('Escape');
+      return text;
+    };
+    // From the tour: the classic numbers, and a word that tables change them.
+    await page.click('#b-rules');
+    let text = await sheet();
+    await page.keyboard.press('Escape');
+    assert.match(text.join(' '), /Reach 63 across the six boxes for a 35-point bonus \(three of each number gets you there\)/);
+    assert.match(text.join(' '), /You get three rolls\./);
+    assert.equal(text.at(-1), 'Some tables change these; each says how when you sit down.');
+    assert.ok(!text.some(t => t.startsWith('At this table')));
+    // The joker rules as options() plays them, the cases a zeroed box or a full bottom section leave included.
+    assert.ok(text.includes('Once the Five of a kind box is filled, another five of a kind has to go in its own number’s box if that’s open. If not, it goes in any open box in the bottom section, where a full house or a straight counts in full. If the bottom is full too, it scores 0 in a top box. It also earns 100 extra, unless the Five of a kind box holds a 0.'), text.join('\n'));
+
+    // Evens: its twist first, and the bonus at 72, with nothing about 63 or three of each.
+    text = await fromGame(1);
+    assert.equal(text[0], `At this table: ${await page.evaluate(() => window.fullHouse.game.board.blurb)}`);
+    assert.match(text.join(' '), /Reach 72 across the six boxes for a 35-point bonus\./);
+    assert.ok(!/63|three of each/.test(text.join(' ')), text.join('\n'));
+    assert.ok(!text.includes('Some tables change these; each says how when you sit down.'));
+    // Two Rolls: two rolls. High Stakes: four, and the bottom section at double.
+    assert.match((await fromGame(3)).join(' '), /You get two rolls\./);
+    text = (await fromGame(7)).join(' ');
+    assert.match(text, /You get four rolls\./);
+    assert.match(text, /Full house, three of one number and two of another: 50\. Small straight, four in a row: 60\. Large straight, five in a row: 80\. Five of a kind: 100\./);
+    assert.match(text, /the total of all five dice, doubled/);
+    // Hot Boxes: which two boxes are hot this time, and the bonus they make.
+    text = await fromGame(5);
+    const hot = await page.evaluate(() => window.fullHouse.game.board);
+    const names = hot.boxes.filter(b => b.mult > 1).map(b => ({ f1: 'Ones', f2: 'Twos', f3: 'Threes', f4: 'Fours', f5: 'Fives', f6: 'Sixes', three: 'Three of a kind', four: 'Four of a kind', full: 'Full house', small: 'Small straight', large: 'Large straight', chance: 'Chance' })[b.id]);
+    assert.ok(text[0].endsWith(` This time it’s ${names.join(' and ')}.`), text[0]);
+    assert.match(text.join(' '), new RegExp(`Reach ${hot.bonus.at} across the six boxes for a 35-point bonus \\(three of each number gets you there\\)`));
+  });
+
   await step('a phone held sideways has the pad beside the dice, with room to read it', async ({ page, settled }) => {
     await page.evaluate(() => window.fullHouse.start(7)); // High Stakes, whose ×2 badges make the widest pad
     await page.click('#b-roll');
