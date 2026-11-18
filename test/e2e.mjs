@@ -370,7 +370,7 @@ try {
     assert.equal(await result(), false, 'the result came up again by itself after it was closed');
     // Closed, the finished pad is there to read, and the button brings the result back: by Escape, and by the back button.
     for (const close of [() => page.keyboard.press('Escape'), () => page.goBack()]) {
-      assert.ok(await page.isEnabled('#b-roll'));
+      assert.equal(await page.getAttribute('#b-roll', 'aria-disabled'), 'false');
       await page.click('#b-roll');
       assert.ok(await result(), 'the button did not open the result again');
       assert.match(await page.textContent('#result-title'), /You beat Pip/);
@@ -965,13 +965,13 @@ try {
     await page.click('#b-roll');
     await settled();
     for (let i = 0; i < 5; i++) await page.click(`.die >> nth=${i}`);
-    assert.ok(await page.isDisabled('#b-roll'), 'Roll is on with every die held');
+    assert.equal(await page.getAttribute('#b-roll', 'aria-disabled'), 'true', 'Roll is on with every die held');
     await page.evaluate(() => document.activeElement.blur());
     await page.keyboard.press(' ');
     assert.equal((await game()).rolls, 1, 'a roll was used up with every die held');
     // Let one go and you can roll again.
     await page.click('.die >> nth=4');
-    assert.ok(await page.isEnabled('#b-roll'));
+    assert.equal(await page.getAttribute('#b-roll', 'aria-disabled'), 'false');
   });
 
   await step('with a mouse, a picked box shows its amber fill', async ({ page, settled }) => {
@@ -1010,6 +1010,27 @@ try {
     await page.keyboard.press('Shift+R');
     await settled();
     assert.equal((await game()).rolls, 2, 'R did nothing with a die focused');
+  }, { desktop: true });
+
+  await step('keyboard: Roll keeps the focus, so Enter on it rolls each time', async ({ page, game, settled }) => {
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    const focused = () => page.evaluate(() => document.activeElement.id || document.activeElement.tagName);
+    for (let i = 0; i < 20 && (await focused()) !== 'b-roll'; i++) await page.keyboard.press('Tab');
+    assert.equal(await focused(), 'b-roll', 'Tab did not reach Roll');
+    for (let n = 1; n <= 3; n++) {
+      await page.keyboard.press('Enter');
+      assert.equal(await focused(), 'b-roll', `the focus left Roll as roll ${n} was in the air`);
+      await settled();
+      assert.equal((await game()).rolls, n, `Enter ${n} did not roll`);
+      assert.equal(await focused(), 'b-roll', `the focus left Roll after roll ${n}`);
+    }
+    // Out of rolls it stays where it is, says so, and does nothing.
+    assert.equal(await page.textContent('#b-roll'), 'No rolls left');
+    assert.equal(await page.getAttribute('#b-roll', 'aria-disabled'), 'true');
+    await page.keyboard.press('Enter');
+    assert.equal((await game()).rolls, 3);
+    assert.equal(await focused(), 'b-roll');
   }, { desktop: true });
 
   await step('keyboard: Enter on a box picks it, and Enter again scores it', async ({ page, game, settled }) => {

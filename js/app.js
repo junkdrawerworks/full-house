@@ -310,8 +310,10 @@ function render() {
 
   const left = b.rolls - g.rolls;
   $('rolls').innerHTML = Array.from({ length: b.rolls }, (_, i) => `<i class="${i < g.rolls && (mine || g.turn === 'them') ? 'used' : ''}"></i>`).join('');
+  // Not `disabled`, which would throw the keyboard's focus off the button while the dice are in the air: it stays put,
+  // reads out whose turn it is, and roll() turns down a press it can't take.
   const button = $('b-roll');
-  button.disabled = !g.over && (!mine || busy || left <= 0 || allHeld(g));
+  button.setAttribute('aria-disabled', String(!g.over && (!mine || busy || left <= 0 || allHeld(g))));
   button.textContent = g.over ? 'See the result' : !mine ? `${opp.name}’s turn` : g.rolls === 0 ? 'Roll' : left > 0 ? `Roll again (${left} left)` : 'No rolls left';
 
   if (mine && !busy) {
