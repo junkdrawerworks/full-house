@@ -252,7 +252,7 @@ test('a box’s hint on the pad says what it pays at that table', () => {
   const makes = { full: [2, 2, 3, 3, 3], small: [1, 2, 3, 4, 6], large: [1, 2, 3, 4, 5], five: [4, 4, 4, 4, 4], low: [1, 1, 2, 2, 3] };
   // Every table, and Hot Boxes with every box it can make hot.
   const boards = TABLES.map((_, i) => boardFor(i, 7));
-  for (let seed = 0, seen = new Set(); seen.size < 12; seed++) {
+  for (let seed = 0, seen = new Set(); seen.size < 11; seed++) {
     const b = boardFor(5, seed), hot = b.boxes.filter(x => x.mult > 1).map(x => x.id);
     if (hot.some(id => !seen.has(id))) { hot.forEach(id => seen.add(id)); boards.push(b); }
   }
@@ -370,7 +370,7 @@ test('an opponent’s turn comes out the same from the same seed and turn number
     'small 30, chance 20, three 27, f1 0, f6 36, f2 4, f4 8, full 25, four 23, f5 15, f3 3, large 40, five 0',
     'small 30, chance 17, f1 1, f2 4, four 0, three 13, f3 9, full 25, f5 20, f6 18, f4 4, five 0, large 40',
     'three 23, five 50, four 29, small 30, chance 20, full 25, large 40, f5 15, f1 0, f6 18, f4 8, f3 6, f2 4',
-    'small 30, f2 8, three 27, full 25, chance 21, four 0, f3 27, f5 15, five 0, f6 18, f4 8, f1 9, large 0',
+    'small 30, f2 24, three 27, f4 48, chance 21, large 40, full 25, f5 15, four 23, f6 18, f1 2, f3 9, five 0',
     'small 30, low 30, f6 18, pairs 12, f2 8, large 40, full 25, f5 15, four 23, f4 12, f1 2, f3 9, five 0',
     'large 80, four 26, three 54, small 60, f1 2, chance 48, full 50, f5 15, f2 2, f6 18, f4 8, f3 9, five 0',
   ];
@@ -386,19 +386,19 @@ test('an opponent’s turn comes out the same from the same seed and turn number
   });
 });
 
-test('Hot Boxes: two boxes three times over, never Five of a kind, and a bonus three of each number still earns', () => {
+test('Hot Boxes: two boxes three times over, never Five of a kind or Ones, and a bonus three of each number still earns', () => {
   const pairs = new Set();
   for (let seed = 0; seed < 2000; seed++) {
     const board = boardFor(5, seed), hot = board.boxes.filter(b => b.mult > 1);
     assert.equal(board.boxes.length, 13);
     assert.equal(hot.length, 2, `seed ${seed}`);
-    assert.ok(hot.every(b => b.mult === 3 && b.kind !== 'five'), `seed ${seed}: ${hot.map(b => b.id)}`);
+    assert.ok(hot.every(b => b.mult === 3 && b.kind !== 'five' && b.id !== 'f1'), `seed ${seed}: ${hot.map(b => b.id)}`);
     assert.equal(board.bonus.at, 63 + hot.filter(b => b.kind === 'face').reduce((a, b) => a + 6 * b.face, 0), `seed ${seed}`);
     const top = board.boxes.filter(b => b.kind === 'face');
     assert.equal(3 * top.reduce((a, b) => a + b.face * b.mult, 0), board.bonus.at, `seed ${seed}: three of each doesn't earn the bonus`);
     pairs.add(hot.map(b => b.id).join('+'));
   }
-  assert.equal(pairs.size, 66, 'every pair of the twelve boxes comes up');
+  assert.equal(pairs.size, 55, 'every pair of the eleven boxes comes up');
 });
 
 test('the joker rules in the corners: a full bottom section, multiplied boxes, Two pairs, Evens and wild ones', () => {

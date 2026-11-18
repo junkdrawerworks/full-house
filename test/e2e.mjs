@@ -469,7 +469,7 @@ try {
     await settled();
     assert.notEqual(await status(), line);
 
-    // Hot Boxes, sat down to with seed 15: Threes and Fives are hot, and the first line and the menu say so.
+    // Hot Boxes, sat down to with seed 15: Fours and Sixes are hot, and the first line and the menu say so.
     const sit = (seed, hot) => page.evaluate(async ([seed, hot]) => {
       const { boardFor } = await import('./js/tour.js');
       window.fullHouse.start(5);
@@ -480,9 +480,9 @@ try {
       window.fullHouse.set(g);
     }, [seed, hot]);
     await sit(15);
-    assert.equal(await status(), 'Hot this time: Threes and Fives. Roll the dice.');
+    assert.equal(await status(), 'Hot this time: Fours and Sixes. Roll the dice.');
     await page.click('#b-menu');
-    assert.equal(await page.textContent('#menu-twist'), `${await page.evaluate(() => window.fullHouse.game.board.blurb)} This time it’s Threes and Fives. Against Otto. Steady. Always goes for the bonus.`);
+    assert.equal(await page.textContent('#menu-twist'), `${await page.evaluate(() => window.fullHouse.game.board.blurb)} This time it’s Fours and Sixes. Against Otto. Steady. Always goes for the bonus.`);
     await page.keyboard.press('Escape');
 
     // The longest of these lines keep to two lines, as every status line does, on a small phone and a phone.

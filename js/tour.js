@@ -19,10 +19,11 @@ export const CLASSIC = {
   boxes: boxes(),
 };
 
-// Two boxes chosen at random score three times over, different every time you sit down.
+// Two boxes chosen at random score three times over, different every time you sit down. Never Five of a kind, and
+// never Ones, where three times over is still only a few points.
 function hotBoxes(seed) {
   const rand = mulberry32(seed);
-  const pool = STANDARD.filter(b => b.kind !== 'five').map(b => b.id);
+  const pool = STANDARD.filter(b => b.kind !== 'five' && b.id !== 'f1').map(b => b.id);
   const hot = [];
   while (hot.length < 2) {
     const id = pool[Math.floor(rand() * pool.length)];
