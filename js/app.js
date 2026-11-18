@@ -84,12 +84,14 @@ function pick(id) {
 
 // ---- the opponent's turn ----
 
-const PACE = { normal: { roll: 800, think: 650, choose: 850 }, fast: { roll: 420, think: 280, choose: 420 } };
+// `tumble` is how long thrown dice take to land (--tumble in css/app.css).
+const PACE = { normal: { roll: 800, think: 650, choose: 850, tumble: 700 }, fast: { roll: 420, think: 280, choose: 420, tumble: 380 } };
 
-function wait(ms) {
+// A pause in the opponent's turn, cut to `hurried` ms (or less) once you tap to hurry them along.
+function wait(ms, hurried = 140) {
   return new Promise(resolve => {
     const t0 = performance.now();
-    const tick = () => (performance.now() - t0 >= (hurry ? Math.min(ms, 140) : ms) ? resolve() : setTimeout(tick, 30));
+    const tick = () => (performance.now() - t0 >= (hurry ? Math.min(ms, hurried) : ms) ? resolve() : setTimeout(tick, 30));
     tick();
   });
 }
@@ -114,6 +116,7 @@ async function theirTurn() {
   g.rolls = 1;
   status(`${name} rolls.`);
   showDice([0, 1, 2, 3, 4]);
+  let thrown = performance.now(); // when the dice last left their hand
   render();
   await wait(pace.roll);
   if (!still()) return;
@@ -131,16 +134,23 @@ async function theirTurn() {
     g.dice = g.dice.map((d, i) => (keep[i] ? d : (rolled.push(i), roll())));
     g.rolls++;
     showDice(rolled);
+    if (rolled.length) thrown = performance.now();
     await wait(pace.roll);
     if (!still()) return;
   }
 
+  // Hurried, the rolls go by before the dice land, but the turn ends on landed dice and a score you can read.
+  const landing = pace.tumble + 40 - (performance.now() - thrown); // and a frame or two for the browser to draw them landed
+  if (hurry && landing > 0 && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    await new Promise(resolve => setTimeout(resolve, landing));
+    if (!still()) return;
+  }
   const option = opp.box(b, g.them, g.dice, rand);
   theirPick = { id: option.box.id, score: option.score };
   status(`${name} scores ${option.score} in ${boxLabel(option.box)}${option.extra ? `, plus ${b.extra} extra` : ''}.`);
   render();
   pad.reveal(option.box.id); // on a short screen the box may be scrolled out of sight; your own turn never moves the pad
-  await wait(pace.choose);
+  await wait(pace.choose, 450);
   if (!still()) return;
 
   g.them = mark(g.them, option);

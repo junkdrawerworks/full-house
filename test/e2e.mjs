@@ -385,10 +385,35 @@ try {
       await page.locator('tr.can').first().click();
       await page.locator('tr.can').first().click();
       assert.equal(await said, 0, `${pace}, the opponent's score is announced while their dice are still tumbling`);
+
+      // Hurried along with a tap: the rolls go by faster, but the last one lands before the score shows, and the
+      // score stays up long enough to read.
+      await myTurn();
+      await page.click('#b-roll');
+      await page.waitForFunction(() => !window.fullHouse.busy);
+      const hurried = moving(`/scores \\d+ in/.test(document.getElementById('status').textContent)`);
+      const upFor = page.evaluate(() => new Promise(resolve => {
+        const line = () => /scores \d+ in/.test(document.getElementById('status').textContent);
+        let from = 0;
+        const look = () => {
+          if (!from && line()) from = performance.now();
+          if (from && !line()) resolve(performance.now() - from); else setTimeout(look, 4);
+        };
+        look();
+      }));
+      upFor.catch(() => {}); // looked at below, unless something else fails first
+      await page.locator('tr.can').first().click();
+      await page.locator('tr.can').first().click();
+      const die = await page.locator('.die >> nth=2').boundingBox();
+      await page.touchscreen.tap(die.x + die.width / 2, die.y + die.height / 2);
+      assert.equal(await hurried, 0, `${pace}, hurried along, the opponent's score is announced while their dice are still tumbling`);
+      const up = await upFor;
+      assert.ok(up >= 400, `${pace}, hurried along, the opponent's score is up for only ${Math.round(up)} ms`);
     }
     // Asked for less motion, the dice don't tumble at all.
-    await page.emulateMedia({ reducedMotion: 'reduce' });
     await myTurn();
+    await page.waitForTimeout(500); // the opponent's held dice have dropped back
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.click('#b-roll');
     await page.waitForTimeout(200);
     assert.equal(await moving('true'), 0, 'the dice tumble though less motion was asked for');
