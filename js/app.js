@@ -80,6 +80,7 @@ function pick(id) {
   save();
   render();
   showDice(); // still yours, until the opponent rolls
+  $('b-roll').focus({ preventScroll: true }); // the box picked from the keyboard has gone: Roll says whose turn it is, then yours
   status(`You score ${option.score} in ${boxLabel(option.box)}${option.extra ? `, plus ${g.board.extra} extra` : ''}.`);
   setTimeout(theirTurn, settings.fast ? 300 : 650);
 }
@@ -259,7 +260,7 @@ function showResult() {
   if (!game?.over || !$('sheet-result').hidden) return;
   resultSeen = true;
   hideToast();
-  openSheet('sheet-result');
+  openSheet('sheet-result', $('b-roll')); // closed, it can be opened again from there
 }
 
 // Leaving a game part way counts as a loss at that table. Leaving one that's over just goes back to the tour.
@@ -369,7 +370,9 @@ function renderHome() {
   if (going) c.innerHTML = `<b>Carry on</b><span>${game.table === null ? 'Quick game' : `Table ${game.table + 1}: ${game.board.name}`}, against ${mid(who(game).name)}. Turn ${Math.min(game.number, game.board.boxes.length)} of ${game.board.boxes.length}.</span>`;
 }
 
-function open(screen) {
+// The focus goes to the thing to do next there (Roll; on the tour, Carry on or the table that's next), unless the page is
+// just opening, when a screen reader starts from the top.
+function open(screen, { focus = true } = {}) {
   document.body.dataset.screen = screen;
   if (screen === 'home') { renderHome(); hideToast(); } // a message about the game stays with it (giving up raises its own after)
   window.scrollTo(0, 0);
@@ -378,6 +381,10 @@ function open(screen) {
   if (at) {
     const r = at.getBoundingClientRect();
     if (r.top < 0 || r.bottom > innerHeight) at.scrollIntoView({ block: 'center', behavior: 'instant' });
+  }
+  if (focus) {
+    const to = screen === 'game' ? $('b-roll') : !$('b-continue').hidden ? $('b-continue') : document.querySelector('#tables li.next button, #tables li:last-child button');
+    to?.focus({ preventScroll: true });
   }
   keepHistory();
 }
@@ -563,8 +570,9 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { dismiss(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return; // the browser's shortcuts, like Ctrl+R to reload
   if (document.body.dataset.screen !== 'game' || document.querySelector('.sheet:not([hidden])')) return;
-  // R rolls wherever the focus is; Space only when nothing has it, since Space presses the button in focus.
-  if (e.key.toLowerCase() === 'r' || (e.key === ' ' && e.target === document.body)) { e.preventDefault(); roll(); }
+  // R rolls wherever the focus is; Space only when nothing has it, since Space presses the button in focus. Once the
+  // game is over, they open its result, as the button does.
+  if (e.key.toLowerCase() === 'r' || (e.key === ' ' && e.target === document.body)) { e.preventDefault(); if (game?.over) showResult(); else roll(); }
   if (/^[1-5]$/.test(e.key)) toggle(+e.key - 1);
 });
 
@@ -661,10 +669,10 @@ if ('serviceWorker' in navigator && !('single' in document.documentElement.datas
 
 // ---- starting up ----
 
-open('home');
+open('home', { focus: false });
 if (game) {
   // A game in progress comes back where you left it. An opponent's turn that was cut short starts over, the same turn.
-  open('game');
+  open('game', { focus: false });
   showDice();
   render();
   if (game.turn === 'them') { busy = true; setTimeout(theirTurn, 500); }

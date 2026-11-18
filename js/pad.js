@@ -13,9 +13,19 @@ export class Pad {
       if (row && row.classList.contains('can')) onPick(row.dataset.box);
     });
     el.addEventListener('keydown', e => {
-      if (e.key !== 'Enter' && e.key !== ' ') return;
       const row = e.target.closest('tr[data-box]');
       if (!row || !row.classList.contains('can')) return;
+      // Up and Down go between the open boxes, Home and End to the first and the last, so a box is a Tab and an arrow or two away.
+      const open = [...el.querySelectorAll('tr.can')], at = open.indexOf(row);
+      const to = { ArrowUp: at - 1, ArrowDown: at + 1, Home: 0, End: open.length - 1 }[e.key];
+      if (to !== undefined) {
+        e.preventDefault();
+        const next = open[Math.max(0, Math.min(to, open.length - 1))];
+        next.focus({ preventScroll: true });
+        this.reveal(next.dataset.box);
+        return;
+      }
+      if (e.key !== 'Enter' && e.key !== ' ') return;
       e.preventDefault();
       onPick(row.dataset.box);
       this.reveal(row.dataset.box); // a box picked from the keyboard may have been scrolled out of sight

@@ -378,12 +378,16 @@ try {
       await page.waitForSelector('#sheet-result', { state: 'hidden' });
       assert.equal(await page.evaluate(() => document.body.dataset.screen), 'game');
     }
-    // R and Space don't roll a finished game.
+    // R and Space don't roll a finished game: they open its result, as the button does.
     await page.keyboard.press('r');
+    assert.ok(await result(), 'R did not open the result');
     assert.equal((await t.game()).over, true);
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => document.activeElement.blur());
+    await page.keyboard.press(' ');
+    assert.ok(await result(), 'Space did not open the result');
     assert.equal(await page.textContent('#b-roll'), 'See the result');
     // On to table 2, then Escape on its card: the result again. It counted once.
-    await page.click('#b-roll');
     await page.click('#b-next');
     await page.waitForSelector('#sheet-intro:not([hidden])');
     await page.keyboard.press('Escape');
@@ -1031,6 +1035,50 @@ try {
     await page.keyboard.press('Enter');
     assert.equal((await game()).rolls, 3);
     assert.equal(await focused(), 'b-roll');
+  }, { desktop: true });
+
+  await step('keyboard: the focus goes to what comes next, and arrows move between the open boxes', async ({ page, myTurn, settled }) => {
+    const focused = () => page.evaluate(() => { const a = document.activeElement; return a.id || a.dataset.box || (a.dataset.table && `table ${a.dataset.table}`) || a.tagName; });
+    await page.focus('[data-table="0"]');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter'); // Sit down
+    assert.equal(await focused(), 'b-roll', 'the focus did not go to Roll as the game began');
+    await page.evaluate(() => { window.fullHouse.settings.fast = true; });
+    await page.keyboard.press('Enter');
+    await settled();
+    // One Tab from Roll is the first open box, and the arrows, Home and End go between the open ones.
+    await page.keyboard.press('Tab');
+    const open = await page.$$eval('tr.can', rows => rows.map(r => r.dataset.box));
+    assert.equal(await focused(), open[0], 'Tab from Roll did not reach the first open box');
+    for (const [key, want] of [['ArrowDown', open[1]], ['ArrowDown', open[2]], ['End', open.at(-1)], ['ArrowDown', open.at(-1)], ['ArrowUp', open.at(-2)], ['Home', open[0]], ['ArrowUp', open[0]]]) {
+      await page.keyboard.press(key);
+      assert.equal(await focused(), want, `${key} went to the wrong box`);
+    }
+    assert.equal((await page.evaluate(() => window.fullHouse.game.rolls)), 1, 'an arrow did something else as well');
+    // Scored, the focus goes to Roll, which says whose turn it is, and then that it's yours.
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    assert.equal(await focused(), 'b-roll', 'the focus did not go to Roll after scoring');
+    assert.equal(await page.textContent('#b-roll'), 'Pip’s turn');
+    await myTurn();
+    assert.equal(await focused(), 'b-roll', 'the focus left Roll during the opponent’s turn');
+    assert.equal(await page.textContent('#b-roll'), 'Roll');
+    // Back to the tour: on Carry on. And from there into the game: on Roll.
+    await page.click('#b-home');
+    assert.equal(await focused(), 'b-continue', 'the focus did not go to Carry on');
+    await page.keyboard.press('Enter');
+    assert.equal(await focused(), 'b-roll', 'the focus did not go to Roll on carrying on');
+    // The last turn: the result comes up, and closed, it hands the focus back to Roll, where Space opens it again.
+    await lastTurn({ page, myTurn, settled });
+    await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
+    await page.keyboard.press('Escape');
+    assert.equal(await focused(), 'b-roll', 'the focus did not come back to Roll from the result');
+    await page.keyboard.press(' ');
+    assert.ok(await page.isVisible('#sheet-result .panel'), 'Space on Roll did not open the result');
+    // Back to the tour from the result: on the table that's next up.
+    await page.click('#b-tour');
+    assert.equal(await focused(), 'table 1', 'the focus did not go to the next table');
   }, { desktop: true });
 
   await step('keyboard: Enter on a box picks it, and Enter again scores it', async ({ page, game, settled }) => {
