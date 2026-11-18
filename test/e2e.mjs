@@ -816,6 +816,14 @@ try {
     const dealer = await play(7, 20);
     assert.equal(dealer.line, 'You’ve beaten The Dealer before. That’s still the whole tour.');
     assert.equal(dealer.next, 'Play again');
+    // Table 1 again, with table 2 beaten too: nothing to send you on to, so the button plays it again.
+    const again = await play(0, 20);
+    assert.equal(again.line, 'You’ve beaten Pip before.');
+    assert.equal(again.next, 'Play again');
+    assert.ok(await page.isHidden('#b-again'), 'Play this table again offered beside Play again');
+    await page.click('#b-next');
+    assert.equal(await page.textContent('#g-table'), 'Table 1: Classic');
+    assert.equal((await page.evaluate(() => window.fullHouse.game)).number, 1);
   });
 
   await step('giving up takes two taps, and the tour says what happened', async ({ page, game, settled }) => {

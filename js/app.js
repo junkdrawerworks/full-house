@@ -234,19 +234,20 @@ function finish() {
 
   $('result-title').textContent = won ? `You beat ${name}` : tie ? 'A tie' : `${name} wins`;
   const last = g.table === TABLES.length - 1;
+  const onward = won && g.table !== null && !last && !(before && progress.beaten[g.table + 1]); // a table to send you on to
   $('result-line').textContent = won
     ? g.table === null ? 'A good game.'
       : last ? (before ? `You’ve beaten ${name} before. That’s still the whole tour.` : 'That’s the whole tour. Nobody at these tables has anything left to teach you.')
-      : before ? `You’ve beaten ${name} before; table ${g.table + 2} is still open.`
+      : before ? (onward ? `You’ve beaten ${name} before; table ${g.table + 2} is still open.` : `You’ve beaten ${name} before.`)
       : `Table ${g.table + 2} is open: ${TABLES[g.table + 1].board.name}, against ${TABLES[g.table + 1].who.name}.`
     : tie ? 'Play it again to settle it.' : 'The dice owe you one.';
   $('result-scores').innerHTML = `<div><span>You</span><b>${you}</b></div><div class="them"><span>${escape(name)}</span><b>${them}</b></div>`;
   $('result-best').textContent = best;
   $('result-best').hidden = !best;
   const next = $('b-next');
-  if (won && g.table !== null && !last) { next.textContent = `On to table ${g.table + 2}`; next.onclick = () => { intro(g.table + 1); under = 'sheet-result'; }; }
+  if (onward) { next.textContent = `On to table ${g.table + 2}`; next.onclick = () => { intro(g.table + 1); under = 'sheet-result'; }; }
   else { next.textContent = 'Play again'; next.onclick = () => start(g.table, g.opp); }
-  $('b-again').hidden = !(won && g.table !== null && !last);
+  $('b-again').hidden = !onward;
   const t = token;
   setTimeout(() => { if (t === token && game === g && !resultSeen) showResult(); }, 900); // unless a new game has started, or it's been opened already
 }
