@@ -44,7 +44,7 @@ npm start                      # serves it at http://localhost:8080 (or use any 
 npm install                    # once, for the bundler and the screenshot tool's PNG compressor
 npm test                       # the rules and the opponents in Node, then the game played in Chromium, the one-file build too (needs Playwright, and npm install)
 node tools/screenshots.mjs     # redraws docs/*.png and og.png
-node tools/make-icons.mjs      # redraws the PNG icons from icon.svg
+node tools/make-icons.mjs      # redraws the PNG icons from icon.svg, the same to the byte every time
 npm run build                  # bundles everything into dist/full-house.html, one file you can send around, and dist/artifact.html
 node dev/strength.mjs 300 all  # how each opponent scores at its own table, against the best settings
 npm run sim                    # how often a rule-of-thumb player and the best planner beat each table's opponent
