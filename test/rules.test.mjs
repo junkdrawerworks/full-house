@@ -78,7 +78,7 @@ test('every table is a complete board; the twists are what they say', () => {
   const evens = TABLES[1].board;
   assert.equal(s('evens', [2, 4, 4, 5, 1], evens), 10);
   assert.equal(s('f6', [6, 6, 1, 2, 3], TABLES[2].board), 36, 'triple sixes');
-  assert.match(TABLES[2].board.blurb, /bonus needs 99: still three of each number/, 'the table says what 99 is');
+  assert.match(TABLES[2].board.blurb, /bonus needs 99: three of each number still earns it/, 'the table says what 99 is');
   assert.equal(TABLES[3].board.rolls, 2);
   const pairs = TABLES[6].board;
   assert.equal(s('pairs', [5, 5, 3, 3, 1], pairs), 16);
