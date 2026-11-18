@@ -85,6 +85,10 @@ test('every table is a complete board; the twists are what they say', () => {
   const pairs = TABLES[6].board;
   assert.equal(s('pairs', [5, 5, 3, 3, 1], pairs), 16);
   assert.equal(s('pairs', [5, 5, 5, 3, 1], pairs), 0);
+  assert.equal(s('pairs', [5, 5, 5, 3, 3], pairs), 16, 'a full house holds two pairs');
+  assert.equal(s('pairs', [6, 6, 6, 6, 2], pairs), 24, 'four of one number are two pairs of it');
+  assert.equal(s('pairs', [2, 2, 2, 2, 6], pairs), 8);
+  assert.equal(s('pairs', [4, 4, 4, 4, 4], pairs), 16, 'and so is a first five of a kind');
   assert.equal(s('low', [1, 2, 3, 2, 4], pairs), 30);
   assert.equal(s('low', [6, 2, 3, 2, 4], pairs), 0);
   // Hot boxes: two boxes at three times, the same two for the same seed.
@@ -288,7 +292,7 @@ const ORACLE = (() => {
     const c = [0, 0, 0, 0, 0, 0, 0];
     d.forEach(x => c[x]++);
     const tot = d.reduce((a, x) => a + x, 0), most = Math.max(...c), has = (...fs) => fs.every(f => c[f]);
-    const pairs = [6, 5, 4, 3, 2, 1].filter(f => c[f] >= 2);
+    const pairs = [6, 5, 4, 3, 2, 1].flatMap(f => (c[f] >= 4 ? [f, f] : c[f] >= 2 ? [f] : [])); // four of one number: two pairs of it
     return {
       face: () => c[b.face] * b.face, evens: () => d.filter(x => x % 2 === 0).reduce((a, x) => a + x, 0), odds: () => d.filter(x => x % 2).reduce((a, x) => a + x, 0),
       three: () => (most >= 3 ? tot : 0), four: () => (most >= 4 ? tot : 0),
@@ -411,10 +415,10 @@ test('the joker rules in the corners: a full bottom section, multiplied boxes, T
   while (!boardFor(5, seed).boxes.some(b => b.id === 'full' && b.mult === 3)) seed++;
   const hot = boardFor(5, seed);
   assert.match(opts(hot, card(hot, { five: 50, f2: 4 }), [2, 2, 2, 2, 2]), /full 75\+100/);
-  // Two pairs: four 6s alone score 0, and a first five 6s too, but a second five 6s counts as two pairs of 6s: 24.
+  // Two pairs: four 6s count as two pairs of 6s, 24, and so do a first five 6s and a second.
   const pairs = TABLES[6].board;
-  assert.equal(s('pairs', [6, 6, 6, 6, 2], pairs), 0);
-  assert.equal(s('pairs', [6, 6, 6, 6, 6], pairs), 0);
+  assert.equal(s('pairs', [6, 6, 6, 6, 2], pairs), 24);
+  assert.equal(s('pairs', [6, 6, 6, 6, 6], pairs), 24);
   assert.equal(opts(pairs, card(pairs, { five: 50, f6: 18 }), [6, 6, 6, 6, 6]), 'pairs 24+100, four 30+100, full 25+100, small 30+100, large 40+100, low 0+100');
   // Evens has no Ones box, so five 1s open the bottom section straight away; five 4s go in Fours, not Evens.
   const evens = TABLES[1].board;

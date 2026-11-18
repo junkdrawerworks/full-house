@@ -55,8 +55,9 @@ function plain(kind, dice, face) {
     case 'five': return c.includes(5) ? 50 : 0;
     case 'chance': return total;
     case 'pairs': {
-      const faces = [6, 5, 4, 3, 2, 1].filter(f => c[f] >= 2);
-      return faces.length >= 2 ? 2 * (faces[0] + faces[1]) : 0;
+      // Four or five of one number count as two pairs of it, as a second five of a kind does under the joker rules.
+      const faces = [6, 5, 4, 3, 2, 1].filter(f => c[f] >= 2), four = [6, 5, 4, 3, 2, 1].find(f => c[f] >= 4);
+      return four ? 4 * four : faces.length >= 2 ? 2 * (faces[0] + faces[1]) : 0;
     }
     case 'low': return total <= 12 ? 30 : 0;
   }
@@ -111,7 +112,7 @@ export function jokerState(board, card, dice) {
 const openBoxes = (board, card) => board.boxes.filter(b => card[b.id] === null || card[b.id] === undefined);
 
 // The boxes you may score these dice in, and what each would give. With a second five of a kind, the joker rules
-// above. (Two pairs counts in full too, as two pairs of the same number.)
+// above. (Two pairs counts as two pairs of the same number, as it does for four of one number.)
 export function options(board, card, dice) {
   const open = openBoxes(board, card);
   const joker = jokerState(board, card, dice);

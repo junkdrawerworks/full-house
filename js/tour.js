@@ -90,7 +90,7 @@ export const TABLES = [
   {
     board: {
       ...base, id: 'pairs', name: 'Pairs and the Low Road',
-      blurb: 'Three of a kind becomes Two pairs: add up the four paired dice. Chance becomes the Low road: 30 if the dice total 12 or less.',
+      blurb: 'Three of a kind becomes Two pairs: add up the four paired dice (four of one number count as two pairs). Chance becomes the Low road: 30 if the dice total 12 or less.',
       boxes: boxes({ three: { id: 'pairs', kind: 'pairs' }, chance: { id: 'low', kind: 'low' } }),
     },
     who: { name: 'Wren', line: 'Sharp, and getting sharper.', colour: '#9a7a2f' },
