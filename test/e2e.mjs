@@ -285,6 +285,22 @@ try {
     await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 5000 });
   });
 
+  await step('on a shorter phone a new game starts at the top of the pad, and carrying on keeps your place', async ({ page }) => {
+    const pad = () => page.evaluate(() => document.querySelector('.pad-wrap').scrollTop);
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    await page.evaluate(() => { document.querySelector('.pad-wrap').scrollTop = 9999; });
+    const down = await pad();
+    assert.ok(down > 40, 'the whole pad fits, so this checks nothing');
+    await page.click('#b-home');
+    await page.click('#b-continue');
+    assert.equal(await pad(), down, 'Carry on lost your place on the pad');
+    await page.click('#b-home');
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    assert.equal(await pad(), 0, 'a new game started with the pad scrolled down');
+  }, { viewport: { width: 375, height: 667 } });
+
   await step('a finished game is not offered to carry on', async t => {
     const { page } = t;
     const screen = () => page.evaluate(() => document.body.dataset.screen);
