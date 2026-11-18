@@ -822,6 +822,22 @@ try {
     }
   });
 
+  await step('the browser’s bar is the colour of the table, light and dark', async ({ page }) => {
+    const colours = () => page.evaluate(async () => ({
+      bar: [...document.querySelectorAll('meta[name="theme-color"]')].find(m => matchMedia(m.media).matches)?.content,
+      table: getComputedStyle(document.documentElement).getPropertyValue('--table').trim(),
+      manifest: await (await fetch(document.querySelector('link[rel="manifest"]').href)).json(),
+    }));
+    const light = await colours();
+    assert.equal(light.bar, light.table, 'in light, the browser’s bar is not the table’s colour');
+    assert.equal(light.manifest.theme_color, light.table, 'an installed game’s bar is not the table’s colour');
+    assert.equal(light.manifest.background_color, light.table, 'an installed game opens on another colour than the table’s');
+    await page.emulateMedia({ colorScheme: 'dark' });
+    const dark = await colours();
+    assert.notEqual(dark.table, light.table, 'the table has no dark colour');
+    assert.equal(dark.bar, dark.table, 'in dark, the browser’s bar is not the table’s colour');
+  });
+
   await step('a quick game asks first when it would end the game you’re in', async ({ page, game }) => {
     const progress = () => page.evaluate(() => window.fullHouse.progress);
     await page.click('[data-table="0"]');
