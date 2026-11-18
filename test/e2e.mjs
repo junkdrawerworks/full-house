@@ -968,8 +968,16 @@ try {
 
   await step('the pad’s small print is big enough to read, on one line, in rows no taller for it', async ({ page, settled }) => {
     await page.setViewportSize({ width: 320, height: 568 });
-    for (const table of [6, 7, 5]) { // the longest hint (Two pairs), the Dealer's wider columns, and a raised bonus line
-      await page.evaluate(table => window.fullHouse.start(table), table);
+    // The longest hints (Two pairs; a hot box three times over, on a board with every box hot), the Dealer's wider
+    // columns and doubled hints, a raised bonus line, wild ones, and triple sixes.
+    for (const table of [6, 7, 5, 'all hot', 4, 2]) {
+      await page.evaluate(table => {
+        if (table !== 'all hot') { window.fullHouse.start(table); return; }
+        window.fullHouse.start(5);
+        const g = structuredClone(window.fullHouse.game);
+        g.board.boxes.forEach(b => { b.mult = 3; });
+        window.fullHouse.set(g);
+      }, table);
       await page.click('#b-roll');
       await settled();
       await page.click('.die >> nth=0');
@@ -989,10 +997,11 @@ try {
       assert.ok(m.held >= 12, `the HELD tag is ${m.held}px`);
       assert.ok(m.progress >= 13, `the bonus so far is ${m.progress}px`);
       assert.match(m.colour, /^rgb\(/, 'a box’s hint is see-through');
-      assert.deepEqual(m.twoLines, [], `at table ${table + 1}, 320 wide, a hint doesn’t fit on its line`);
-      assert.ok(m.rows.every(h => h <= 36.5), `at table ${table + 1} a row with a hint is taller than 36px: ${m.rows}`);
-      assert.ok(m.bonus <= 34.5, `at table ${table + 1} the bonus row is ${m.bonus}px tall`);
-      assert.equal(m.sideways, false, `at table ${table + 1}, 320 wide, the page scrolls sideways`);
+      const at = typeof table === 'number' ? `table ${table + 1}` : 'a board with every box hot';
+      assert.deepEqual(m.twoLines, [], `at ${at}, 320 wide, a hint doesn’t fit on its line`);
+      assert.ok(m.rows.every(h => h <= 36.5), `at ${at} a row with a hint is taller than 36px: ${m.rows}`);
+      assert.ok(m.bonus <= 34.5, `at ${at} the bonus row is ${m.bonus}px tall`);
+      assert.equal(m.sideways, false, `at ${at}, 320 wide, the page scrolls sideways`);
     }
   });
 

@@ -9,24 +9,29 @@
 
 export const FACE = ['', 'Ones', 'Twos', 'Threes', 'Fours', 'Fives', 'Sixes'];
 
+// A box's hint says what it pays on this board: a fixed score with its multiplier in, ones wild where they are.
+const TIMES = { 2: 'Twice', 3: 'Three times' }, OVER = { 2: ', doubled', 3: ', tripled' };
+const over = b => OVER[b.mult] || '';
+const pays = (n, b) => n * (b.mult || 1);
+const totalHint = (b, board) => `Total of all dice${board?.wild ? ', 1s wild' : ''}${over(b)}`;
 const KINDS = {
-  face: { upper: true, label: b => FACE[b.face], hint: () => '' }, // the name says it all
-  evens: { upper: true, label: () => 'Evens', hint: () => 'Add up the even dice' },
-  odds: { upper: true, label: () => 'Odds', hint: () => 'Add up the odd dice' },
-  three: { label: () => 'Three of a kind', hint: () => 'Total of all dice' },
-  four: { label: () => 'Four of a kind', hint: () => 'Total of all dice' },
-  full: { label: () => 'Full house', hint: () => 'Three and a pair: 25' },
-  small: { label: () => 'Small straight', hint: () => 'Four in a row: 30' },
-  large: { label: () => 'Large straight', hint: () => 'Five in a row: 40' },
-  five: { label: () => 'Five of a kind', hint: () => 'All five the same: 50' },
-  chance: { label: () => 'Chance', hint: () => 'Total of all dice' },
-  pairs: { label: () => 'Two pairs', hint: () => 'Total of the four paired dice' },
-  low: { label: () => 'Low road', hint: () => 'Total of 12 or less: 30' },
+  face: { upper: true, label: b => FACE[b.face], hint: b => (TIMES[b.mult] ? `${TIMES[b.mult]} the ${FACE[b.face].toLowerCase()}` : '') }, // otherwise the name says it all
+  evens: { upper: true, label: () => 'Evens', hint: b => `Add up the even dice${over(b)}` },
+  odds: { upper: true, label: () => 'Odds', hint: b => `Add up the odd dice${over(b)}` },
+  three: { label: () => 'Three of a kind', hint: totalHint },
+  four: { label: () => 'Four of a kind', hint: totalHint },
+  full: { label: () => 'Full house', hint: b => `Three and a pair: ${pays(25, b)}` },
+  small: { label: () => 'Small straight', hint: b => `Four in a row: ${pays(30, b)}` },
+  large: { label: () => 'Large straight', hint: b => `Five in a row: ${pays(40, b)}` },
+  five: { label: () => 'Five of a kind', hint: b => `All five the same: ${pays(50, b)}` },
+  chance: { label: () => 'Chance', hint: totalHint },
+  pairs: { label: () => 'Two pairs', hint: b => `Total of the four paired dice${over(b)}` },
+  low: { label: () => 'Low road', hint: b => `Total of 12 or less: ${pays(30, b)}` },
 };
 
 export const isUpper = box => !!KINDS[box.kind].upper;
 export const boxLabel = box => KINDS[box.kind].label(box);
-export const boxHint = box => KINDS[box.kind].hint(box);
+export const boxHint = (box, board) => KINDS[box.kind].hint(box, board);
 
 const counts = dice => {
   const c = [0, 0, 0, 0, 0, 0, 0];

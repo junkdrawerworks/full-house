@@ -1,7 +1,7 @@
 // The rules, the tables and the opponents, checked in Node:  node --test test/
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { score, options, blankCard, mark, totals, filled, fiveOf } from '../js/rules.js';
+import { score, options, blankCard, mark, totals, filled, fiveOf, boxHint } from '../js/rules.js';
 import { TABLES, CLASSIC, boardFor } from '../js/tour.js';
 import { Opponent, playTurn } from '../js/ai.js';
 import { mulberry32 } from '../js/rng.js';
@@ -133,4 +133,39 @@ test('the opponents get better as the tour goes on', () => {
   assert.ok(pip < maud && maud < dealer, `${pip} < ${maud} < ${dealer}`);
   assert.ok(dealer > 220, `the Dealer averages ${dealer}`);
   assert.ok(pip < 170, `Pip averages ${pip}`);
+});
+
+test('a box’s hint on the pad says what it pays at that table', () => {
+  // A roll that makes each fixed-score box, and one for the boxes that add up the dice.
+  const makes = { full: [2, 2, 3, 3, 3], small: [1, 2, 3, 4, 6], large: [1, 2, 3, 4, 5], five: [4, 4, 4, 4, 4], low: [1, 1, 2, 2, 3] };
+  // Every table, and Hot Boxes with every box it can make hot.
+  const boards = TABLES.map((_, i) => boardFor(i, 7));
+  for (let seed = 0, seen = new Set(); seen.size < 12; seed++) {
+    const b = boardFor(5, seed), hot = b.boxes.filter(x => x.mult > 1).map(x => x.id);
+    if (hot.some(id => !seen.has(id))) { hot.forEach(id => seen.add(id)); boards.push(b); }
+  }
+  for (const board of boards) {
+    for (const b of board.boxes) {
+      const hint = boxHint(b, board), m = b.mult || 1, where = `${board.name}, ${b.id} ×${m}: “${hint}”`;
+      if (b.kind in makes) {
+        assert.equal(+hint.match(/(\d+)$/)[1], score(board, b, makes[b.kind]), where);
+      } else if (b.kind === 'face') {
+        assert.equal(hint, m === 3 ? `Three times the ${['', 'ones', 'twos', 'threes', 'fours', 'fives', 'sixes'][b.face]}` : '', where);
+        const other = b.face === 6 ? 5 : 6;
+        assert.equal(score(board, b, [b.face, b.face, b.face, other, other]), 3 * b.face * m, where);
+      } else {
+        assert.match(hint, /^(Total of all dice|Total of the four paired dice|Add up the even dice)/, where);
+        assert.equal(hint.endsWith(', tripled'), m === 3, where);
+        assert.equal(hint.endsWith(', doubled'), m === 2, where);
+        assert.equal(hint.includes('1s wild'), !!board.wild, where);
+      }
+    }
+  }
+  // High Stakes: the bottom section pays double, and the hints say so.
+  const high = TABLES[7].board;
+  assert.equal(boxHint(box(high, 'full'), high), 'Three and a pair: 50');
+  assert.equal(boxHint(box(high, 'five'), high), 'All five the same: 100');
+  assert.equal(boxHint(box(high, 'chance'), high), 'Total of all dice, doubled');
+  assert.equal(boxHint(box(TABLES[2].board, 'f6'), TABLES[2].board), 'Three times the sixes');
+  assert.equal(boxHint(box(TABLES[4].board, 'three'), TABLES[4].board), 'Total of all dice, 1s wild');
 });

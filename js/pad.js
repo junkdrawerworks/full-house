@@ -56,9 +56,9 @@ export class Pad {
     };
     const row = b => {
       const can = offers && b.id in offers;
-      const mult = b.mult > 1 ? `<em class="mult">×${b.mult}</em>` : '';
+      const mult = b.mult > 1 ? `<em class="mult">×${b.mult}</em>` : '', hint = boxHint(b, board);
       return `<tr data-box="${b.id}" class="${can ? 'can' : ''}${picked === b.id ? ' picked' : ''}${b.mult > 1 ? ' hot' : ''}"${can ? ' tabindex="0" role="button"' : ''}>
-        <th scope="row"><b>${boxLabel(b)}${mult}</b>${boxHint(b) ? `<small>${boxHint(b)}</small>` : ''}</th>${cell(you, b, 'you')}${cell(them, b, 'them')}</tr>`;
+        <th scope="row"><b>${boxLabel(b)}${mult}</b>${hint ? `<small>${hint}</small>` : ''}</th>${cell(you, b, 'you')}${cell(them, b, 'them')}</tr>`;
     };
     const upper = board.boxes.filter(isUpper), lower = board.boxes.filter(b => !isUpper(b));
     const bonusCell = (t, who) => `<td class="${who}">${t.bonus ? t.bonus : t.upper >= 0 ? `<small>${t.upper}/${board.bonus.at}</small>` : ''}</td>`;
