@@ -887,6 +887,48 @@ try {
     }
   });
 
+  await step('the Total stays in view at the foot of the pad while the boxes scroll under it', async ({ page, settled }) => {
+    await page.evaluate(() => window.fullHouse.start(0));
+    await page.click('#b-roll');
+    await settled();
+    // Where the Total is, what a tap in the middle of it lands on, and whether any box shows through below it.
+    const look = () => page.evaluate(() => {
+      const wrap = document.querySelector('.pad-wrap'), w = wrap.getBoundingClientRect();
+      const t = document.querySelector('.pad tfoot th').getBoundingClientRect(), last = document.querySelector('.pad tbody:last-of-type tr:last-child').getBoundingClientRect();
+      const at = y => document.elementFromPoint(t.left + 30, y)?.closest('.pad tr');
+      let below = false;
+      for (let y = t.bottom + 2; y < Math.min(w.bottom, innerHeight) - 1; y += 2) if (at(y)) below = true;
+      return {
+        inView: t.top >= w.top && t.bottom <= w.bottom + 0.5 && t.bottom <= innerHeight + 0.5, tapped: at(t.top + t.height / 2)?.className, below,
+        gap: t.top - last.bottom, more: wrap.scrollHeight - wrap.clientHeight, scrollTop: wrap.scrollTop,
+      };
+    });
+    for (const [width, height] of [[360, 640], [390, 664], [320, 568], [844, 390]]) {
+      await page.setViewportSize({ width, height });
+      const size = `at ${width} x ${height}`;
+      await page.evaluate(() => { document.querySelector('.pad-wrap').scrollTop = 0; });
+      let m = await look();
+      assert.ok(m.more > 40, `${size} the whole pad fits, so this checks nothing`);
+      assert.ok(m.inView, `${size} the Total is out of view with the pad at its top`);
+      assert.equal(m.tapped, 'total', `${size} something lies over the Total`);
+      assert.equal(m.below, false, `${size} boxes show below the Total`);
+      // Half way down, the same.
+      await page.evaluate(() => { const w = document.querySelector('.pad-wrap'); w.scrollTop = (w.scrollHeight - w.clientHeight) / 2; });
+      m = await look();
+      assert.ok(m.inView && m.tapped === 'total' && !m.below, `${size} the Total is not at the foot of the pad half way down`);
+      // At the end the Total is where it's printed, straight after the last box, which it doesn't cover.
+      await page.evaluate(() => { document.querySelector('.pad-wrap').scrollTop = 9999; });
+      m = await look();
+      assert.ok(m.inView, `${size} the Total is out of view with the pad at its end`);
+      assert.ok(Math.abs(m.gap) < 1, `${size} the Total is ${m.gap}px from the last box with the pad at its end`);
+    }
+    // On a tall phone the whole pad fits and nothing scrolls.
+    await page.setViewportSize({ width: 412, height: 915 });
+    const m = await look();
+    assert.equal(m.more, 0, 'on a tall phone the pad does not fit');
+    assert.ok(m.inView && Math.abs(m.gap) < 1, 'on a tall phone the Total is not where it is printed');
+  });
+
   await step('a second copy open at the same time picks up what the other one saves', async t => {
     const { page, ctx } = t;
     const other = await ctx.newPage(), trouble = [];
