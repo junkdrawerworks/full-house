@@ -40,12 +40,12 @@
 It's a static site: plain HTML, CSS and JavaScript, with no build step.
 
 ```sh
-npx serve .                    # or any static file server, then open the printed address
+npm start                      # serves it at http://localhost:8080 (or use any static file server)
 npm install                    # once, for the bundler and the screenshot tool's PNG compressor
 npm test                       # the rules and the opponents in Node, then a game played in Chromium (needs Playwright)
 node tools/screenshots.mjs     # redraws docs/*.png and og.png
 node tools/make-icons.mjs      # redraws the PNG icons from icon.svg
-npm run build                  # bundles everything into dist/full-house.html, one file you can send around
+npm run build                  # bundles everything into dist/full-house.html, one file you can send around, and dist/artifact.html
 node dev/strength.mjs 300 all  # how each opponent scores at its own table, against the best settings
 npm run sim                    # how often a rule-of-thumb player and the best planner beat each table's opponent
 ```
@@ -54,6 +54,8 @@ To put it online with GitHub Pages: **Settings → Pages → Build and deploymen
 
 ### Files
 
+- `index.html`: the page: the tour, the game, and the sheets that open over them.
+- `css/app.css`: how it looks, in light and dark, on a phone (upright or sideways), a tablet and a desktop.
 - `js/rules.js`: the rules. Boxes as plain data, scoring (wild ones and multipliers included), the five-of-a-kind bonus and joker rules, and the totals.
 - `js/tour.js`: the eight tables, each a board and an opponent.
 - `js/rng.js`: seeded random numbers, so a Hot Boxes table comes out the same from its seed, and an opponent's turn cut short by a reload plays out the same way again.
@@ -61,10 +63,12 @@ To put it online with GitHub Pages: **Settings → Pages → Build and deploymen
 - `js/dice.js`: the dice, drawn as real cubes that tumble and land face up.
 - `js/pad.js`: the score pad.
 - `js/app.js`: the tour, your turns, the opponent's turns played out on the table, and saving.
+- `manifest.webmanifest`, `icon.svg` and the `icon-*.png` files: what a phone needs to install it to the home screen.
+- `og.png`: the picture a link to the game shows when it's shared; `docs/`: the screenshots in this README.
 - `fonts/`: Barlow, Barlow Condensed and Caveat (SIL Open Font License), served from here so nothing loads from elsewhere.
 - `sw.js`: keeps a copy for playing offline. On a connection that isn't answering, a page opens from that copy after four seconds. `FILES` in it is a fingerprint of the files it keeps: change one and `npm test` says what to set it to, so a release never leaves the copy half old.
 - `carry.js`: brings saves over from the old address, junkdrawer.works/full-house/, the first time the game opens here.
 - `test/`: the rules and the opponents in Node, and a game played through the real page.
 - `tools/`: redraws the README screenshots, the link preview and the icons.
-- `scripts/build.mjs`: bundles the game into one file, `dist/full-house.html`.
+- `scripts/build.mjs`: bundles the game into one file, `dist/full-house.html`, and writes `dist/artifact.html`, the same page without its `<html>`, `<head>` and `<body>`, for a host that supplies its own.
 - `dev/`: tools used while building it: opponent strength runs, the ladder (how hard each table is to beat) and quick screenshots.
