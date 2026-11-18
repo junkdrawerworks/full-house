@@ -93,21 +93,31 @@ export function fiveOf(board, dice) {
   return 0;
 }
 
-// The boxes you may score these dice in, and what each would give. With a second five of a kind, the joker rules:
-// it earns the extra bonus if the five-of-a-kind box holds a score, then it must go in its own number's box
-// if that's open, otherwise anywhere in the bottom section (where the full house and straights count in full),
-// otherwise anywhere at all. (Two pairs counts in full too, as two pairs of the same number.)
-export function options(board, card, dice) {
-  const open = board.boxes.filter(b => card[b.id] === null || card[b.id] === undefined);
+// A second five of a kind, rolled with the Five of a kind box filled: the joker rules. Returns null for any other roll,
+// or { face, extra, forced, lower, topOnly }: the number rolled; what it earns extra (if the five-of-a-kind box holds a
+// score, not a 0); the box it has to go in, its own number's if that's open; failing that, the open boxes in the bottom
+// section it can go in, where the full house and straights count in full; and failing those, whether only top boxes
+// are left, where it scores what it scores (0, unless one adds up even dice).
+export function jokerState(board, card, dice) {
   const fiveBox = board.boxes.find(b => b.kind === 'five');
   const f = fiveOf(board, dice);
-  const joker = f && fiveBox && card[fiveBox.id] !== null && card[fiveBox.id] !== undefined;
-  const extra = joker && card[fiveBox.id] > 0 ? board.extra : 0;
-  if (!joker) return open.map(b => ({ box: b, score: score(board, b, dice), extra: 0 }));
+  if (!f || !fiveBox || card[fiveBox.id] === null || card[fiveBox.id] === undefined) return null;
+  const open = openBoxes(board, card);
+  const forced = open.find(b => b.kind === 'face' && b.face === f) || null;
+  const lower = forced ? [] : open.filter(b => !isUpper(b));
+  return { face: f, extra: card[fiveBox.id] > 0 ? board.extra : 0, forced, lower, topOnly: !forced && !lower.length };
+}
 
-  const own = open.find(b => b.kind === 'face' && b.face === f);
-  if (own) return [{ box: own, score: score(board, own, dice), extra }];
-  const lower = open.filter(b => !isUpper(b));
+const openBoxes = (board, card) => board.boxes.filter(b => card[b.id] === null || card[b.id] === undefined);
+
+// The boxes you may score these dice in, and what each would give. With a second five of a kind, the joker rules
+// above. (Two pairs counts in full too, as two pairs of the same number.)
+export function options(board, card, dice) {
+  const open = openBoxes(board, card);
+  const joker = jokerState(board, card, dice);
+  if (!joker) return open.map(b => ({ box: b, score: score(board, b, dice), extra: 0 }));
+  const { forced, lower, extra, face: f } = joker;
+  if (forced) return [{ box: forced, score: score(board, forced, dice), extra }];
   const full = { full: 25, small: 30, large: 40, pairs: 4 * f };
   if (lower.length) return lower.map(b => ({ box: b, score: b.kind in full ? full[b.kind] * (b.mult || 1) : score(board, b, dice), extra }));
   return open.map(b => ({ box: b, score: score(board, b, dice), extra }));

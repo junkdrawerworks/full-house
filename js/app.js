@@ -1,6 +1,6 @@
 // Full House: the tour, a game in progress, and the opponent's turns played out on the table.
 
-import { blankCard, options, mark, totals, filled, boxLabel } from './rules.js';
+import { blankCard, options, jokerState, mark, totals, filled, boxLabel } from './rules.js';
 import { TABLES, boardFor, CLASSIC } from './tour.js';
 import { Opponent } from './ai.js';
 import { Tray } from './dice.js';
@@ -137,7 +137,7 @@ async function theirTurn() {
 
   const option = opp.box(b, g.them, g.dice, rand);
   theirPick = { id: option.box.id, score: option.score };
-  status(`${name} scores ${option.score} in ${boxLabel(option.box)}.`);
+  status(`${name} scores ${option.score} in ${boxLabel(option.box)}${option.extra ? `, plus ${b.extra} extra` : ''}.`);
   render();
   pad.reveal(option.box.id); // on a short screen the box may be scrolled out of sight; your own turn never moves the pad
   await wait(pace.choose);
@@ -286,7 +286,8 @@ function render() {
   $('g-twist').textContent = `against ${opp.name} · turn ${Math.min(g.number, turns)} of ${turns}`;
   document.documentElement.style.setProperty('--them-colour', opp.colour);
 
-  const offers = mine && g.rolls > 0 && !busy ? Object.fromEntries(options(b, g.you, g.dice).map(o => [o.box.id, o.score])) : null;
+  const opts = mine && g.rolls > 0 && !busy ? options(b, g.you, g.dice) : null;
+  const offers = opts && Object.fromEntries(opts.map(o => [o.box.id, o.score]));
   pad.render({ board: b, you: g.you, them: g.them, name: opp.name, offers, picked, fresh, hints: settings.hints, theirPick });
   fresh = {};
 
@@ -297,13 +298,26 @@ function render() {
   button.textContent = g.over ? 'See the result' : !mine ? `${opp.name}’s turn` : g.rolls === 0 ? 'Roll' : left > 0 ? `Roll again (${left} left)` : 'No rolls left';
 
   if (mine && !busy) {
+    const joker = g.rolls > 0 && jokerState(b, g.you, g.dice);
     if (picked) {
-      const o = offers?.[picked];
-      status(`Tap ${boxLabel(b.boxes.find(x => x.id === picked))} again to ${o === 0 ? 'write in a 0' : `score ${o}`}.`);
+      const o = opts?.find(x => x.box.id === picked);
+      status(`Tap ${boxLabel(b.boxes.find(x => x.id === picked))} again to ${!o?.score ? 'write in a 0' : `score ${o.score}`}${o?.extra ? `, plus ${o.extra} extra` : ''}.`);
     } else if (g.rolls === 0) status(g.number === 1 ? 'Your turn. Roll the dice.' : 'Your turn.');
+    else if (joker) status(jokerLine(b, joker, opts));
     else if (left > 0) status('Tap dice to hold them, then roll again. Or pick a box to score.');
     else status('Pick a box to score.');
   }
+}
+
+// A second five of a kind lights only the boxes the joker rules allow, so the line says which, and what it earns.
+// It keeps to two lines on a small phone, as every status line does, so the dice and the pad don't move.
+function jokerLine(b, joker, opts) {
+  const again = joker.extra ? `Five of a kind again: ${joker.extra} extra.` : 'Five of a kind again.';
+  if (joker.forced) return `${again} It has to go in ${boxLabel(joker.forced)}.`;
+  if (joker.topOnly) return `${again} Only top boxes are left${opts.every(o => !o.score) ? ': it scores 0 there' : ''}.`;
+  const has = kind => joker.lower.some(x => x.kind === kind);
+  const whole = [has('full') && 'a full house', (has('small') || has('large')) && 'a straight'].filter(Boolean).join(' or ') || (has('pairs') && 'two pairs');
+  return `${again} ${whole ? `Any bottom box: ${whole} counts in full.` : 'It can go in any bottom box.'}`;
 }
 
 function status(text) { $('status').textContent = text; }

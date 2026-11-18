@@ -508,6 +508,65 @@ try {
     assert.equal(await page.textContent('#b-next'), 'Play again');
   });
 
+  await step('a second five of a kind says where it has to go and what it earns, in two lines on a small phone', async t => {
+    const { page } = t;
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.evaluate(() => window.fullHouse.start(0));
+    // Your turn at Classic with these dice rolled once, these boxes of yours filled, and the opponent from this seed and turn.
+    const at = (you, dice = [4, 4, 4, 4, 4], more = {}, them = {}) => page.evaluate(([you, dice, more, them]) => {
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) { g.you[b.id] = b.id in you ? you[b.id] : null; g.them[b.id] = b.id in them ? them[b.id] : null; }
+      Object.assign(g, { number: 2, rolls: 1, turn: 'you', dice, held: [false, false, false, false, false] }, more);
+      window.fullHouse.settings.fast = true;
+      window.fullHouse.set(g);
+    }, [you, dice, more, them]);
+    const status = () => page.textContent('#status');
+    const can = () => page.$$eval('tr.can', rows => rows.map(r => r.dataset.box));
+    const lines = () => page.evaluate(() => { const e = document.getElementById('status'); return Math.round(e.getBoundingClientRect().height / parseFloat(getComputedStyle(e).lineHeight)); });
+    // An ordinary roll, for the height of the line.
+    await at({}, [1, 2, 3, 4, 6]);
+    const ordinary = await page.evaluate(() => document.getElementById('status').getBoundingClientRect().height);
+    const twoLines = async () => {
+      assert.ok(await lines() <= 2, `the line runs to three lines: ${await status()}`);
+      assert.equal(await page.evaluate(() => document.getElementById('status').getBoundingClientRect().height), ordinary, 'the line is a different height from an ordinary one');
+    };
+
+    // Fours is open: it has to go there, and the 100 extra shows before it's scored.
+    await at({ five: 50 });
+    assert.equal(await status(), 'Five of a kind again: 100 extra. It has to go in Fours.');
+    assert.deepEqual(await can(), ['f4']);
+    await twoLines();
+    await page.click('tr[data-box="f4"]');
+    assert.equal(await status(), 'Tap Fours again to score 20, plus 100 extra.');
+    await page.click('tr[data-box="f4"]');
+    assert.equal(await status(), 'You score 20 in Fours, plus 100 extra.');
+
+    // Fours is filled: any box in the bottom section, where a full house and the straights count in full.
+    await at({ five: 50, f4: 8 });
+    assert.equal(await status(), 'Five of a kind again: 100 extra. Any bottom box: a full house or a straight counts in full.');
+    assert.deepEqual(await can(), ['three', 'four', 'full', 'small', 'large', 'chance']);
+    await twoLines();
+    await page.click('tr[data-box="large"]');
+    assert.equal(await status(), 'Tap Large straight again to score 40, plus 100 extra.');
+
+    // The Five of a kind box crossed out with a 0: the same rules, with nothing extra.
+    await at({ five: 0 });
+    assert.equal(await status(), 'Five of a kind again. It has to go in Fours.');
+    await page.click('tr[data-box="f4"]');
+    assert.equal(await status(), 'Tap Fours again to score 20.');
+
+    // Fours and the whole bottom section filled: a 0 in a top box.
+    await at({ five: 50, f4: 8, three: 10, four: 0, full: 25, small: 30, large: 0, chance: 20 });
+    assert.equal(await status(), 'Five of a kind again: 100 extra. Only top boxes are left: it scores 0 there.');
+    assert.deepEqual(await can(), ['f1', 'f2', 'f3', 'f5', 'f6']);
+    await twoLines();
+
+    // The opponent's line says it too. (Pip rolls five 1s on turn 2 of the game with seed 2.)
+    await at({}, [2, 3, 4, 5, 6], { seed: 2, turn: 'them' }, { five: 50 });
+    await page.waitForFunction(() => /scores/.test(document.getElementById('status').textContent), null, { timeout: 15000 });
+    assert.equal(await status(), 'Pip scores 5 in Ones, plus 100 extra.');
+  });
+
   await step('the result says when you’ve beaten your best at a table, and doesn’t open a table twice', async t => {
     const { page } = t;
     // A game at a table (null for a quick game) with every box but Chance worth `each` to you, played to its result.
