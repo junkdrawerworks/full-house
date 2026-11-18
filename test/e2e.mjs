@@ -5,7 +5,7 @@ import { execSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { join, dirname, extname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 
 const require = createRequire(import.meta.url);
@@ -25,24 +25,27 @@ const browser = await pw.chromium.launch();
 const only = process.argv.slice(2).join(' ');
 
 // Each step starts on a fresh page with nothing saved: a phone (upright unless it says otherwise), or a desktop with a mouse.
-async function step(name, fn, { desktop = false, serviceWorkers = 'block', viewport = { width: 390, height: 844 } } = {}) {
+// `at` is the page to open, the game from the test server unless it says otherwise. Anything the page asks for from
+// elsewhere, anything the server hasn't got (a 404) and any request of its own that fails is a problem.
+async function step(name, fn, { desktop = false, serviceWorkers = 'block', viewport = { width: 390, height: 844 }, at = base } = {}) {
   if (only && !name.includes(only)) return;
   const size = desktop ? { viewport: { width: 1280, height: 800 } } : { viewport, deviceScaleFactor: 2, hasTouch: true };
   const ctx = await browser.newContext({ ...size, serviceWorkers });
   const page = await ctx.newPage();
-  const problems = [];
+  const problems = [], home = at.slice(0, at.lastIndexOf('/') + 1);
   page.on('pageerror', e => problems.push(e.message));
   page.on('console', m => { if (m.type() === 'error') problems.push(m.text()); });
-  page.on('requestfailed', r => problems.push('failed: ' + r.url()));
-  page.on('request', r => { if (!r.url().startsWith(base)) problems.push('left the site: ' + r.url()); });
+  page.on('request', r => { if (!r.url().startsWith(home) && !r.url().startsWith('data:')) problems.push('left the site: ' + r.url()); });
+  page.on('response', r => { if (r.status() >= 400) problems.push(`${r.status()}: ${r.url()}`); });
+  page.on('requestfailed', r => { if (r.url().startsWith(home)) problems.push(`failed (${r.failure()?.errorText}): ${r.url()}`); });
   const game = () => page.evaluate(() => window.fullHouse.game);
   const myTurn = () => page.waitForFunction(() => window.fullHouse.game?.turn === 'you' && !window.fullHouse.busy, null, { timeout: 30000 });
   const settled = () => page.waitForFunction(() => !window.fullHouse.busy, null, { timeout: 30000 });
   try {
-    await page.goto(base);
+    await page.goto(at);
     await page.evaluate(() => document.fonts.ready);
     await fn({ page, ctx, game, myTurn, settled });
-    assert.deepEqual(problems.filter(p => !p.startsWith('failed:')), [], `problems while playing: ${name}`);
+    assert.deepEqual(problems, [], `problems while playing: ${name}`);
   } finally {
     await ctx.close();
   }
@@ -1427,6 +1430,20 @@ try {
     assert.equal(page.url(), 'about:blank');
   });
 
+  // The one-file copy that npm run build makes: built afresh, opened from the disk, and played to a result.
+  const oneFile = 'the one-file copy from npm run build opens from the disk and plays a game to its end';
+  if (oneFile.includes(only)) execSync('node scripts/build.mjs', { cwd: root, stdio: 'ignore' });
+  await step(oneFile, async t => {
+    const { page } = t;
+    assert.equal(await page.evaluate(() => 'single' in document.documentElement.dataset), true, 'not the one-file copy');
+    assert.equal(await page.locator('#tables li').count(), 8);
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    await win(t);
+    assert.match(await page.textContent('#result-title'), /You beat Pip/);
+    assert.ok(await page.evaluate(() => [...document.fonts].some(f => f.family.includes('Barlow Condensed') && f.status === 'loaded')), 'its fonts did not load');
+  }, { at: pathToFileURL(join(root, 'dist/full-house.html')).href });
+
   await step('a save stuck with both cards full on the opponent’s turn ends the game', async ({ page, myTurn }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
@@ -1519,6 +1536,29 @@ try {
   assert.deepEqual(problems, [], 'problems while offline or on a stalled connection');
   await ctx.close();
   server.close();
+
+  // Every file the page loads is in SHELL, so the offline copy a release installs has all of it: what index.html links
+  // to or loads, the fonts css/app.css uses, and every module the scripts import. (A file left out would still be
+  // cached the first time it's fetched, so nothing above would notice; only an installed copy updating in the
+  // background would be left without it.)
+  {
+    const sw = await readFile(join(root, 'sw.js'), 'utf8');
+    const shell = new Set([...sw.match(/SHELL = \[([^\]]*)\]/)[1].replace(/\/\/.*/g, '').matchAll(/'([^']*)'/g)].map(m => m[1]));
+    const html = await readFile(join(root, 'index.html'), 'utf8'), css = await readFile(join(root, 'css/app.css'), 'utf8');
+    const local = u => !/^([a-z]+:|\/\/|#)/i.test(u);
+    const loads = [
+      ...[...html.matchAll(/\s(?:src|href)="([^"]+)"/g)].map(m => m[1]).filter(local),
+      ...[...css.matchAll(/url\(['"]?([^'")]+)['"]?\)/g)].map(m => m[1]).filter(local).map(u => new URL(u, 'http://x/css/').pathname.slice(1)),
+    ];
+    const { readdir } = await import('node:fs/promises');
+    for (const f of (await readdir(join(root, 'js'))).filter(f => f.endsWith('.js'))) {
+      const js = await readFile(join(root, 'js', f), 'utf8');
+      loads.push(...[...js.matchAll(/^import [^;]*? from '([^']+)'/gm)].map(m => new URL(m[1], 'http://x/js/').pathname.slice(1)));
+    }
+    const missing = [...new Set(loads)].filter(f => !shell.has(f));
+    assert.deepEqual(missing, [], `sw.js doesn't keep files the page loads: add them to SHELL`);
+    assert.ok(loads.includes('js/rules.js') && loads.includes('fonts/caveat.woff2') && loads.includes('carry.js'), `the check found too little: ${loads}`);
+  }
 
   // sw.js changes whenever a file it keeps does, so a release replaces the whole offline copy at once: FILES in sw.js
   // is a fingerprint of every file in SHELL (sha1 of each, in the list's order, an address like './' read as its

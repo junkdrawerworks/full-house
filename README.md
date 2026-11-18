@@ -42,7 +42,7 @@ It's a static site: plain HTML, CSS and JavaScript, with no build step.
 ```sh
 npm start                      # serves it at http://localhost:8080 (or use any static file server)
 npm install                    # once, for the bundler and the screenshot tool's PNG compressor
-npm test                       # the rules and the opponents in Node, then a game played in Chromium (needs Playwright)
+npm test                       # the rules and the opponents in Node, then the game played in Chromium, the one-file build too (needs Playwright, and npm install)
 node tools/screenshots.mjs     # redraws docs/*.png and og.png
 node tools/make-icons.mjs      # redraws the PNG icons from icon.svg
 npm run build                  # bundles everything into dist/full-house.html, one file you can send around, and dist/artifact.html
