@@ -64,10 +64,17 @@ export class Pad {
       if (who === 'them' && theirPick?.id === b.id) return `<td class="them offer picked"><span>${theirPick.score}</span></td>`;
       return `<td class="${who}"></td>`;
     };
+    // An open box is a button, named for what it would do, since its row's text would read your score and the opponent's
+    // run together: "Sixes, times 3: score 18", "Ones: write in 0", or with the scores hidden, "Sixes: score here".
+    const said = b => {
+      const what = !(hints || picked === b.id) ? 'score here' : offers[b.id] ? `score ${offers[b.id]}` : 'write in 0';
+      return `${boxLabel(b)}${b.mult > 1 ? `, times ${b.mult}` : ''}: ${what}`;
+    };
     const row = b => {
       const can = offers && b.id in offers;
       const mult = b.mult > 1 ? `<em class="mult">×${b.mult}</em>` : '', hint = boxHint(b, board);
-      return `<tr data-box="${b.id}" class="${can ? 'can' : ''}${picked === b.id ? ' picked' : ''}${b.mult > 1 ? ' hot' : ''}"${can ? ' tabindex="0" role="button"' : ''}>
+      const button = can ? ` tabindex="0" role="button" aria-pressed="${picked === b.id}" aria-label="${escape(said(b))}"` : '';
+      return `<tr data-box="${b.id}" class="${can ? 'can' : ''}${picked === b.id ? ' picked' : ''}${b.mult > 1 ? ' hot' : ''}"${button}>
         <th scope="row"><b>${boxLabel(b)}${mult}</b>${hint ? `<small>${hint}</small>` : ''}</th>${cell(you, b, 'you')}${cell(them, b, 'them')}</tr>`;
     };
     const upper = board.boxes.filter(isUpper), lower = board.boxes.filter(b => !isUpper(b));
@@ -75,6 +82,7 @@ export class Pad {
     const anyExtras = you.extras || them.extras;
     this.el.classList.toggle('long', name.length > 6); // the Dealer: see css/app.css
     this.el.innerHTML = `
+      <caption class="vh">Score pad</caption>
       <thead><tr><th scope="col"><span class="vh">Box</span></th><th scope="col" class="you">You</th><th scope="col" class="them">${escape(name)}</th></tr></thead>
       <tbody>${upper.map(row).join('')}
         <tr class="sub"><th scope="row"><b>Bonus</b><small>${board.bonus.at} or more on top: ${board.bonus.worth}</small></th>${bonusCell(ty, 'you')}${bonusCell(tt, 'them')}</tr>

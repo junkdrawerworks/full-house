@@ -1059,6 +1059,32 @@ try {
     assert.equal(await said(), 'You gave up at table 1. Pip takes that one.');
   });
 
+  await step('an open box is read out as what it would do, and a picked one as pressed', async ({ page, settled }) => {
+    const boxes = () => page.$$eval('tr.can', rows => rows.map(r => ({ id: r.dataset.box, role: r.getAttribute('role'), label: r.getAttribute('aria-label'), pressed: r.getAttribute('aria-pressed'), shows: r.querySelector('td.you span')?.textContent ?? null })));
+    await page.evaluate(() => { window.fullHouse.settings.fast = true; window.fullHouse.start(2); }); // Triple Sixes
+    assert.equal(await page.textContent('#pad caption'), 'Score pad');
+    await page.click('#b-roll');
+    await settled();
+    let open = await boxes();
+    assert.ok(open.length >= 12);
+    for (const b of open) {
+      assert.equal(b.role, 'button');
+      assert.equal(b.pressed, 'false');
+      assert.ok(b.label.endsWith(b.shows === '0' ? ': write in 0' : `: score ${b.shows}`), `${b.id} is read as "${b.label}" and shows ${b.shows}`);
+    }
+    assert.match(open.find(b => b.id === 'f6').label, /^Sixes, times 3: /);
+    assert.match(open.find(b => b.id === 'f1').label, /^Ones: /);
+    await page.click('tr[data-box="f6"]');
+    open = await boxes();
+    assert.deepEqual(open.filter(b => b.pressed === 'true').map(b => b.id), ['f6'], 'the picked box is not the one pressed');
+    // With the scores hidden, the boxes say only where you can score, and the picked one what it would score.
+    await page.evaluate(() => { window.fullHouse.settings.hints = false; window.fullHouse.set(structuredClone(window.fullHouse.game)); });
+    await page.click('tr[data-box="f1"]');
+    open = await boxes();
+    for (const b of open) if (b.id !== 'f1') assert.match(b.label, /^[^:]+: score here$/, b.label);
+    assert.match(open.find(b => b.id === 'f1').label, /^Ones: (score \d+|write in 0)$/);
+  });
+
   await step('keyboard: Space or Enter hurries the opponent, and How to play says which keys do what', async ({ page, game, myTurn, settled }) => {
     await page.click('#b-rules');
     assert.ok(await page.isVisible('#rules-list .keys'), 'How to play does not say the keys on a computer');
