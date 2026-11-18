@@ -449,7 +449,7 @@ function intro(table, opp = table) {
   $('intro-n').textContent = table === null ? 'Quick game' : `Table ${table + 1} of ${TABLES.length}`;
   $('intro-title').textContent = board.name;
   $('intro-blurb').textContent = board.blurb;
-  $('intro-who').innerHTML = `<i class="dot big" aria-hidden="true" style="--c:${t.who.colour}">${t.who.name.replace(/^The /, '')[0]}</i><div><b>${t.who.name}</b><span>${t.who.line}</span>${game && !game.over ? '<em>Sitting down here ends the game you’re in.</em>' : ''}</div>`;
+  $('intro-who').innerHTML = `<i class="dot big" aria-hidden="true" style="--c:${t.who.colour}">${t.who.name.replace(/^The /, '')[0]}</i><div><b>${t.who.name}</b><span>${t.who.line}</span>${game && !game.over ? '<em>Sitting down here ends the game you’re in. It counts as a loss.</em>' : ''}</div>`;
   $('b-sit').onclick = () => start(table, opp);
   openSheet('sheet-intro');
 }
