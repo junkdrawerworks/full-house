@@ -27,7 +27,8 @@ export class Tray {
 
   // Show these dice. `rolled` lists the ones that were just thrown, which tumble into place: sooner when `quick`,
   // since the game then waits less for them to land.
-  show(values, held, { rolled = [], theirs = false, idle = false, canHold = false, quick = false } = {}) {
+  // `name` is the opponent's, for their dice.
+  show(values, held, { rolled = [], theirs = false, idle = false, canHold = false, quick = false, name = '' } = {}) {
     this.el.classList.toggle('quick', quick);
     this.el.classList.toggle('theirs', theirs);
     this.el.classList.toggle('idle', idle);
@@ -53,7 +54,8 @@ export class Tray {
       b.classList.toggle('held', !!held[i]);
       b.disabled = !canHold;
       b.setAttribute('aria-pressed', String(!!held[i]));
-      b.setAttribute('aria-label', `${v}${held[i] ? ', held' : ''}`);
+      // Before a roll the faces are left over from the last one, so they aren't read out as if they were.
+      b.setAttribute('aria-label', idle ? `Die ${i + 1}, not rolled` : `${theirs ? `${name}’s die` : `Die ${i + 1}`}: ${v}${held[i] ? ', held' : ''}`);
     });
   }
 }

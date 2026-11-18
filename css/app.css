@@ -267,7 +267,7 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 }
 /* A disabled button swallows taps, so let them through to the tray, where tapping hurries the opponent along. */
 .die:disabled { cursor: default; pointer-events: none; }
-.die:focus-visible { outline: 2px solid var(--hold); outline-offset: 6px; border-radius: 10px; }
+.die:focus-visible { outline: 3px solid var(--ivory); outline-offset: 6px; border-radius: 10px; } /* not the amber of a held die */
 .die::before {
   content: '';
   position: absolute;

@@ -28,6 +28,7 @@ let playing = -1;      // the token of the game whose opponent is playing a turn
 const tray = new Tray($('tray'), { onToggle: toggle, onTap: () => { if (busy && game?.turn === 'them') hurry = true; } });
 const pad = new Pad($('pad'), { onPick: pick });
 const who = g => TABLES[g.opp].who;
+const where = g => (g.table === null ? 'Quick game' : `Table ${g.table + 1}: ${g.board.name}`); // "Table 3: Triple Sixes"
 // A name inside a sentence: "against the Dealer". At the start of one, and on the pad and the tour, it keeps its capital.
 const mid = name => name.replace(/^The /, 'the ');
 const die = () => 1 + Math.floor(Math.random() * 6);
@@ -309,6 +310,7 @@ function showDice(rolled = []) {
     idle: mine && g.rolls === 0,
     canHold: mine && !busy && g.rolls > 0 && g.rolls < g.board.rolls,
     quick: settings.fast, // the dice land before roll() and PACE move on
+    name: who(g).name,
   });
 }
 
@@ -317,7 +319,8 @@ function render() {
   if (!g) return;
   const b = g.board, opp = who(g), mine = g.turn === 'you' && !g.over;
   const turns = b.boxes.length;
-  $('g-table').textContent = g.table === null ? 'Quick game' : `Table ${g.table + 1}: ${b.name}`;
+  $('g-table').textContent = where(g);
+  if (document.body.dataset.screen === 'game') document.title = `${where(g)} · Full House`;
   $('g-twist').textContent = `against ${mid(opp.name)} · turn ${Math.min(g.number, turns)} of ${turns}`;
   document.documentElement.style.setProperty('--them-colour', opp.colour);
 
@@ -400,13 +403,14 @@ function renderHome() {
   $('people').innerHTML = met.map(({ t, i }) => `<button type="button" data-quick="${i}"><i class="dot" style="--c:${t.who.colour}"></i>${t.who.name}</button>`).join('');
   const c = $('b-continue'), going = game && !game.over;
   c.hidden = !going;
-  if (going) c.innerHTML = `<b>Carry on</b><span>${game.table === null ? 'Quick game' : `Table ${game.table + 1}: ${game.board.name}`}, against ${mid(who(game).name)}. Turn ${Math.min(game.number, game.board.boxes.length)} of ${game.board.boxes.length}.</span>`;
+  if (going) c.innerHTML = `<b>Carry on</b><span>${where(game)}, against ${mid(who(game).name)}. Turn ${Math.min(game.number, game.board.boxes.length)} of ${game.board.boxes.length}.</span>`;
 }
 
 // The focus goes to the thing to do next there (Roll; on the tour, Carry on or the table that's next), unless the page is
 // just opening, when a screen reader starts from the top.
 function open(screen, { focus = true } = {}) {
   document.body.dataset.screen = screen;
+  document.title = screen === 'game' && game ? `${where(game)} · Full House` : 'Full House';
   if (screen === 'home') { renderHome(); hideToast(); } // a message about the game stays with it (giving up raises its own after)
   window.scrollTo(0, 0);
   // Near the end of the tour the table you're on is below the fold: bring it into view, unless Carry on is the thing to tap.
@@ -430,7 +434,7 @@ function intro(table, opp = table) {
   $('intro-n').textContent = table === null ? 'Quick game' : `Table ${table + 1} of ${TABLES.length}`;
   $('intro-title').textContent = board.name;
   $('intro-blurb').textContent = board.blurb;
-  $('intro-who').innerHTML = `<i class="dot big" style="--c:${t.who.colour}">${t.who.name.replace(/^The /, '')[0]}</i><div><b>${t.who.name}</b><span>${t.who.line}</span>${game && !game.over ? '<em>Sitting down here ends the game you’re in.</em>' : ''}</div>`;
+  $('intro-who').innerHTML = `<i class="dot big" aria-hidden="true" style="--c:${t.who.colour}">${t.who.name.replace(/^The /, '')[0]}</i><div><b>${t.who.name}</b><span>${t.who.line}</span>${game && !game.over ? '<em>Sitting down here ends the game you’re in.</em>' : ''}</div>`;
   $('b-sit').onclick = () => start(table, opp);
   openSheet('sheet-intro');
 }
@@ -577,7 +581,7 @@ $('b-rules').addEventListener('click', () => { showRules(CLASSIC, false); openSh
 $('b-menu-rules').addEventListener('click', () => { showRules(game?.board || CLASSIC, !!game); openSheet('sheet-rules', $('b-menu')); });
 const showMenu = () => {
   if (!game) return;
-  $('menu-title').textContent = game.table === null ? 'Quick game' : `Table ${game.table + 1}: ${game.board.name}`;
+  $('menu-title').textContent = where(game);
   $('menu-twist').textContent = `${game.board.blurb}${hotNames(game.board) ? ` This time it’s ${hotNames(game.board)}.` : ''} Against ${mid(who(game).name)}. ${who(game).line}`;
   openSheet('sheet-menu');
 };

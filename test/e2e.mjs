@@ -1085,6 +1085,43 @@ try {
     assert.match(open.find(b => b.id === 'f1').label, /^Ones: (score \d+|write in 0)$/);
   });
 
+  await step('the dice, the sheets, the settings and the page say what they are', async ({ page, myTurn, settled }) => {
+    const labels = () => page.$$eval('.die', ds => ds.map(d => d.getAttribute('aria-label')));
+    assert.equal(await page.title(), 'Full House');
+    assert.equal(await page.locator('main').count(), 1);
+    await page.click('[data-table="0"]');
+    assert.equal(await page.getAttribute('#sheet-intro .dot.big', 'aria-hidden'), 'true', 'the avatar’s letter is read out');
+    const describedBy = await page.getAttribute('#sheet-intro [role="dialog"]', 'aria-describedby');
+    assert.deepEqual(describedBy.split(' '), ['intro-blurb', 'intro-who']);
+    await page.click('#b-sit');
+    assert.equal(await page.title(), 'Table 1: Classic · Full House');
+    assert.ok(await page.isVisible('main #tray[role="group"][aria-label="Dice"]'));
+    assert.deepEqual(await labels(), [1, 2, 3, 4, 5].map(n => `Die ${n}, not rolled`), 'dice not yet rolled are read as numbers');
+    await page.evaluate(() => { window.fullHouse.settings.fast = true; });
+    await page.click('#b-roll');
+    await settled();
+    await page.click('.die >> nth=1');
+    const dice = (await page.evaluate(() => window.fullHouse.game.dice));
+    assert.deepEqual(await labels(), dice.map((v, i) => `Die ${i + 1}: ${v}${i === 1 ? ', held' : ''}`));
+    await page.locator('tr.can').first().click();
+    await page.locator('tr.can').first().click();
+    await page.waitForFunction(() => document.getElementById('tray').classList.contains('theirs'), null, { timeout: 30000 });
+    assert.match((await labels())[0], /^Pip’s die: [1-6](, held)?$/);
+    await page.click('#tray');
+    await myTurn();
+    // The bar's buttons open sheets, and the settings are switches named by their bold words.
+    for (const id of ['b-where', 'b-menu']) assert.equal(await page.getAttribute(`#${id}`, 'aria-haspopup'), 'dialog');
+    await page.click('#b-menu');
+    assert.equal(await page.getAttribute('#sheet-menu [role="dialog"]', 'aria-describedby'), 'menu-twist');
+    const fast = page.getByRole('switch', { name: 'Quick opponents', exact: true });
+    assert.equal(await fast.count(), 1, 'Quick opponents is not a switch of that name');
+    assert.equal(await page.getByRole('switch', { name: 'Show what each box would score', exact: true }).count(), 1);
+    await page.keyboard.press('Escape');
+    assert.equal(await page.getAttribute('#sheet-result [role="dialog"]', 'aria-describedby'), 'result-line result-scores');
+    await page.click('#b-home');
+    assert.equal(await page.title(), 'Full House');
+  });
+
   await step('keyboard: Space or Enter hurries the opponent, and How to play says which keys do what', async ({ page, game, myTurn, settled }) => {
     await page.click('#b-rules');
     assert.ok(await page.isVisible('#rules-list .keys'), 'How to play does not say the keys on a computer');
@@ -1272,7 +1309,7 @@ try {
     assert.equal(await load({ progress, game: good }), 'game');
   });
 
-  await step('a new game’s dice show the numbers they’re read out as', async ({ page, settled }) => {
+  await step('a new game’s dice show the numbers they hold, and are read out as not rolled', async ({ page, settled }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
     await page.click('#b-roll');
@@ -1284,9 +1321,10 @@ try {
     // Which face each cube is turned to show, from its rotation.
     const dice = await page.evaluate(() => [...document.querySelectorAll('.die')].map(b => {
       const [x, y] = b.querySelector('.cube').style.transform.match(/-?\d+/g).map(n => ((+n % 360) + 360) % 360);
-      return [{ '0,0': 1, '0,270': 2, '270,0': 3, '90,0': 4, '0,90': 5, '0,180': 6 }[`${x},${y}`], +b.getAttribute('aria-label')];
+      return [{ '0,0': 1, '0,270': 2, '270,0': 3, '90,0': 4, '0,90': 5, '0,180': 6 }[`${x},${y}`], +b.dataset.v, b.getAttribute('aria-label')];
     }));
-    for (const [shown, read] of dice) assert.equal(shown, read, `a die shows ${shown} and is read out as ${read}`);
+    for (const [shown, held] of dice) assert.equal(shown, held, `a die shows ${shown} and holds ${held}`);
+    assert.deepEqual(dice.map(d => d[2]), [1, 2, 3, 4, 5].map(n => `Die ${n}, not rolled`));
   });
 
   await step('the tour’s footer has the house line, then How to play', async ({ page }) => {

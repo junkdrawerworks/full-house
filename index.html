@@ -24,8 +24,9 @@
 <body data-screen="home">
   <noscript><p class="noscript">Full House needs JavaScript to roll the dice.</p></noscript>
 
+  <main>
   <!-- The tour: eight tables, one opponent each. -->
-  <main class="home" id="home">
+  <div class="home" id="home">
     <header class="masthead">
       <h1>Full House</h1>
       <p>Five dice, three rolls, thirteen boxes. Beat each opponent to move up to the next table, where the rules change a little and the play gets sharper.</p>
@@ -47,18 +48,18 @@
       <span aria-hidden="true">·</span>
       <button type="button" class="linkish" id="b-rules">How to play</button>
     </footer>
-  </main>
+  </div>
 
   <!-- A game in progress. -->
   <div class="game" id="game">
     <header class="bar">
       <button type="button" class="icon" id="b-home" aria-label="Back to the tour"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
-      <button type="button" class="where" id="b-where"><b id="g-table"></b><span id="g-twist"></span></button>
-      <button type="button" class="icon" id="b-menu" aria-label="Menu"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
+      <button type="button" class="where" id="b-where" aria-haspopup="dialog"><b id="g-table"></b><span id="g-twist"></span></button>
+      <button type="button" class="icon" id="b-menu" aria-label="Menu" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
     </header>
 
     <section class="play">
-      <div class="tray" id="tray" aria-label="Dice"></div>
+      <div class="tray" id="tray" role="group" aria-label="Dice"></div>
       <p class="status" id="status"></p>
       <div class="actions">
         <span class="rolls" id="rolls" aria-hidden="true"></span>
@@ -70,6 +71,7 @@
       <table class="pad" id="pad"></table>
     </section>
   </div>
+  </main>
 
   <div class="toast" id="toast" hidden></div>
   <!-- What a screen reader hears: js/app.js, say(). -->
@@ -78,7 +80,7 @@
   <!-- Sheets -->
   <div class="sheet" id="sheet-intro" hidden>
     <div class="scrim" data-close></div>
-    <section class="panel" role="dialog" aria-modal="true" aria-labelledby="intro-title">
+    <section class="panel" role="dialog" aria-modal="true" aria-labelledby="intro-title" aria-describedby="intro-blurb intro-who">
       <p class="eyebrow" id="intro-n"></p>
       <h2 id="intro-title"></h2>
       <p id="intro-blurb"></p>
@@ -90,7 +92,7 @@
 
   <div class="sheet" id="sheet-result" hidden>
     <div class="scrim"></div>
-    <section class="panel" role="dialog" aria-modal="true" aria-labelledby="result-title">
+    <section class="panel" role="dialog" aria-modal="true" aria-labelledby="result-title" aria-describedby="result-line result-scores">
       <h2 id="result-title"></h2>
       <p id="result-line"></p>
       <div class="scores" id="result-scores"></div>
@@ -103,15 +105,15 @@
 
   <div class="sheet" id="sheet-menu" hidden>
     <div class="scrim" data-close></div>
-    <section class="panel" role="dialog" aria-modal="true" aria-labelledby="menu-title">
+    <section class="panel" role="dialog" aria-modal="true" aria-labelledby="menu-title" aria-describedby="menu-twist">
       <div class="panel-head">
         <h2 id="menu-title">This table</h2>
         <button type="button" class="close" data-close aria-label="Close">×</button>
       </div>
       <p id="menu-twist"></p>
       <h3>Settings</h3>
-      <label class="toggle"><input type="checkbox" id="o-fast"><span><b>Quick opponents</b> Opponents roll and score faster. You can also tap the dice to hurry them along.</span></label>
-      <label class="toggle"><input type="checkbox" id="o-hints"><span><b>Show what each box would score</b> After each roll, the open boxes show what the dice would score there.</span></label>
+      <label class="toggle"><input type="checkbox" role="switch" id="o-fast" aria-labelledby="o-fast-name" aria-describedby="o-fast-more"><span><b id="o-fast-name">Quick opponents</b> <span id="o-fast-more">Opponents roll and score faster. You can also tap the dice to hurry them along.</span></span></label>
+      <label class="toggle"><input type="checkbox" role="switch" id="o-hints" aria-labelledby="o-hints-name" aria-describedby="o-hints-more"><span><b id="o-hints-name">Show what each box would score</b> <span id="o-hints-more">After each roll, the open boxes show what the dice would score there.</span></span></label>
       <button type="button" class="plain" id="b-menu-rules">How to play</button>
       <button type="button" class="plain warn" id="b-concede">Give up this game</button>
     </section>
