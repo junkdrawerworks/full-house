@@ -57,7 +57,8 @@ function roll() {
     if (game !== g) return;
     pad.revealOpen(); // the only time your own turn moves the pad: when nothing you can score is in view
     const left = g.board.rolls - g.rolls;
-    say(`You rolled ${g.dice.join(', ')}. ${left ? `${left} roll${left === 1 ? '' : 's'} left.` : 'No rolls left.'}${jokerState(g.board, g.you, g.dice) ? ` ${$('status').textContent}` : ''}`);
+    const five = /^Five of a kind/.test($('status').textContent) ? ` ${$('status').textContent}` : ''; // the first or another
+    say(`You rolled ${g.dice.join(', ')}. ${left ? `${left} roll${left === 1 ? '' : 's'} left.` : 'No rolls left.'}${five}`);
   }, settings.fast ? 450 : 750);
 }
 
@@ -348,13 +349,14 @@ function render() {
   button.textContent = g.over ? 'See the result' : !mine ? `${opp.name}’s turn` : g.rolls === 0 ? 'Roll' : left > 0 && allHeld(g) ? 'All five held' : left > 0 ? `Roll again (${left}\u00a0left)` : 'No rolls left';
 
   if (mine && !busy) {
-    const joker = g.rolls > 0 && jokerState(b, g.you, g.dice);
+    const joker = g.rolls > 0 && jokerState(b, g.you, g.dice), five = offers && b.boxes.find(x => x.kind === 'five');
     if (picked) {
       const o = opts?.find(x => x.box.id === picked);
       status(`Tap ${boxLabel(b.boxes.find(x => x.id === picked))} again to ${!o?.score ? 'write in a 0' : `score ${o.score}`}${o?.extra ? `, plus ${o.extra} extra` : ''}.`);
     } else if (g.rolls === 0) status(firstLine(g));
     else if (joker) status(jokerLine(b, joker, opts));
     else if (left > 0 && allHeld(g)) status('All five held. Let one go to roll again, or pick a box to score in.');
+    else if (five && offers[five.id]) status(`Five of a kind. ${offers[five.id]} in its box, if you want it.`); // a first one: the second has the joker's line
     else if (left > 0) status('Hold dice and roll again, or pick a box to score.');
     else status('Pick a box to score.');
   }

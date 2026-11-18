@@ -1065,6 +1065,37 @@ try {
     }
   });
 
+  await step('a first five of a kind is noticed as the dice land, at the box’s own value', async ({ page, settled }) => {
+    const status = () => page.textContent('#status');
+    const rolled = (table, dice, more = {}, you = {}) => page.evaluate(([table, dice, more, you]) => {
+      window.fullHouse.start(table);
+      const g = structuredClone(window.fullHouse.game);
+      Object.assign(g.you, you);
+      Object.assign(g, { rolls: 1, dice }, more);
+      window.fullHouse.set(g);
+    }, [table, dice, more, you]);
+    await rolled(0, [5, 5, 5, 5, 5]);
+    assert.equal(await status(), 'Five of a kind. 50 in its box, if you want it.');
+    await page.click('tr[data-box="f5"]');
+    assert.equal(await status(), 'Tap Fives again to score 25.', 'a picked box says what it would score');
+    // After the last roll too, and doubled at High Stakes.
+    await rolled(0, [2, 2, 2, 2, 2], { rolls: 3 });
+    assert.equal(await status(), 'Five of a kind. 50 in its box, if you want it.');
+    await rolled(7, [6, 6, 6, 6, 6]);
+    assert.equal(await status(), 'Five of a kind. 100 in its box, if you want it.');
+    // Not with the box filled: then it's the second one's line. Nor on an ordinary roll.
+    await rolled(0, [5, 5, 5, 5, 5], {}, { five: 0 });
+    assert.match(await status(), /^Five of a kind again\./);
+    await rolled(0, [5, 5, 5, 5, 4]);
+    assert.equal(await status(), 'Hold dice and roll again, or pick a box to score.');
+    // Rolled for real (with dice that can only come up 5), and heard as well as seen.
+    await page.evaluate(() => { window.fullHouse.settings.fast = true; window.fullHouse.start(0); Math.random = () => 0.7; });
+    await page.click('#b-roll');
+    await settled();
+    assert.equal(await status(), 'Five of a kind. 50 in its box, if you want it.');
+    assert.equal(await page.textContent('#said'), 'You rolled 5, 5, 5, 5, 5. 2 rolls left. Five of a kind. 50 in its box, if you want it.');
+  });
+
   await step('with all five dice held there is nothing to roll', async ({ page, game, settled }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
