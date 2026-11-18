@@ -176,6 +176,7 @@ function yourTurn(g) {
   save();
   render();
   showDice();
+  if (document.body.dataset.screen === 'home') renderHome(); // their turn ended behind the tour: Carry on says the new turn
 }
 
 // ---- starting and finishing ----
@@ -227,6 +228,7 @@ function finish() {
   save();
   render();
   showDice();
+  if (document.body.dataset.screen === 'home') renderHome(); // it ended behind the tour: Carry on goes, and a table may open
   status(won ? 'You win.' : tie ? 'A tie.' : `${name} wins.`);
 
   $('result-title').textContent = won ? `You beat ${name}` : tie ? 'A tie' : `${name} wins`;
@@ -363,7 +365,7 @@ function renderHome() {
 
 function open(screen) {
   document.body.dataset.screen = screen;
-  if (screen === 'home') renderHome();
+  if (screen === 'home') { renderHome(); hideToast(); } // a message about the game stays with it (giving up raises its own after)
   window.scrollTo(0, 0);
   keepHistory();
 }

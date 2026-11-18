@@ -249,6 +249,42 @@ try {
     assert.ok(Date.now() - t1 < 3000, `their turn took ${Date.now() - t1} ms after a tap straight after scoring`);
   });
 
+  await step('the tour keeps up with a turn that ends behind it, and a message from the game stays with the game', async ({ page, myTurn }) => {
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    const banner = () => page.textContent('#b-continue span');
+    // Five of a kind on turn 1, then straight to the tour while the opponent plays.
+    await page.evaluate(() => {
+      const g = structuredClone(window.fullHouse.game);
+      Object.assign(g, { rolls: 1, dice: [6, 6, 6, 6, 6] });
+      window.fullHouse.settings.fast = true;
+      window.fullHouse.set(g);
+    });
+    await page.click('tr[data-box="five"]');
+    await page.click('tr[data-box="five"]');
+    assert.ok(await page.isVisible('#toast'));
+    await page.click('#b-home');
+    assert.ok(await page.isHidden('#toast'), 'the game’s message came onto the tour');
+    assert.equal(await banner(), 'Table 1: Classic, against Pip. Turn 1 of 13.');
+    await myTurn();
+    assert.equal(await banner(), 'Table 1: Classic, against Pip. Turn 2 of 13.', 'Carry on kept the turn you left on');
+    // Their last turn, ending the game behind the tour: Carry on goes, and the result comes up over the tour.
+    await page.click('#b-continue');
+    await page.evaluate(() => {
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) { g.you[b.id] = b.id === 'chance' ? null : 20; g.them[b.id] = b.id === 'chance' ? null : 5; }
+      Object.assign(g, { number: 13, rolls: 1, turn: 'you' });
+      window.fullHouse.set(g);
+    });
+    await page.click('tr[data-box="chance"]');
+    await page.click('tr[data-box="chance"]');
+    await page.click('#b-home');
+    await page.waitForFunction(() => window.fullHouse.game?.over, null, { timeout: 30000 });
+    assert.ok(await page.isHidden('#b-continue'), 'Carry on still offered for a game that ended behind the tour');
+    assert.match(await page.textContent('#tables li:nth-child(2)'), /Next up/);
+    await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 5000 });
+  });
+
   await step('a finished game is not offered to carry on', async t => {
     const { page } = t;
     const screen = () => page.evaluate(() => document.body.dataset.screen);
