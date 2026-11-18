@@ -158,6 +158,29 @@ test('on the last turn the planner keeps dice within half a point of the best pl
   }
 });
 
+test('an opponent doesn’t spend a box that has more to give on a bonus it would get anyway', () => {
+  // Reaching the top-section bonus with a box counted the whole 35, even when the bonus was in easy reach later.
+  // Wren, two boxes left, 62 of 63 on top: 2 in Twos takes the bonus, but the straight is 40, and one 2 or better in
+  // Twos next turn still takes it. The best play there is says the straight, by about 29 points.
+  const pairs = TABLES[6].board, noSlip = () => 1;
+  const wren = cardWith(pairs, ['f2', 'large'], { f1: 2, f3: 9, f4: 12, f5: 15, f6: 24, four: 0, five: 0 });
+  // Classic, two boxes left, 53 on top: five 5s are 25 in Fives and the bonus, or 50 in Five of a kind, with two 5s
+  // next turn enough for the bonus.
+  const classic = cardWith(CLASSIC, ['f5', 'five'], { f1: 3, f2: 6, f3: 9, f4: 12, f6: 23 });
+  for (const [who, play, board, card, dice, want] of [
+    ['Wren', TABLES[6].play, pairs, wren, [3, 4, 6, 5, 2], 'large'],
+    ['the planner at its best', { patience: 1, bonus: 1 }, CLASSIC, classic, [5, 5, 5, 5, 5], 'five'],
+  ]) {
+    const opts = options(board, card, dice).map(o => ({ id: o.box.id, worth: best(board, mark(card, o)) })).sort((a, b) => b.worth - a.worth);
+    assert.equal(opts[0].id, want, `the best play there is takes ${opts[0].id}`);
+    const opp = new Opponent({ ...play, slip: 0 }), got = opp.box(board, card, dice, noSlip).box.id;
+    assert.equal(got, want, `${who} wrote ${dice.join('-')} in ${got}: ${opts.map(o => `${o.id} leads to ${o.worth.toFixed(1)}`).join(', ')}`);
+    // And over the two turns, the planner's own play comes within half a point of the best there is.
+    const right = best(board, card), mine = planned(board, card, opp);
+    assert.ok(right - mine < 0.5, `${who} expects ${mine.toFixed(2)} from here, the best play ${right.toFixed(2)}`);
+  }
+});
+
 test('the opponents get better as the tour goes on, each one on classic rules', () => {
   // Each opponent's average over the same 600 games' worth of dice (game g rolls from its own seed). At 3,000 games
   // the steps between neighbours are 4 to 12 points; at 600 from these seeds they're 3.4 or more, enough to stay

@@ -82,17 +82,20 @@ function valuer(board, card, p) {
   const parLeft = upperOpen.reduce((a, b) => a + PAR[b.kind](b) * (b.mult || 1), 0);
   const need = board.bonus.at - t.upper;
   const later = LATER(n, p.tau);
+  // How much the bonus is still in reach: what's needed against par for the open number boxes, give or take a die.
+  const reach = Math.max(0, Math.min(1, (parLeft + 6 - need) / 12 + 0.5));
   return opt => {
     const b = opt.box;
     let v = opt.score + opt.extra;
     v -= p.patience * typical(b, p) * later;
     if (isUpper(b) && need > 0 && p.bonus) {
-      if (opt.score >= need) v += board.bonus.worth * p.bonus;
+      // Reaching the bonus counts for less the likelier it was anyway: counting it all put five 5s in Fives for 25
+      // instead of 50, and 2 in Twos over a made large straight. On the last box, nothing else could reach it.
+      if (opt.score >= need) v += board.bonus.worth * p.bonus * (n === 1 ? 1 : 1 - 0.8 * reach);
       else {
         // Ahead of par or behind it, weighted by how much the bonus is still in reach. Being ahead counts for one die's
         // worth at most: the bonus doesn't need more, and counting it all put five sixes in Sixes for 30, not 50.
         const par = PAR[b.kind](b) * (b.mult || 1);
-        const reach = Math.max(0, Math.min(1, (parLeft + 6 - need) / 12 + 0.5));
         v += p.bonus * reach * Math.min(opt.score - par, par / 3) * (board.bonus.worth / board.bonus.at) * p.pull;
       }
     }
