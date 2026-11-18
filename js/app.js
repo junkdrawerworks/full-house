@@ -262,6 +262,7 @@ function showDice(rolled = []) {
     theirs: !mine && theirDice,
     idle: mine && g.rolls === 0,
     canHold: mine && !busy && g.rolls > 0 && g.rolls < g.board.rolls,
+    quick: settings.fast, // the dice land before roll() and PACE move on
   });
 }
 
@@ -455,7 +456,7 @@ document.querySelectorAll('[data-close]').forEach(el => el.addEventListener('cli
 const TOGGLES = [['fast', 'o-fast'], ['hints', 'o-hints']];
 for (const [k, id] of TOGGLES) {
   $(id).checked = settings[k];
-  $(id).addEventListener('change', e => { settings[k] = e.target.checked; save(); render(); });
+  $(id).addEventListener('change', e => { settings[k] = e.target.checked; save(); showDice(); render(); });
 }
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { dismiss(); return; }
@@ -479,6 +480,7 @@ addEventListener('storage', e => {
   if (next.settings && typeof next.settings === 'object') Object.assign(settings, settingsFrom(next.settings));
   if (next.progress && typeof next.progress === 'object') Object.assign(progress, progressFrom(next.progress));
   for (const [k, id] of TOGGLES) $(id).checked = settings[k];
+  showDice();
   const theirs = whole(next.game) ? next.game : null, ours = game && !game.over ? game : null;
   if (JSON.stringify(theirs) !== JSON.stringify(ours) && !keepOurs(ours, theirs)) adopt(theirs);
   if (document.body.dataset.screen === 'home') renderHome(); else render();

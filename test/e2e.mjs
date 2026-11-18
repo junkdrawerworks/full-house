@@ -352,6 +352,35 @@ try {
     assert.equal((await now()).said, 'You score 30 in Sixes, plus 100 extra.');
   });
 
+  await step('the dice have landed by the time their scores show, at either pace', async ({ page, myTurn }) => {
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    // The dice still moving at the moment something turns true, looked for every few milliseconds.
+    const moving = when => page.evaluate(when => new Promise(resolve => {
+      const test = new Function(`return ${when}`);
+      const look = () => (test() ? resolve(document.getAnimations().filter(a => a.playState === 'running' && a.effect.target.closest('#tray')).length) : setTimeout(look, 4));
+      look();
+    }), when);
+    for (const fast of [false, true]) {
+      await page.evaluate(fast => { if (document.getElementById('o-fast').checked !== fast) document.getElementById('o-fast').click(); }, fast);
+      const pace = fast ? 'with quick opponents' : 'at the usual pace';
+      await myTurn();
+      const offered = moving(`!!document.querySelector('#pad tr.can')`);
+      await page.click('#b-roll');
+      assert.equal(await offered, 0, `${pace}, the pad offers scores while your dice are still tumbling`);
+      const said = moving(`/scores \\d+ in/.test(document.getElementById('status').textContent)`);
+      await page.locator('tr.can').first().click();
+      await page.locator('tr.can').first().click();
+      assert.equal(await said, 0, `${pace}, the opponent's score is announced while their dice are still tumbling`);
+    }
+    // Asked for less motion, the dice don't tumble at all.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await myTurn();
+    await page.click('#b-roll');
+    await page.waitForTimeout(200);
+    assert.equal(await moving('true'), 0, 'the dice tumble though less motion was asked for');
+  });
+
   await step('giving up takes two taps, and the tour says what happened', async ({ page, game, settled }) => {
     const screen = () => page.evaluate(() => document.body.dataset.screen);
     const label = () => page.textContent('#b-concede');

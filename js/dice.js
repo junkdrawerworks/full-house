@@ -25,8 +25,10 @@ export class Tray {
     el.addEventListener('click', e => { if (!e.target.closest('.die')) onTap?.(); });
   }
 
-  // Show these dice. `rolled` lists the ones that were just thrown, which tumble into place.
-  show(values, held, { rolled = [], theirs = false, idle = false, canHold = false } = {}) {
+  // Show these dice. `rolled` lists the ones that were just thrown, which tumble into place: sooner when `quick`,
+  // since the game then waits less for them to land.
+  show(values, held, { rolled = [], theirs = false, idle = false, canHold = false, quick = false } = {}) {
+    this.el.classList.toggle('quick', quick);
     this.el.classList.toggle('theirs', theirs);
     this.el.classList.toggle('idle', idle);
     const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
