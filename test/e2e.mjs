@@ -801,6 +801,18 @@ try {
     await page.click('tr[data-box="large"]');
     assert.equal(await status(), 'Tap Large straight again to score 40, plus 100 extra.');
 
+    // One bottom box left: the line names it, and what it counts there.
+    const all = { f1: 3, f3: 9, f4: 12, f5: 15, f6: 18, three: 20, four: 0, full: 25, small: 30, chance: 22, five: 50 };
+    await at({ ...all }, [6, 6, 6, 6, 6]);
+    assert.equal(await status(), 'Five of a kind again: 100 extra. It has to go in Large straight, where it counts in full: 40.');
+    assert.deepEqual(await can(), ['large']);
+    await twoLines();
+    const { chance, ...noChance } = all;
+    await at({ ...noChance, large: 40 }, [6, 6, 6, 6, 6]);
+    assert.equal(await status(), 'Five of a kind again: 100 extra. It has to go in Chance.');
+    assert.deepEqual(await can(), ['chance']);
+    await twoLines();
+
     // The Five of a kind box crossed out with a 0: the same rules, with nothing extra.
     await at({ five: 0 });
     assert.equal(await status(), 'Five of a kind again. It has to go in Fours.');

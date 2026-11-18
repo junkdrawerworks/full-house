@@ -366,6 +366,10 @@ function jokerLine(b, joker, opts) {
   const again = joker.extra ? `Five of a kind again: ${joker.extra} extra.` : 'Five of a kind again.';
   if (joker.forced) return `${again} It has to go in ${boxLabel(joker.forced)}.`;
   if (joker.topOnly) return `${again} Only top boxes are left${opts.every(o => !o.score) ? ': it scores 0 there' : ''}.`;
+  if (joker.lower.length === 1) {
+    const [box] = joker.lower, whole = ['full', 'small', 'large', 'pairs'].includes(box.kind);
+    return `${again} It has to go in ${boxLabel(box)}${whole ? `, where it counts in full: ${opts[0].score}` : ''}.`;
+  }
   const has = kind => joker.lower.some(x => x.kind === kind);
   const whole = [has('full') && 'a full house', (has('small') || has('large')) && 'a straight'].filter(Boolean).join(' or ') || (has('pairs') && 'two pairs');
   return `${again} ${whole ? `Any bottom box: ${whole} counts in full.` : 'It can go in any bottom box.'}`;
