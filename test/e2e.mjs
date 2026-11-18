@@ -1892,6 +1892,26 @@ try {
     assert.equal(dark.bar, dark.table, 'in dark, the browser’s bar is not the table’s colour');
   });
 
+  // The page itself never loads the big icons, so nothing else would notice one missing: a phone fetches them only as
+  // it installs the game.
+  await step('every icon the install uses is there, of the type and size the manifest says', async ({ page }) => {
+    const at = new URL(await page.getAttribute('link[rel="manifest"]', 'href'), base);
+    const { icons } = await (await fetch(at)).json();
+    for (const icon of icons) {
+      const res = await fetch(new URL(icon.src, at));
+      assert.equal(res.status, 200, `${icon.src} is not there`);
+      assert.equal(res.headers.get('content-type'), icon.type, `${icon.src} is not served as ${icon.type}`);
+      const bytes = Buffer.from(await res.arrayBuffer());
+      if (icon.type === 'image/png') {
+        assert.equal(bytes.toString('latin1', 1, 4), 'PNG', `${icon.src} is not a PNG`);
+        assert.equal(`${bytes.readUInt32BE(16)}x${bytes.readUInt32BE(20)}`, icon.sizes, `${icon.src} is not the size the manifest says`);
+      } else assert.equal(icon.sizes, 'any', `${icon.src} has a size, which a ${icon.type} doesn’t`);
+    }
+    const has = (purpose, size) => icons.some(i => (i.purpose || 'any').split(' ').includes(purpose) && (!size || i.sizes === size));
+    assert.ok(has('any', '192x192') && has('any', '512x512'), 'the manifest needs an icon at 192 and at 512');
+    assert.ok(has('maskable'), 'the manifest has no maskable icon, the one Android crops to its own shape');
+  });
+
   await step('a quick game asks first when it would end the game you’re in', async ({ page, game }) => {
     const progress = () => page.evaluate(() => window.fullHouse.progress);
     await page.click('[data-table="0"]');
