@@ -322,7 +322,7 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
   left: 50%;
   bottom: -21px;
   transform: translateX(-50%);
-  font: 700 11px var(--cond);
+  font: 700 12px var(--cond);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--hold);
@@ -395,7 +395,7 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 .pad thead th.them::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; background: var(--them-colour); box-shadow: 0 0 0 1.5px var(--paper); }
 .pad th[scope='row'] { padding: 3px 6px 3px 12px; text-align: left; font-weight: 400; }
 .pad th[scope='row'] b { display: block; font: 700 15px/1.05 var(--cond); letter-spacing: 0.03em; text-transform: uppercase; }
-.pad th[scope='row'] small { display: block; font: 400 11.5px/1.15 var(--text); color: rgba(46, 72, 102, 0.75); }
+.pad th[scope='row'] small { display: block; font: 400 12.5px/1.05 var(--text); color: var(--small-print); } /* a line no taller than it was at 11.5px */
 .pad td {
   width: 62px;
   height: 31px;
@@ -406,7 +406,7 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
   color: var(--pencil);
 }
 .pad td.them { color: var(--red-pencil); }
-.pad td small { font: 600 12px var(--cond); color: var(--small-print); letter-spacing: 0.03em; }
+.pad td small { font: 600 13px var(--cond); color: var(--small-print); letter-spacing: 0.03em; }
 .pad td.offer span { color: var(--offer); font-weight: 500; }
 .pad tr.can { cursor: pointer; }
 .pad tr.can:not(.picked):hover th, .pad tr.can:not(.picked):hover td.you { background: rgba(46, 72, 102, 0.05); }

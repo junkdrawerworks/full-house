@@ -950,6 +950,36 @@ try {
     assert.ok(m.inView && Math.abs(m.gap) < 1, 'on a tall phone the Total is not where it is printed');
   });
 
+  await step('the pad’s small print is big enough to read, on one line, in rows no taller for it', async ({ page, settled }) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    for (const table of [6, 7, 5]) { // the longest hint (Two pairs), the Dealer's wider columns, and a raised bonus line
+      await page.evaluate(table => window.fullHouse.start(table), table);
+      await page.click('#b-roll');
+      await settled();
+      await page.click('.die >> nth=0');
+      const m = await page.evaluate(() => {
+        const px = (s, p = 'fontSize') => parseFloat(getComputedStyle(document.querySelector(s))[p]);
+        const hints = [...document.querySelectorAll('.pad th[scope="row"] small')];
+        return {
+          hint: px('.pad th[scope="row"] small'), held: px('.held-tag'), progress: px('.pad .sub td small'),
+          colour: getComputedStyle(hints[0]).color,
+          twoLines: hints.filter(e => e.getBoundingClientRect().height > 16 || e.scrollWidth > e.clientWidth).map(e => e.textContent),
+          rows: [...document.querySelectorAll('.pad tbody:last-of-type tr[data-box]')].slice(1).map(r => r.getBoundingClientRect().height),
+          bonus: document.querySelector('.pad tr.sub').getBoundingClientRect().height,
+          sideways: document.documentElement.scrollWidth > innerWidth,
+        };
+      });
+      assert.ok(m.hint >= 12.5, `a box’s hint is ${m.hint}px`);
+      assert.ok(m.held >= 12, `the HELD tag is ${m.held}px`);
+      assert.ok(m.progress >= 13, `the bonus so far is ${m.progress}px`);
+      assert.match(m.colour, /^rgb\(/, 'a box’s hint is see-through');
+      assert.deepEqual(m.twoLines, [], `at table ${table + 1}, 320 wide, a hint doesn’t fit on its line`);
+      assert.ok(m.rows.every(h => h <= 36.5), `at table ${table + 1} a row with a hint is taller than 36px: ${m.rows}`);
+      assert.ok(m.bonus <= 34.5, `at table ${table + 1} the bonus row is ${m.bonus}px tall`);
+      assert.equal(m.sideways, false, `at table ${table + 1}, 320 wide, the page scrolls sideways`);
+    }
+  });
+
   await step('a second copy open at the same time picks up what the other one saves', async t => {
     const { page, ctx } = t;
     const other = await ctx.newPage(), trouble = [];
