@@ -452,7 +452,7 @@ function renderHome() {
     const beaten = !!progress.beaten[i], unlocked = i === 0 || !!progress.beaten[i - 1];
     const state = unlocked ? [beaten ? 'Beaten' : 'Next up', record(i), progress.best[i] && `your best ${progress.best[i]}`].filter(Boolean).join(' · ') : 'Locked';
     return `<li class="${beaten ? 'beaten' : unlocked ? 'next' : 'locked'}">
-      <button type="button" data-table="${i}" ${unlocked ? '' : 'disabled'}>
+      <button type="button" data-table="${i}">
         <span class="n">${i + 1}${done && beaten ? TICK : ''}</span>
         <span class="txt"><b>${t.board.name}</b><span class="vs"><i class="dot" style="--c:${t.who.colour}"></i>${t.who.name}</span><small>${state}</small></span>
       </button></li>`;
@@ -509,13 +509,18 @@ function open(screen, { focus = true } = {}) {
 // ---- sheets and messages ----
 
 // A table on the tour, or a quick game (table null) against the opponent from table `opp`.
+// A table not yet open shows its card too, its twist and its opponent, with what it takes to sit there in place of Sit down.
 function intro(table, opp = table) {
   const t = TABLES[opp], board = table === null ? CLASSIC : t.board;
+  const locked = table !== null && table > 0 && !progress.beaten[table - 1];
   $('intro-n').textContent = table === null ? 'Quick game' : `Table ${table + 1} of ${TABLES.length}`;
   $('intro-title').textContent = board.name;
   $('intro-blurb').textContent = board.blurb;
-  $('intro-who').innerHTML = `<i class="dot big" aria-hidden="true" style="--c:${t.who.colour}">${t.who.name.replace(/^The /, '')[0]}</i><div><b>${t.who.name}</b><span>${lineOf(opp)}</span>${game && !game.over ? '<em>Sitting down here ends the game you’re in. It counts as a\u00a0loss.</em>' : ''}</div>`;
-  $('b-sit').onclick = () => start(table, opp);
+  $('intro-who').innerHTML = `<i class="dot big" aria-hidden="true" style="--c:${t.who.colour}">${t.who.name.replace(/^The /, '')[0]}</i><div><b>${t.who.name}</b><span>${lineOf(opp)}</span>${game && !game.over && !locked ? '<em>Sitting down here ends the game you’re in. It counts as a\u00a0loss.</em>' : ''}</div>`;
+  $('intro-locked').textContent = locked ? `Beat ${mid(TABLES[table - 1].who.name)} to sit here` : '';
+  $('intro-locked').hidden = !locked;
+  $('b-sit').hidden = locked;
+  $('b-sit').onclick = locked ? null : () => start(table, opp);
   openSheet('sheet-intro');
 }
 
@@ -569,7 +574,7 @@ function openSheet(id, back) {
   opener = back || document.activeElement;
   behind().forEach(el => { el.inert = true; });
   $(id).hidden = false;
-  $(id).querySelector('.primary, .close, button')?.focus({ preventScroll: true });
+  $(id).querySelector('.primary:not([hidden]), .close, button:not([hidden])')?.focus({ preventScroll: true });
   keepHistory();
 }
 function closeSheets() {

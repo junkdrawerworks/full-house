@@ -360,6 +360,36 @@ try {
     }
   });
 
+  await step('a locked table shows its card, its twist and its opponent, and what it takes to sit there', async ({ page, game }) => {
+    // On a fresh tour: table 3's card, with Beat Maud to sit here in place of Sit down, and the focus on Not yet.
+    await page.click('[data-table="2"]');
+    await page.waitForSelector('#sheet-intro:not([hidden])');
+    assert.equal(await page.textContent('#intro-n'), 'Table 3 of 8');
+    assert.equal(await page.textContent('#intro-title'), 'Triple Sixes');
+    assert.match(await page.textContent('#intro-blurb'), /^Sixes score three times over/);
+    assert.equal(await page.textContent('#intro-who span'), 'Patient. Waits for the big numbers.');
+    assert.equal(await page.textContent('#intro-locked'), 'Beat Maud to sit here');
+    assert.ok(await page.isVisible('#intro-locked'));
+    assert.ok(await page.isHidden('#b-sit'), 'a locked table offers Sit down');
+    assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Not yet');
+    await page.keyboard.press('Escape');
+    assert.equal(await game(), null, 'a locked table started a game');
+    assert.ok(await page.isHidden('#sheet-intro'));
+    // The Dealer's, from a game in progress at table 1: no warning that sitting down ends it, since you can't.
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    await page.click('#b-home');
+    await page.click('[data-table="7"]');
+    assert.equal(await page.textContent('#intro-locked'), 'Beat Wren to sit here');
+    assert.doesNotMatch(await page.textContent('#intro-who'), /Sitting down/);
+    await page.click('#sheet-intro .plain');
+    // The table that's next is as it was: Sit down, and no word about beating anyone.
+    await page.click('[data-table="0"]');
+    assert.ok(await page.isVisible('#b-sit'));
+    assert.ok(await page.isHidden('#intro-locked'));
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'b-sit');
+  });
+
   await step('a finished game is not offered to carry on', async t => {
     const { page } = t;
     const screen = () => page.evaluate(() => document.body.dataset.screen);
@@ -1621,7 +1651,7 @@ try {
     await page.click('[data-table="0"]');
     assert.equal(await page.getAttribute('#sheet-intro .dot.big', 'aria-hidden'), 'true', 'the avatar’s letter is read out');
     const describedBy = await page.getAttribute('#sheet-intro [role="dialog"]', 'aria-describedby');
-    assert.deepEqual(describedBy.split(' '), ['intro-blurb', 'intro-who']);
+    assert.deepEqual(describedBy.split(' '), ['intro-blurb', 'intro-who', 'intro-locked']);
     await page.click('#b-sit');
     assert.equal(await page.title(), 'Table 1: Classic · Full House');
     assert.ok(await page.isVisible('main #tray[role="group"][aria-label="Dice"]'));

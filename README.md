@@ -19,7 +19,7 @@
 
 - **Five dice, three rolls, thirteen boxes.** Hold any dice between rolls, then fill one box a turn: the six number boxes on top (63 or more earns a 35-point bonus), then three and four of a kind, a full house, small and large straights, five of a kind and chance. Every five of a kind after the first is worth 100 more (unless Five of a kind holds a 0), and has to go in its own number's box if that's open, or else any box in the bottom section, where a full house or a straight counts in full.
 - **Pick, then score.** Tap a box to pick it and tap it again to write it in, so a slip of the thumb doesn't cost you a box. After each roll the open boxes show what the dice would score there (a light dash where they'd score nothing), unless you turn that off.
-- **The tour.** Eight tables, in order, each with its own twist and its own opponent:
+- **The tour.** Eight tables, in order, each with its own twist and its own opponent (a tap on one not yet open shows its card, and who to beat to sit there):
   1. **Classic** against Pip, who keeps whatever there's most of.
   2. **Evens** against Maud: the Ones box is gone, Evens adds up every even die instead, and the bonus needs 72.
   3. **Triple Sixes** against Bea: the Sixes box scores three times over, and the bonus needs 99.

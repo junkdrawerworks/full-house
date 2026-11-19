@@ -163,7 +163,7 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 .tables .vs { font-size: 14.5px; color: #4f6178; }
 .tables small { font: 600 12.5px var(--text); color: var(--small-print); }
 .tables .next small { color: var(--red-print); }
-.tables .locked button { cursor: default; opacity: 0.5; }
+.tables .locked button { opacity: 0.5; } /* not open yet, though a tap shows its card */
 /* A finished tour: a pencilled tick on each table's number, over a halo of paper so it shows on the navy disc too, and
    your eight best scores added up at the foot of the card, as the pad's Total is. */
 .tables .n { position: relative; }
@@ -645,6 +645,9 @@ body[data-screen='home'] .toast { top: auto; bottom: calc(16px + env(safe-area-i
   text-transform: uppercase;
   cursor: pointer;
 }
+.primary[hidden], .locked-note[hidden] { display: none; }
+/* In place of Sit down on the card of a table not open yet: what it takes to sit there. */
+.panel .locked-note { margin: 16px 0 0; padding: 14px; border: 2px dashed var(--line); border-radius: 14px; text-align: center; font: 700 19px var(--cond); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .plain { display: block; width: 100%; margin-top: 8px; padding: 11px; border: 0; border-radius: 12px; background: transparent; color: var(--accent-text); font-weight: 600; cursor: pointer; }
 .plain:hover { background: var(--line); }
 .plain[hidden] { display: none; }
