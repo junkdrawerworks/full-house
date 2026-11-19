@@ -563,6 +563,35 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
   .tray { --d: 76px; height: 180px; }
   .pad-wrap { padding-right: 24px; }
 }
+/* An upright tablet, in one column with a tall screen to itself (an iPad held upright, with the browser's bars off): at
+   phone size about a fifth of it was empty under the pad. The column is a fifth wider, the dice a third bigger, and the
+   pad's rows and lettering a fifth bigger, so the pad reaches down near the foot of the screen. A phone and a computer
+   are as they were: a phone is never 640px wide held upright, and a computer's screen is wider than it's tall. */
+@media (orientation: portrait) and (min-width: 640px) and (max-width: 879.98px) and (min-height: 1000px) {
+  .game { max-width: 680px; }
+  .play { padding: 6px 16px 0; }
+  .tray { --d: 83px; gap: 20px; height: calc(var(--d) + 30px + 1.75em); border-radius: 22px; clip-path: inset(0 0 -3px round 22px); }
+  .held-tag { font-size: 14px; }
+  .wild-tag { font-size: 12px; }
+  .pad-wrap { padding: 16px 16px 0; }
+  .pad thead th { padding: 8px 7px; font-size: 15.5px; }
+  .pad.long thead th { padding: 8px 2px; font-size: 14.5px; line-height: 19px; }
+  .pad thead th.them::before { width: 13px; height: 13px; }
+  .pad th[scope='row'] { padding: 4px 7px 4px 14px; }
+  .pad th[scope='row'] b { font-size: 18px; }
+  .pad th[scope='row'] small { font-size: 15px; }
+  .pad td { width: 74px; height: 37px; font-size: 30px; }
+  .pad.long td { width: 88px; }
+  .pad td small { font-size: 15.5px; }
+  .pad td small.par { font-size: 15px; }
+  .mult { font-size: 14px; }
+  .pad .sub th[scope='row'] b { font-size: 15.5px; }
+  .pad .sub td { height: 36px; font-size: 26px; }
+  .pad tfoot th { padding: 10px 14px; font-size: 20px; }
+  .pad tfoot td { height: 53px; font-size: 37px; }
+  .pad .ring { width: 79px; height: 48px; }
+}
+
 /* The opponent's card, under Roll, on a computer's wide screen and a tablet's (not a phone held sideways, nor a window
    too short to have room under the dice for it): the card from the table's intro, and the table's twist in small print. */
 .opp-card { display: none; }

@@ -2916,6 +2916,35 @@ try {
     assert.equal((await card()).shown, false, 'an opponent’s card at Two players');
   }, { desktop: true });
 
+  await step('on an upright tablet the dice are a third bigger and the pad a fifth, reaching near the foot of the screen; phones and computers as they were', async ({ page }) => {
+    const sizes = () => page.evaluate(() => {
+      const row = document.querySelector('#pad tbody tr[data-box="f1"]').getBoundingClientRect(), wrap = document.querySelector('.pad-wrap');
+      return { die: document.querySelector('.die').getBoundingClientRect().width, row: row.height, label: parseFloat(getComputedStyle(document.querySelector('#pad th[scope="row"] b')).fontSize),
+        bottom: document.getElementById('pad').getBoundingClientRect().bottom, scrolls: wrap.scrollHeight > wrap.clientHeight + 1, height: innerHeight,
+        tag: document.querySelector('.held-tag').getBoundingClientRect().bottom, tray: document.getElementById('tray').getBoundingClientRect().bottom };
+    });
+    await page.evaluate(() => window.fullHouse.start(0));
+    // Not tall enough to count as a tablet in the browser (an older iPad with Safari's bars): phone size, as before.
+    await page.setViewportSize({ width: 820, height: 960 });
+    const before = await sizes();
+    assert.equal(before.die, 62);
+    for (const [width, height] of [[820, 1080], [744, 1133], [820, 1180]]) {
+      await page.setViewportSize({ width, height });
+      const now = await sizes();
+      assert.ok(Math.abs(now.die / before.die - 4 / 3) < 0.03, `the dice are not a third bigger at ${width} x ${height}: ${now.die}`);
+      assert.ok(Math.abs(now.row / before.row - 1.2) < 0.05, `the pad's rows are not a fifth taller at ${width} x ${height}: ${now.row} from ${before.row}`);
+      assert.equal(now.label, 18, `the pad's labels are not a fifth bigger at ${width} x ${height}`);
+      assert.ok(!now.scrolls && now.bottom <= height, `the pad doesn't fit the screen at ${width} x ${height}`);
+      assert.ok(now.tag - 7 <= now.tray - 9, `a held die's tag reaches the tray's wooden frame at ${width} x ${height}`); // a held die sits 7px up; the frame is 9px
+      if (height <= 1133) assert.ok(now.bottom >= 0.85 * height, `the pad stops well short of the foot of the screen at ${width} x ${height}: ${now.bottom}`);
+    }
+    // A phone, and a computer, keep their sizes.
+    for (const [width, height, die] of [[390, 844, 52.65], [1280, 800, 76], [1032, 1376, 76]]) {
+      await page.setViewportSize({ width, height });
+      assert.ok(Math.abs((await sizes()).die - die) < 0.1, `the dice changed size at ${width} x ${height}`);
+    }
+  });
+
   await step('a phone held sideways has the pad beside the dice, with room to read it', async ({ page, settled }) => {
     await page.evaluate(() => window.fullHouse.start(7)); // High Stakes, whose ×2 badges make the widest pad
     await page.click('#b-roll');
@@ -3107,12 +3136,13 @@ try {
         assert.ok(m.statusBottom <= m.actionsTop, `${at} the line runs into the Roll button`);
         assert.ok(m.tagsInFelt && m.diceInTray, `${at} the dice or HELD don't fit the tray`);
       }
-      // Tall phones, a tablet, a phone held sideways and a desktop keep the roomier layout they had.
+      // Tall phones, a tablet, a phone held sideways and a desktop keep the roomier layout they had (an upright tablet's
+      // rows a fifth taller again: see the tablet's own step).
       for (const [width, height] of [[390, 844], [412, 915], [430, 932], [768, 1024], [844, 390], [1280, 800]]) {
         await page.setViewportSize({ width, height });
         const m = await look(), at = `at table ${table + 1}, ${width} x ${height},`;
         assert.equal(m.roll, 50, `${at} the Roll button is ${m.roll}px tall`);
-        assert.equal(m.row, 36, `${at} a row with a hint is ${m.row}px tall`);
+        assert.equal(m.row, width === 768 ? 44 : 36, `${at} a row with a hint is ${m.row}px tall`);
         assert.ok(m.tagsInFelt && m.diceInTray, `${at} the dice or HELD don't fit the tray`);
         if (height > width) assert.equal(m.over, 0, `${at} the pad is ${m.over}px too tall to fit`);
       }
