@@ -2252,12 +2252,14 @@ try {
   await step('Sound starts off; switched on, a throw rattles, more for more dice, a score scratches, holding a die buzzes, and a game behind the tour is quiet', async ({ page, myTurn, settled }) => {
     await page.addInitScript(() => {
       window.heard = [];
+      window.lengths = [];
       window.buzzed = [];
       const start = AudioBufferSourceNode.prototype.start;
       AudioBufferSourceNode.prototype.start = function (...args) {
         let energy = 0;
         for (const x of this.buffer.getChannelData(0)) energy += x * x;
         window.heard.push(energy);
+        window.lengths.push(this.buffer.duration);
         return start.apply(this, args);
       };
       Object.defineProperty(Navigator.prototype, 'vibrate', { configurable: true, value: ms => { window.buzzed.push(ms); return true; } });
@@ -2298,9 +2300,14 @@ try {
     const [one, five] = await page.evaluate(() => [window.heard[1], window.heard[3]]);
     assert.ok(five > 2 * one, `five dice thrown (${five.toFixed(1)}) are not much more of a rattle than one (${one.toFixed(1)})`);
     assert.ok(await heard() > 4, 'the opponent’s turn makes no sound');
+    // Where motion is cut down the dice land at once, so their rattle is a quick clatter, not one that goes on after them.
     // Your score goes in, then back to the tour before the opponent rolls: their turn, played out behind it, is quiet.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.click('#b-roll');
     await settled();
+    const [thrown, still] = await page.evaluate(() => [window.lengths[1], window.lengths.at(-1)]);
+    assert.ok(thrown > 0.45 && still < 0.3, `with motion cut down the rattle lasts ${still.toFixed(2)} s, against ${thrown.toFixed(2)} s for dice that tumble`);
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
     const before = await heard();
     await row.click();
     await row.click();

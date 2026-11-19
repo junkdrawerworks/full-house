@@ -513,7 +513,8 @@ function showDice(rolled = []) {
   const mine = hands(g);
   // Your holds show only while there's a roll left for them to stay out of. The opponent's show to the end of their turn.
   const held = !mine || g.rolls < g.board.rolls ? g.held : [false, false, false, false, false];
-  if (rolled.length && heard()) sound.rattle(rolled.length, quick() ? 0.38 : 0.7); // as long as the dice take to land (--tumble)
+  // As long as the dice take to land (--tumble), or, where motion is cut down and they land at once, a quick clatter.
+  if (rolled.length && heard()) sound.rattle(rolled.length, matchMedia('(prefers-reduced-motion: reduce)').matches ? 0.15 : quick() ? 0.38 : 0.7);
   tray.show(g.dice, held, {
     rolled,
     theirs: two(g) ? g.turn === 'them' : !mine && theirDice, // at Two players, Red's dice are red from the start of their turn
