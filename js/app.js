@@ -654,6 +654,8 @@ $('people').addEventListener('click', e => {
 });
 $('b-tour').addEventListener('click', () => { closeSheets(); game = null; save(); open('home'); });
 $('b-again').addEventListener('click', () => start(game.table, game.opp));
+// The result put aside, to look over the finished pad under it: See the result, where the focus goes back to, opens it again.
+$('b-look').addEventListener('click', closeSheets);
 $('b-rules').addEventListener('click', () => { showRules(CLASSIC, false); openSheet('sheet-rules'); });
 // From the menu, which closes as How to play opens: afterwards the focus goes back to the menu button.
 $('b-menu-rules').addEventListener('click', () => { showRules(game?.board || CLASSIC, !!game); openSheet('sheet-rules', $('b-menu')); });

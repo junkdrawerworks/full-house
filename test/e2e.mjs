@@ -406,8 +406,9 @@ try {
     await page.keyboard.press('Escape');
     await page.waitForTimeout(1200);
     assert.equal(await result(), false, 'the result came up again by itself after it was closed');
-    // Closed, the finished pad is there to read, and the button brings the result back: by Escape, and by the back button.
-    for (const close of [() => page.keyboard.press('Escape'), () => page.goBack()]) {
+    // Closed, the finished pad is there to read, and the button brings the result back: by Look at the pad on the result,
+    // by Escape, and by the back button. Put aside by its own button, the focus goes to See the result.
+    for (const close of [() => page.click('#b-look'), () => page.keyboard.press('Escape'), () => page.goBack()]) {
       assert.equal(await page.getAttribute('#b-roll', 'aria-disabled'), 'false');
       await page.click('#b-roll');
       assert.ok(await result(), 'the button did not open the result again');
@@ -415,7 +416,11 @@ try {
       await close();
       await page.waitForSelector('#sheet-result', { state: 'hidden' });
       assert.equal(await page.evaluate(() => document.body.dataset.screen), 'game');
+      assert.ok(await page.evaluate(() => !document.getElementById('game').inert), 'the pad is out of reach with the result put aside');
     }
+    await page.click('#b-roll');
+    await page.click('#b-look');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'b-roll', 'the focus did not go to See the result');
     // R and Space don't roll a finished game: they open its result, as the button does.
     await page.keyboard.press('r');
     assert.ok(await result(), 'R did not open the result');
