@@ -1693,6 +1693,110 @@ try {
     assert.equal(await page.textContent('#today-row small'), 'Today: given up · won 1 of 2 days');
   });
 
+  await step('Two players: Black and Red take turns at one phone, Red’s dice red and the red column taking the taps, and nothing counts', async ({ page, game, settled }) => {
+    const filledIn = card => Object.entries(card).filter(([k, v]) => k !== 'extras' && v !== null).length;
+    // There from the first visit, nothing beaten.
+    assert.equal(await page.textContent('#b-two'), 'Black and Red');
+    await page.click('#b-two');
+    await page.waitForSelector('#sheet-two:not([hidden])');
+    assert.ok(await page.isHidden('#two-warn'), 'no game to end');
+    await page.fill('#two-a', '  Mum ');
+    await page.click('#b-two-sit');
+    let g = await game();
+    assert.deepEqual([g.kind, g.names, g.table, g.board.id], ['two', ['Mum', 'Red'], null, 'classic']);
+    assert.equal(await page.textContent('#g-table'), 'Two players');
+    assert.equal(await page.textContent('#g-twist'), 'Mum against Red\u00a0· turn 1 of 13');
+    assert.deepEqual(await page.locator('#pad thead th').allTextContents(), ['Box', 'Mum', 'Red']);
+    assert.equal(await page.textContent('#status'), 'Mum’s turn. Roll the dice.');
+    await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
+    const dice = await page.evaluate(async seed => { const { rollFor } = await import('./js/rng.js'); return [rollFor(seed, 1, 1, 0), rollFor(seed, 1, 1, 1)]; }, g.seed);
+
+    // Black's turn: roll and score. Then the phone goes to Red.
+    await page.click('#b-roll');
+    await settled();
+    assert.deepEqual((await game()).dice, dice[0]);
+    assert.equal(await page.locator('#pad td.them.offer').count(), 0);
+    await page.locator('tr.can').first().click();
+    await page.locator('tr.can').first().click();
+    g = await game();
+    assert.deepEqual([g.turn, g.number, g.rolls, filledIn(g.you), filledIn(g.them)], ['them', 1, 0, 1, 0]);
+    assert.equal(await page.textContent('#status'), 'Red’s turn. Roll the dice.');
+    assert.equal(await page.textContent('#b-roll'), 'Roll');
+    assert.ok(await page.evaluate(() => document.getElementById('tray').classList.contains('theirs')), 'Red’s dice are red');
+
+    // Red's turn: their own dice, and the red column takes the taps.
+    await page.click('#b-roll');
+    await settled();
+    assert.deepEqual((await game()).dice, dice[1]);
+    assert.ok(await page.locator('#pad td.them.offer').count() > 0, 'the red column shows what Red’s dice would score');
+    assert.equal(await page.locator('#pad td.you.offer').count(), 0);
+    const red = await page.locator('tr.can').first().getAttribute('data-box');
+    await page.locator('tr.can').first().click();
+    assert.match(await page.textContent('#status'), /^Tap .* again/);
+    await page.locator('tr.can').first().click();
+    g = await game();
+    assert.notEqual(g.them[red], null);
+    assert.deepEqual([g.turn, g.number, filledIn(g.you), filledIn(g.them)], ['you', 2, 1, 1]);
+    assert.equal(await page.textContent('#status'), 'Mum’s turn. Roll the dice.');
+    assert.ok(await page.evaluate(() => !document.getElementById('tray').classList.contains('theirs')));
+    // Nobody plays for Red, after a reload either.
+    await page.reload();
+    await page.waitForTimeout(1200);
+    g = await game();
+    assert.deepEqual([g.turn, filledIn(g.them), await page.evaluate(() => window.fullHouse.busy)], ['you', 1, false]);
+    await page.evaluate(() => {
+      const g = structuredClone(window.fullHouse.game);
+      g.turn = 'them';
+      window.fullHouse.set(g);
+    });
+    await page.waitForTimeout(1200);
+    g = await game();
+    assert.deepEqual([g.turn, g.rolls, filledIn(g.them)], ['them', 0, 1], 'Red’s turn waits for Red');
+
+    // The last turns, and the result: who won, with nothing counted anywhere and nothing to share.
+    await page.evaluate(() => {
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) { g.you[b.id] = b.id === 'chance' ? null : 20; g.them[b.id] = b.id === 'chance' ? null : 5; }
+      Object.assign(g, { number: 13, rolls: 0, turn: 'you' });
+      window.fullHouse.settings.pace = 'quick';
+      window.fullHouse.set(g);
+    });
+    assert.equal(await page.textContent('#status'), 'Mum’s last turn. Roll the dice.');
+    for (const who of ['Red', null]) {
+      await page.click('#b-roll');
+      await settled();
+      await page.locator('tr.can').first().click();
+      await page.locator('tr.can').first().click();
+      if (who) assert.equal(await page.textContent('#status'), `${who}’s last turn. Roll the dice.`);
+    }
+    await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
+    const [a, r] = [await page.textContent('#pad tfoot td.you').then(Number), await page.textContent('#pad tfoot td.them').then(Number)];
+    assert.ok(a > r);
+    assert.equal(await page.textContent('#result-title'), 'Mum wins');
+    assert.match(await page.textContent('#result-line'), /^Mum’s (top|bottom) section came to \d+ and Red’s to \d+\.$/);
+    assert.deepEqual(await page.locator('#result-scores span').allTextContents(), ['Mum', 'Red']);
+    assert.ok(await page.isHidden('#b-share'));
+    assert.ok(await page.isHidden('#b-again'));
+    assert.ok(await page.isHidden('#result-n'));
+    const p = await page.evaluate(() => window.fullHouse.progress);
+    assert.deepEqual([p.played.length, p.won.length, p.beaten.length, p.quick.played, p.days.played], [0, 0, 0, 0, 0]);
+    assert.equal(await page.textContent('#b-next'), 'Play again');
+    await page.click('#b-next');
+    g = await game();
+    assert.deepEqual([g.kind, g.names, g.number, g.over], ['two', ['Mum', 'Red'], 1, undefined]);
+
+    // Ending one part way is two taps, and no loss for anyone.
+    await page.click('#b-menu');
+    assert.equal(await page.textContent('#b-concede'), 'End this game');
+    await page.click('#b-concede');
+    assert.equal(await page.textContent('#b-concede'), 'Tap again to end it.');
+    await page.click('#b-concede');
+    assert.equal(await page.evaluate(() => document.body.dataset.screen), 'home');
+    assert.ok(await page.isHidden('#toast'));
+    assert.deepEqual(await page.evaluate(() => [window.fullHouse.progress.quick.played, window.fullHouse.settings.names]), [0, ['Mum', '']]);
+    assert.equal(await page.textContent('#b-two'), 'Mum and Red');
+  });
+
   await step('with all five dice held there is nothing to roll', async ({ page, game, settled }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');

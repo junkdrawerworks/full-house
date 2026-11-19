@@ -610,3 +610,14 @@ test('today’s table comes from the date: the same all day for everyone, a diff
   assert.ok(tables.every(n => n > 30), `every table comes round: ${tables}`);
   assert.ok(repeats < 80, `${repeats} days with the same table as the day before`);
 });
+
+test('at Two players the line on what decided a game names both players', () => {
+  const card = scores => ({ ...blankCard(CLASSIC), ...scores, extras: 0 });
+  const bottom = { three: 20, four: 15, full: 25, small: 30, large: 0, five: 0, chance: 22 };
+  const made = card({ f1: 3, f2: 6, f3: 9, f4: 12, f5: 15, f6: 18, ...bottom }), short = card({ f1: 3, f2: 6, f3: 9, f4: 12, f5: 15, f6: 9, ...bottom });
+  assert.equal(whyLine(CLASSIC, short, made, 'Red', 'Black'), 'Red got the 35 bonus; Black was 9 short.');
+  assert.equal(whyLine(CLASSIC, made, short, 'Red', 'Black'), 'Black got the 35 bonus; Red was 9 short.');
+  const low = card({ f1: 0, f2: 0, f3: 3, f4: 4, f5: 5, f6: 6, ...bottom });
+  assert.equal(whyLine(CLASSIC, low, card({ f1: 3, f2: 6, f3: 9, f4: 12, f5: 15, f6: 6, ...bottom }), 'Red', 'Mum'), 'Red’s top section came to 51 and Mum’s to 18.');
+  assert.equal(whyLine(CLASSIC, card({ ...bottom, five: 50 }), card({ ...bottom }), 'Red', 'Black'), 'Black’s five of a kind was the difference.');
+});

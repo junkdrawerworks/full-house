@@ -9,8 +9,9 @@ export const CLOSE = 20; // a game won by this much or less has no line
 const TIMES = ['', 'once', 'twice', 'three times', 'four times', 'five times', 'six times'];
 
 // `name` is the opponent's ("Maud", "The Dealer"). From your side of the table: "Maud's top section came to 64 and
-// yours to 33." on a loss, "Your top section came to 64 and Maud's to 33." on a win.
-export function whyLine(board, you, them, name) {
+// yours to 33." on a loss, "Your top section came to 64 and Maud's to 33." on a win. With `me`, the first column is that
+// player's, named as the other is, for Two players: "Red's top section came to 64 and Black's to 33."
+export function whyLine(board, you, them, name, me = null) {
   const ty = totals(board, you), tt = totals(board, them);
   const margin = Math.abs(ty.total - tt.total);
   if (margin <= CLOSE) return '';
@@ -18,8 +19,9 @@ export function whyLine(board, you, them, name) {
   const [w, l] = won ? [you, them] : [them, you], [tw, tl] = won ? [ty, tt] : [tt, ty];
   const opp = name, mid = name.replace(/^The /, 'the ');
   // Who is who in the sentence: the winner and the loser, as a subject and a possessive, at its start or inside it.
-  const W = won ? { who: 'You', whose: 'Your', inWhose: 'your' } : { who: opp, whose: `${opp}’s`, inWhose: `${mid}’s` };
-  const L = won ? { who: mid, whose: `${mid}’s`, was: 'was', did: 'did' } : { who: 'you', whose: 'yours', was: 'were', did: 'did' };
+  const self = me ? { who: me, whose: `${me}’s`, inWhose: `${me}’s`, was: 'was' } : { who: 'You', whose: 'Your', inWhose: 'your' };
+  const W = won ? self : { who: opp, whose: `${opp}’s`, inWhose: `${mid}’s` };
+  const L = won ? { who: mid, whose: `${mid}’s`, was: 'was', did: 'did' } : me ? { ...self, did: 'did' } : { who: 'you', whose: 'yours', was: 'were', did: 'did' };
 
   const fiveBox = board.boxes.find(b => b.kind === 'five');
   const fives = card => (fiveBox && card[fiveBox.id] ? 1 : 0) + (card.extras || 0); // how many five of a kinds went down

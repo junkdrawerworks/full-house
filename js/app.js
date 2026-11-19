@@ -29,12 +29,20 @@ let playing = -1;      // the token of the game whose opponent is playing a turn
 
 const tray = new Tray($('tray'), { onToggle: toggle, onTap: () => { if (busy && game?.turn === 'them') hurry = true; } });
 const pad = new Pad($('pad'), { onPick: pick });
-const who = g => TABLES[g.opp].who;
+// At Two players (kind 'two'), the second player, Red, sits where the opponent would: their column, their red dice.
+const two = g => g?.kind === 'two';
+const RED = '#b0392d';
+const who = g => (two(g) ? { name: g.names[1], colour: RED } : TABLES[g.opp].who);
+// Whose column is "you": yours, or at Two players the first player's, Black.
+const me = g => (two(g) ? g.names[0] : 'You');
+// The player whose turn it is, when it's played at this phone: yours, or either at Two players. `side` is their card.
+const hands = g => g.turn === 'you' || two(g);
+const turnName = g => (g.turn === 'you' ? me(g) : who(g).name);
 // What's said of the opponent from table i: the Dealer's line changes once you've beaten him.
 const lineOf = i => (progress.beaten[i] && TABLES[i].who.beaten) || TABLES[i].who.line;
-// "Table 3: Triple Sixes"; a quick game, "Quick game", or at a table other than Classic, "Quick game: Wild Ones"; a
+// "Two players"; "Table 3: Triple Sixes"; a quick game, "Quick game", or at a table other than Classic, "Quick game: Wild Ones"; a
 // game from a friend's link, "A friend’s table: Hot Boxes"; today's table, "Today’s table: Hot Boxes".
-const where = g => (g.kind === 'friend' ? `A friend’s table: ${g.board.name}` : g.kind === 'day' ? `Today’s table: ${g.board.name}`
+const where = g => (two(g) ? 'Two players' : g.kind === 'friend' ? `A friend’s table: ${g.board.name}` : g.kind === 'day' ? `Today’s table: ${g.board.name}`
   : g.table !== null ? `Table ${g.table + 1}: ${g.board.name}` : g.board.id === CLASSIC.id ? 'Quick game' : `Quick game: ${g.board.name}`);
 // The table whose rules a game is played by: its own on the tour, the one chosen for a quick game (Classic unless another).
 const rulesOf = g => Math.max(0, TABLES.findIndex(t => t.board.id === g.board.id));
@@ -53,10 +61,11 @@ const allHeld = g => g.rolls > 0 && g.held.every(Boolean); // nothing left to ro
 
 function roll() {
   const g = game;
-  if (!g || g.over || busy || g.turn !== 'you' || g.rolls >= g.board.rolls || allHeld(g)) return;
+  if (!g || g.over || busy || !hands(g) || g.rolls >= g.board.rolls || allHeld(g)) return;
   picked = null;
   // From the game's seed: anyone playing from it gets the same number in each place on this roll of this turn.
-  const thrown = rollFor(g.seed, g.number, g.rolls + 1), rolled = [];
+  // (At Two players, Red's from a stream of their own.)
+  const thrown = rollFor(g.seed, g.number, g.rolls + 1, g.turn === 'them' ? 1 : 0), rolled = [];
   g.dice = g.dice.map((d, i) => (g.held[i] && g.rolls > 0 ? d : (rolled.push(i), thrown[i])));
   if (g.rolls === 0) g.held = [false, false, false, false, false];
   g.rolls++;
@@ -73,13 +82,13 @@ function roll() {
     pad.revealOpen(); // the only time your own turn moves the pad: when nothing you can score is in view
     const left = g.board.rolls - g.rolls;
     const five = /^Five of a kind/.test($('status').textContent) ? ` ${$('status').textContent}` : ''; // the first or another
-    say(`You rolled ${g.dice.join(', ')}. ${left ? `${left} roll${left === 1 ? '' : 's'} left.` : 'No rolls left.'}${five}`);
+    say(`${turnName(g)} rolled ${g.dice.join(', ')}. ${left ? `${left} roll${left === 1 ? '' : 's'} left.` : 'No rolls left.'}${five}`);
   }, quick() ? 450 : 750);
 }
 
 function toggle(i) {
   const g = game;
-  if (!g || busy || g.turn !== 'you' || g.rolls === 0 || g.rolls >= g.board.rolls) return;
+  if (!g || busy || !hands(g) || g.rolls === 0 || g.rolls >= g.board.rolls) return;
   g.held[i] = !g.held[i];
   picked = null;
   showDice();
@@ -92,16 +101,18 @@ function toggle(i) {
 // Tap a box once to pick it, again to score it.
 function pick(id) {
   const g = game;
-  if (!g || busy || g.turn !== 'you' || g.rolls === 0) return;
+  if (!g || busy || !hands(g) || g.rolls === 0) return;
   if (picked !== id) { picked = id; render(); say($('status').textContent); return; }
-  const option = options(g.board, g.you, g.dice).find(o => o.box.id === id);
+  const side = g.turn;
+  const option = options(g.board, g[side], g.dice).find(o => o.box.id === id);
   if (!option) return;
-  const made = makesBonus(g.board, g.you, option);
-  g.you = mark(g.you, option);
-  fresh = { you: id, bonus: made ? 'you' : null };
+  const made = makesBonus(g.board, g[side], option);
+  g[side] = mark(g[side], option);
+  fresh = { [side]: id, bonus: made ? side : null };
   picked = null;
   if (option.extra) toast(`Another five of a kind: ${g.board.extra} extra points.`);
   else if (option.box.kind === 'five' && option.score) toast('Five of a kind.');
+  if (two(g)) { passOn(g, option, made); return; }
   g.turn = 'them';
   g.held = [false, false, false, false, false];
   hurry = false; // a tap from here on hurries the turn that's coming, even before they roll
@@ -114,6 +125,24 @@ function pick(id) {
   status(line);
   say(line);
   setTimeout(theirTurn, quick() ? 300 : 650);
+}
+
+// At Two players, the phone goes to the other player: Black's turn to Red's, and Red's to Black's next turn, till the
+// pad is full. What was just scored is pencilled in as the turn changes, and heard.
+function passOn(g, option, made) {
+  const name = turnName(g), b = g.board;
+  const line = `${name} scores ${option.score} in ${boxLabel(option.box)}${option.extra ? `, plus ${b.extra} extra` : ''}${made ? `, and the ${b.bonus.worth}\u00a0bonus` : ''}.`;
+  g.last = { id: option.box.id, score: option.score, extra: option.extra ? b.extra : 0, bonus: made };
+  g.held = [false, false, false, false, false];
+  if (filled(b, g.you) && filled(b, g.them)) { finish(line); return; }
+  if (g.turn === 'them') g.number++;
+  g.turn = g.turn === 'you' ? 'them' : 'you';
+  g.rolls = 0;
+  save();
+  render();
+  showDice();
+  $('b-roll').focus({ preventScroll: true });
+  say(`${line} ${$('status').textContent}`);
 }
 
 // Whether writing in this score brings the top section up to the bonus. ("The\u00a0bonus" keeps together at the end of a line.)
@@ -147,7 +176,7 @@ function wait(ms, hurried = 140) {
 
 async function theirTurn() {
   const g = game, t = token;
-  if (!g || g.turn !== 'them' || g.over || playing === t) return;
+  if (!g || g.turn !== 'them' || g.over || playing === t || two(g)) return;
   // A game saved while two copies of a turn ran at once can have the opponent's card full already.
   if (filled(g.board, g.them)) { if (filled(g.board, g.you)) finish(); else yourTurn(g); return; }
   const still = () => t === token && game === g;
@@ -245,6 +274,7 @@ function yourTurn(g) {
 // `spec` is for a game that isn't one of those: { kind: 'friend', seed, score } plays the dice from a friend's link
 // (see js/links.js), against the score they had with them, if the link has it. It counts nowhere. { kind: 'day', seed, day }
 // is the table of the day `day` ("2026-11-19"): the first game finished or given up there counts for that day, and only there.
+// { kind: 'two', names: ['Black', 'Red'] } is Two players: Classic, two people at one phone, counting nowhere.
 function start(table, opp = table, at = table ?? 0, spec = {}) {
   const seed = spec.seed ?? ((Math.random() * 2 ** 31) | 0);
   const board = boardFor(at, seed);
@@ -254,6 +284,7 @@ function start(table, opp = table, at = table ?? 0, spec = {}) {
     table, opp, seed, board,
     ...(spec.kind === 'friend' && { kind: 'friend', score: spec.score ?? null }),
     ...(spec.kind === 'day' && { kind: 'day', day: spec.day }),
+    ...(spec.kind === 'two' && { kind: 'two', names: spec.names }),
     you: blankCard(board), them: blankCard(board),
     turn: 'you', number: 1, rolls: 0, last: null,
     dice: [die(), die(), die(), die(), die()], held: [false, false, false, false, false],
@@ -283,6 +314,7 @@ function finish(lead = '') {
   fresh.ring = true; // the winning total ringed as you watch, after the last score goes in
   const you = totals(b, g.you).total, them = totals(b, g.them).total, name = who(g).name;
   const won = you > them, tie = you === them;
+  if (two(g)) { finishTwo(g, lead, you, them); return; }
   let before = false, best = ''; // you'd beaten this table already; a new best there, over one you had
   let counted = false; // the day's first game, at today's table
   if (g.kind === 'day') counted = countDay(g, you, them);
@@ -337,9 +369,37 @@ function finish(lead = '') {
   if (onward) { next.textContent = `On to table ${g.table + 2}`; next.onclick = () => { intro(g.table + 1); under = 'sheet-result'; }; }
   else { next.textContent = g.kind ? 'Play the same dice again' : 'Play again'; next.onclick = () => again(g); }
   $('b-again').hidden = !onward;
+  $('b-share').hidden = false;
   shareSaid('Share');
   const t = token;
   setTimeout(() => { if (t === token && game === g && !resultSeen) showResult(); }, 900); // unless a new game has started, or it's been opened already
+}
+
+// The end of a game at Two players: who won, by the pad, with nothing to count anywhere.
+function finishTwo(g, lead, a, r) {
+  const [black, red] = g.names, tie = a === r, winner = a > r ? black : red;
+  save();
+  render();
+  showDice();
+  if (document.body.dataset.screen === 'home') renderHome();
+  status(tie ? 'A tie.' : `${winner} wins.`);
+  say(`${lead ? `${lead} ` : ''}${tie ? `A tie, ${a} all.` : `${winner} wins, ${Math.max(a, r)} to ${Math.min(a, r)}.`}`);
+  $('result-n').hidden = true;
+  $('result-title').textContent = tie ? 'A tie' : `${winner} wins`;
+  // What decided it, unless it was close (see js/why.js).
+  const why = whyLine(g.board, g.you, g.them, red, black);
+  $('result-line').textContent = tie ? 'Play it again to settle it.' : why || `${Math.max(a, r)} to ${Math.min(a, r)}: a close one.`;
+  $('result-why').hidden = true;
+  const tile = (n, ringed) => (ringed ? `<b class="ringed">${n}${ring()}</b>` : `<b>${n}</b>`);
+  $('result-scores').classList.remove('three');
+  $('result-scores').innerHTML = `<div><span>${escape(black)}</span>${tile(a, a >= r)}</div><div class="them"><span>${escape(red)}</span>${tile(r, r >= a)}</div>`;
+  $('result-best').hidden = true;
+  $('b-next').textContent = 'Play again';
+  $('b-next').onclick = () => again(g);
+  $('b-again').hidden = true;
+  $('b-share').hidden = true;
+  const t = token;
+  setTimeout(() => { if (t === token && game === g && !resultSeen) showResult(); }, 900);
 }
 
 // The first game finished, or given up, at a day's table counts for that day (and a game from a day before today's, once
@@ -399,7 +459,8 @@ async function copy(text) {
 }
 
 // The same again: another game at a table of the tour or a quick game, or the same dice again at a friend's table.
-const again = g => start(g.table, g.opp, rulesOf(g), g.kind ? { kind: g.kind, seed: g.seed, score: g.score, day: g.day } : {});
+// At Two players, another game between the same two, with new dice.
+const again = g => start(g.table, g.opp, rulesOf(g), two(g) ? { kind: 'two', names: g.names } : g.kind ? { kind: g.kind, seed: g.seed, score: g.score, day: g.day } : {});
 
 // The result of the game that's just finished, as finish() wrote it. It can be closed, to look over the pad, and opened again.
 function showResult() {
@@ -415,7 +476,7 @@ function concede(quietly) {
   if (!g) return;
   if (!g.over) {
     token++;
-    if (g.kind === 'day') countDay(g, null, null);
+    if (g.kind === 'day') countDay(g, null, null); // at Two players, or a friend's table: nowhere
     else if (g.kind) { /* counts nowhere */ } else if (g.table !== null) progress.played[g.table] = (progress.played[g.table] || 0) + 1;
     else progress.quick.played++;
     g.over = true;
@@ -432,12 +493,12 @@ function concede(quietly) {
 function showDice(rolled = []) {
   const g = game;
   if (!g) return;
-  const mine = g.turn === 'you';
+  const mine = hands(g);
   // Your holds show only while there's a roll left for them to stay out of. The opponent's show to the end of their turn.
   const held = !mine || g.rolls < g.board.rolls ? g.held : [false, false, false, false, false];
   tray.show(g.dice, held, {
     rolled,
-    theirs: !mine && theirDice,
+    theirs: two(g) ? g.turn === 'them' : !mine && theirDice, // at Two players, Red's dice are red from the start of their turn
     idle: mine && g.rolls === 0,
     canHold: mine && !busy && g.rolls > 0 && g.rolls < g.board.rolls,
     quick: quick(), // the dice land before roll() and PACE move on
@@ -449,19 +510,19 @@ function showDice(rolled = []) {
 function render() {
   const g = game;
   if (!g) return;
-  const b = g.board, opp = who(g), mine = g.turn === 'you' && !g.over;
+  const b = g.board, opp = who(g), mine = hands(g) && !g.over, side = g.turn, card = g[side];
   const turns = b.boxes.length;
   $('g-table').textContent = where(g);
   if (document.body.dataset.screen === 'game') document.title = `${where(g)} · Full House`;
   // On two lines, the break comes after the dot, and "(2 left)" keeps together.
-  $('g-twist').textContent = `against ${mid(opp.name)}\u00a0· turn ${Math.min(g.number, turns)} of ${turns}`;
+  $('g-twist').textContent = `${two(g) ? `${me(g)} against ${opp.name}` : `against ${mid(opp.name)}`}\u00a0· turn ${Math.min(g.number, turns)} of ${turns}`;
   document.documentElement.style.setProperty('--them-colour', opp.colour);
 
-  const opts = mine && g.rolls > 0 && !busy ? options(b, g.you, g.dice) : null;
+  const opts = mine && g.rolls > 0 && !busy ? options(b, card, g.dice) : null;
   const offers = opts && Object.fromEntries(opts.map(o => [o.box.id, o.score]));
   const you = totals(b, g.you).total, them = totals(b, g.them).total;
   const winner = g.over ? (you > them ? 'you' : them > you ? 'them' : 'both') : null;
-  pad.render({ board: b, you: g.you, them: g.them, name: opp.name, offers, picked, fresh, hints: settings.hints, theirPick, winner });
+  pad.render({ board: b, you: g.you, them: g.them, name: opp.name, me: me(g), side, offers, picked, fresh, hints: settings.hints, theirPick, winner });
   fresh = {};
 
   const left = b.rolls - g.rolls;
@@ -474,9 +535,9 @@ function render() {
   button.textContent = g.over ? 'See the result' : !mine ? `${opp.name}’s turn` : g.rolls === 0 ? 'Roll' : left > 0 && allHeld(g) ? 'All five held' : left > 0 ? `Roll again (${left}\u00a0left)` : 'No rolls left';
 
   if (mine && !busy) {
-    const joker = g.rolls > 0 && jokerState(b, g.you, g.dice), five = offers && b.boxes.find(x => x.kind === 'five');
+    const joker = g.rolls > 0 && jokerState(b, card, g.dice), five = offers && b.boxes.find(x => x.kind === 'five');
     if (picked) {
-      const o = opts?.find(x => x.box.id === picked), made = o && makesBonus(b, g.you, o);
+      const o = opts?.find(x => x.box.id === picked), made = o && makesBonus(b, card, o);
       status(`Tap ${boxLabel(b.boxes.find(x => x.id === picked))} again to ${!o?.score ? 'write in a 0' : `score ${o.score}`}${o?.extra ? `, plus ${o.extra} extra${made ? ',' : ''}` : ''}${made ? ' and make the\u00a0bonus' : ''}.`);
     } else if (g.rolls === 0) status(firstLine(g));
     else if (joker) status(jokerLine(b, joker, opts));
@@ -505,6 +566,8 @@ function jokerLine(b, joker, opts) {
 // Before your first roll: what the opponent just scored, or, as a game starts at Hot Boxes, which boxes are hot.
 // Your last box starts with Last turn.
 function firstLine(g) {
+  // At Two players: whose turn it is, so the phone goes to the right person. "Red’s turn. Roll the dice."
+  if (two(g)) return `${turnName(g)}’s ${turnsLeft(g.board, g[g.turn]) === 1 ? 'last turn' : 'turn'}. Roll the dice.`;
   const b = g.board, last = g.number > 1 && g.last && b.boxes.find(x => x.id === g.last.id), final = turnsLeft(b, g.you) === 1;
   const turn = final ? 'Last turn.' : 'Your turn.';
   const extra = g.last?.extra ? `, plus ${g.last.extra} extra${g.last.bonus ? ',' : ''}` : '';
@@ -569,9 +632,12 @@ function renderHome() {
   $('quick-at').innerHTML = tables.map(i => `<label><input type="radio" name="quick-at" value="${i}"${i === at ? ' checked' : ''}><span>${TABLES[i].board.name}</span></label>`).join('');
   const met = TABLES.map((t, i) => ({ t, i })).filter(({ i }) => i === 0 || progress.beaten[i - 1]);
   $('people').innerHTML = met.map(({ t, i }) => `<button type="button" data-quick="${i}"><i class="dot" style="--c:${t.who.colour}"></i>${t.who.name}</button>`).join('');
+  // Two players: the names typed last time, or Black and Red.
+  const [black, red] = twoNames();
+  $('b-two').innerHTML = `<i class="dot" style="--c:var(--ink)"></i>${escape(black)} <span class="and">and</span> <i class="dot" style="--c:${RED}"></i>${escape(red)}`;
   const c = $('b-continue'), going = game && !game.over;
   c.hidden = !going;
-  if (going) c.innerHTML = `<b>Carry on</b><span>${where(game)}, against ${mid(who(game).name)}. Turn ${Math.min(game.number, game.board.boxes.length)} of ${game.board.boxes.length}.</span>`;
+  if (going) c.innerHTML = `<b>Carry on</b><span>${two(game) ? `Two players: ${escape(me(game))} against ${escape(who(game).name)}` : `${where(game)}, against ${mid(who(game).name)}`}. Turn ${Math.min(game.number, game.board.boxes.length)} of ${game.board.boxes.length}.</span>`;
 }
 
 // The counted game at the table of day `day`, if it's been played: { you, them }, both null if it was given up.
@@ -583,6 +649,23 @@ function dayCard() {
   const d = today(new Date(), TABLES.length);
   intro(null, d.table, { kind: 'day', at: d.table, seed: d.seed, day: d.day });
 }
+
+// The two names for Two players: as typed (a space or two tidied away), or Black and Red.
+const tidy = (typed, plain) => String(typed || '').replace(/\s+/g, ' ').trim().slice(0, 10) || plain;
+const twoNames = () => [tidy(settings.names[0], 'Black'), tidy(settings.names[1], 'Red')];
+function twoCard() {
+  $('two-a').value = settings.names[0] || '';
+  $('two-b').value = settings.names[1] || '';
+  $('two-warn').hidden = !(game && !game.over);
+  openSheet('sheet-two');
+}
+$('b-two').addEventListener('click', twoCard);
+$('b-two-sit').addEventListener('click', () => {
+  settings.names = [tidy($('two-a').value, ''), tidy($('two-b').value, '')];
+  start(null, 0, 0, { kind: 'two', names: twoNames() });
+});
+// Enter in a name sits you down, as on a form.
+for (const id of ['two-a', 'two-b']) $(id).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('b-two-sit').click(); } });
 
 // The tour is finished once the Dealer, at the last table, is beaten.
 const finished = () => !!progress.beaten[TABLES.length - 1];
@@ -739,7 +822,8 @@ function read() {
 // A save from before the three paces has a Quick opponents switch (fast) in place of the pace: on is Quick.
 function settingsFrom(s) {
   const { fast, ...rest } = s && typeof s === 'object' ? s : {};
-  return { hints: true, keys: true, quickAt: 0, ...rest, pace: ['normal', 'quick', 'score'].includes(rest.pace) ? rest.pace : fast ? 'quick' : 'normal' };
+  const names = Array.isArray(rest.names) && rest.names.length === 2 ? rest.names.map(n => (typeof n === 'string' ? n.slice(0, 10) : '')) : ['', ''];
+  return { hints: true, keys: true, quickAt: 0, ...rest, names, pace: ['normal', 'quick', 'score'].includes(rest.pace) ? rest.pace : fast ? 'quick' : 'normal' };
 }
 function progressFrom(p) {
   const out = { beaten: [], best: [], played: [], won: [], quick: { played: 0, won: 0 }, today: null, days: { played: 0, won: 0 }, ...p };
@@ -756,7 +840,8 @@ function whole(g) {
     return !g.over && (g.turn === 'you' || g.turn === 'them') && Number.isInteger(g.number) && Number.isInteger(g.rolls)
       && Number.isInteger(g.opp) && !!TABLES[g.opp] && (g.table === null || (Number.isInteger(g.table) && !!TABLES[g.table]))
       && five(g.dice) && g.dice.every(d => Number.isInteger(d) && d >= 1 && d <= 6) && five(g.held)
-      && b.rolls > 0 && b.bonus.at > 0 && b.boxes.length > 0 && b.boxes.every(x => boxLabel(x) && x.id in g.you && x.id in g.them);
+      && b.rolls > 0 && b.bonus.at > 0 && b.boxes.length > 0 && b.boxes.every(x => boxLabel(x) && x.id in g.you && x.id in g.them)
+      && (g.kind !== 'two' || (Array.isArray(g.names) && g.names.length === 2 && g.names.every(n => typeof n === 'string' && n)));
   } catch { return false; } // a part missing altogether
 }
 function save() {
@@ -771,7 +856,7 @@ function carryOn() {
   open('game');
   showDice();
   render();
-  if (game?.turn === 'them' && !busy) theirTurn();
+  if (game?.turn === 'them' && !busy && !two(game)) theirTurn();
 }
 $('b-continue').addEventListener('click', carryOn);
 $('today-row').addEventListener('click', e => { if (e.target.closest('[data-day]')) dayCard(); });
@@ -795,13 +880,15 @@ $('b-menu-rules').addEventListener('click', () => { showRules(game?.board || CLA
 const showMenu = () => {
   if (!game) return;
   $('menu-title').textContent = where(game);
-  $('menu-twist').textContent = `${game.board.blurb}${hotNames(game.board) ? ` This time it’s ${hotNames(game.board)}.` : ''} Against ${mid(who(game).name)}. ${lineOf(game.opp)}`;
+  $('menu-twist').textContent = two(game) ? `${game.board.blurb} ${me(game)} against ${who(game).name}, passing the phone between you. Nothing counts on the tour.`
+    : `${game.board.blurb}${hotNames(game.board) ? ` This time it’s ${hotNames(game.board)}.` : ''} Against ${mid(who(game).name)}. ${lineOf(game.opp)}`;
   openSheet('sheet-menu');
 };
 // Giving up takes two taps, as scoring a box does: the first asks, and closing the menu takes the question back.
 function askGiveUp(on) {
   givingUp = on;
-  $('b-concede').textContent = game?.over ? 'Back to the tour' : on ? 'Tap again to give up. It counts as a loss.' : 'Give up this game';
+  // At Two players nobody loses by it: the game just ends.
+  $('b-concede').textContent = game?.over ? 'Back to the tour' : two(game) ? (on ? 'Tap again to end it.' : 'End this game') : on ? 'Tap again to give up. It counts as a loss.' : 'Give up this game';
   $('b-concede').classList.toggle('asked', on);
 }
 function giveUp() {
@@ -810,7 +897,7 @@ function giveUp() {
   if (g.over) { concede(false); return; } // nothing to lose
   if (!givingUp) { askGiveUp(true); return; }
   concede(false);
-  toast(`You gave up${g.table === null ? '' : ` at table ${g.table + 1}`}. ${who(g).name} takes that one.`);
+  if (!two(g)) toast(`You gave up${g.table === null ? '' : ` at table ${g.table + 1}`}. ${who(g).name} takes that one.`);
 }
 $('b-menu').addEventListener('click', showMenu);
 $('b-where').addEventListener('click', showMenu);
@@ -866,10 +953,11 @@ addEventListener('storage', e => {
 });
 
 // How far into a game a save is: the turn, then the rolls used, with the opponent's go after all of yours.
-const reached = g => g.number * 10 + (g.turn === 'them' ? 9 : g.rolls);
+// (At Two players, Red's rolls count after Black's.)
+const reached = g => g.number * 10 + (g.turn === 'them' ? (two(g) ? 5 + g.rolls : 9) : g.rolls);
 // Part way through your turn here, with the other copy behind it in the same game, or on another game, or none.
 function keepOurs(ours, theirs) {
-  if (!ours || ours.turn !== 'you' || ours.rolls === 0) return false;
+  if (!ours || !hands(ours) || ours.rolls === 0) return false;
   if (!theirs || theirs.seed !== ours.seed) return true;
   return reached(theirs) < reached(ours) || (reached(theirs) === reached(ours) && theirs.dice.join() !== ours.dice.join());
 }
@@ -889,7 +977,7 @@ function adopt(g) {
   if (!g) { closeSheets(); open('home'); return; }
   showDice();
   // As after a reload: the opponent's turn plays out here as well, the same way, since it comes from the game's seed.
-  if (g.turn === 'them') { busy = true; status(`${who(g).name}’s turn.`); setTimeout(theirTurn, 500); }
+  if (g.turn === 'them' && !two(g)) { busy = true; status(`${who(g).name}’s turn.`); setTimeout(theirTurn, 500); }
 }
 
 // ---- the back button ----
@@ -965,7 +1053,7 @@ else if (game) {
   open('game', { focus: false });
   showDice();
   render();
-  if (game.turn === 'them') { busy = true; status(`${who(game).name}’s turn.`); setTimeout(theirTurn, 500); }
+  if (game.turn === 'them' && !two(game)) { busy = true; status(`${who(game).name}’s turn.`); setTimeout(theirTurn, 500); }
 }
 
 // For the tests and the screenshot tool.
@@ -976,5 +1064,5 @@ window.fullHouse = {
   progress,
   settings,
   start,
-  set(g) { token++; game = g; busy = false; picked = null; theirPick = null; theirDice = false; open('game', { focus: false }); showDice(); render(); if (g.turn === 'them') theirTurn(); }, // as a saved game comes back
+  set(g) { token++; game = g; busy = false; picked = null; theirPick = null; theirDice = false; open('game', { focus: false }); showDice(); render(); if (g.turn === 'them' && !two(g)) theirTurn(); }, // as a saved game comes back
 };

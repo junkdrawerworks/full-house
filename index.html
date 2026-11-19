@@ -53,6 +53,11 @@
       </fieldset>
       <div class="people" id="people"></div>
     </section>
+    <section class="quick" aria-labelledby="two-h">
+      <h2 id="two-h">Two players</h2>
+      <p>Classic rules, on one phone passed between you.</p>
+      <div class="people"><button type="button" id="b-two"></button></div>
+    </section>
     <footer class="jd-foot">
       <a href="https://junkdrawer.works/">Part of junkdrawer.works</a>
       <span aria-hidden="true">·</span>
@@ -100,6 +105,22 @@
       <p class="note" id="intro-note" hidden></p>
       <p class="locked-note" id="intro-locked" hidden></p>
       <button type="button" class="primary" id="b-sit">Sit down</button>
+      <button type="button" class="plain" data-close>Not yet</button>
+    </section>
+  </div>
+
+  <div class="sheet" id="sheet-two" hidden>
+    <div class="scrim" data-close></div>
+    <section class="panel" role="dialog" aria-modal="true" aria-labelledby="two-title" aria-describedby="two-blurb two-warn">
+      <p class="eyebrow">Classic rules</p>
+      <h2 id="two-title">Two players</h2>
+      <p id="two-blurb">One phone, passed between you. Black goes first. On Red’s turn the dice turn red, and Red scores in the red column. Nothing counts on the tour.</p>
+      <div class="names">
+        <label><span><i class="dot" aria-hidden="true" style="--c:var(--ink)"></i>Black</span><input type="text" id="two-a" maxlength="10" placeholder="Black" autocomplete="off" spellcheck="false"></label>
+        <label><span><i class="dot" aria-hidden="true" style="--c:var(--red-pencil)"></i>Red</span><input type="text" id="two-b" maxlength="10" placeholder="Red" autocomplete="off" spellcheck="false"></label>
+      </div>
+      <p class="note" id="two-warn" hidden>Sitting down here ends the game you’re in. It counts as a&nbsp;loss.</p>
+      <button type="button" class="primary" id="b-two-sit">Sit down</button>
       <button type="button" class="plain" data-close>Not yet</button>
     </section>
   </div>

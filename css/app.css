@@ -201,6 +201,7 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
   cursor: pointer;
 }
 .people button:hover { border-color: var(--accent); }
+.people .and { font-weight: 400; color: var(--muted); }
 
 /* Each link is padded out to a thumb's height, and the footer's margins pulled in by as much, so the line sits where it would unpadded. */
 .jd-foot { margin: 22px -6px -14px; text-align: center; font-size: 13px; color: var(--muted); }
@@ -474,6 +475,10 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 .pad tr.picked th { box-shadow: inset 4px 0 0 var(--hold); }
 .pad tr.picked td.you span { color: var(--pencil); font-weight: 700; }
 .pad td.them.offer span { color: var(--red-pencil); font-weight: 500; opacity: 0.6; }
+/* Red's turn at Two players: the red column takes the taps, as yours does on your turn. */
+.pad.reds tr.can:not(.picked):hover td.them { background: rgba(46, 72, 102, 0.05); }
+.pad.reds tr.picked td.them { background: rgba(227, 168, 43, 0.38); }
+.pad.reds tr.picked td.them span { opacity: 1; font-weight: 700; }
 .pad td.fresh span { display: inline-block; animation: write 0.55s ease-out; }
 @keyframes write { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 .pad .hot th[scope='row'] { background: rgba(184, 67, 47, 0.07); }
@@ -674,6 +679,13 @@ body[data-screen='home'] .toast { top: auto; bottom: calc(16px + env(safe-area-i
 /* At a friend's table, their score between yours and the opponent's. */
 .scores.three { grid-template-columns: 1fr 1fr 1fr; }
 .panel .note { margin: 12px 0 0; font-weight: 600; color: var(--accent-text); }
+/* Two players: a name for each, typed or left as Black and Red. */
+.names { display: grid; gap: 10px; margin: 16px 0 4px; }
+.names label { display: grid; grid-template-columns: 84px 1fr; align-items: center; gap: 10px; }
+.names span { font: 700 17px var(--cond); letter-spacing: 0.06em; text-transform: uppercase; }
+.names input { min-width: 0; height: 46px; padding: 0 12px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--pencil); font: 700 26px var(--hand); }
+.names input::placeholder { color: var(--offer); opacity: 0.8; }
+.names input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .panel .note[hidden] { display: none; }
 .scores .ring { width: 92px; height: 56px; translate: -50% -46%; }
 .scores .ring path { animation-delay: 0.25s; }

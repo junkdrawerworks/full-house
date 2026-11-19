@@ -67,10 +67,11 @@ export class Pad {
   }
 
   // board, both cards, the opponent's name, and on your turn: what each allowed box would score ({ id: score }),
-  // which box is picked, and which boxes were just written in (to pencil them in as you watch).
+  // which box is picked, and which boxes were just written in (to pencil them in as you watch). At Two players, `me` heads
+  // the first column in place of You, and on Red's turn `side` is 'them': the boxes on offer are in the red column.
   // Once the game is over, `winner` ('you', 'them' or 'both' on a tie) has its Total ringed, drawn in when fresh.ring says
   // the game has only just ended, and simply there on any redraw after.
-  render({ board, you, them, name, offers = null, picked = null, fresh = {}, hints = true, theirPick = null, winner = null }) {
+  render({ board, you, them, name, me = 'You', side = 'you', offers = null, picked = null, fresh = {}, hints = true, theirPick = null, winner = null }) {
     // Redrawing replaces the rows, so note the one with the keyboard focus to give it back afterwards.
     // Only the keyboard's: a box picked with a tap or a click would keep it too, and the next Space would score it.
     const a = document.activeElement;
@@ -80,9 +81,9 @@ export class Pad {
       const v = card[b.id];
       if (v !== null) return `<td class="${who}${fresh[who] === b.id ? ' fresh' : ''}"><span>${v}</span></td>`;
       // A box the dice would score nothing in shows a light dash, not a pencilled 0 that looks like a score, until you pick it.
-      if (who === 'you' && offers && b.id in offers) {
+      if (who === side && offers && b.id in offers) {
         const show = hints || picked === b.id, nil = !offers[b.id] && picked !== b.id;
-        return `<td class="you offer${picked === b.id ? ' picked' : ''}">${!show ? '' : nil ? '<span class="nil">–</span>' : `<span>${offers[b.id]}</span>`}</td>`;
+        return `<td class="${who} offer mine${picked === b.id ? ' picked' : ''}">${!show ? '' : nil ? '<span class="nil">–</span>' : `<span>${offers[b.id]}</span>`}</td>`;
       }
       if (who === 'them' && theirPick?.id === b.id) return `<td class="them offer picked"><span>${theirPick.score}</span></td>`;
       return `<td class="${who}"></td>`;
@@ -113,10 +114,11 @@ export class Pad {
     const total = (t, card, who) => (winner === who || winner === 'both' ? `<span class="ringed">${t.total}${ring(!fresh.ring)}</span>`
       : board.boxes.some(b => card[b.id] !== null) ? t.total : '');
     const anyExtras = you.extras || them.extras;
-    this.el.classList.toggle('long', name.length > 6); // the Dealer: see css/app.css
+    this.el.classList.toggle('long', name.length > 6 || me.length > 6); // the Dealer: see css/app.css
+    this.el.classList.toggle('reds', side === 'them'); // Red's turn at Two players
     this.el.innerHTML = `
       <caption class="vh">Score pad</caption>
-      <thead><tr><th scope="col"><span class="vh">Box</span></th><th scope="col" class="you">You</th><th scope="col" class="them">${escape(name)}</th></tr></thead>
+      <thead><tr><th scope="col"><span class="vh">Box</span></th><th scope="col" class="you">${escape(me)}</th><th scope="col" class="them">${escape(name)}</th></tr></thead>
       <tbody>${upper.map(row).join('')}
         <tr class="sub"><th scope="row"><b>Bonus</b><small>${board.bonus.at} or more on top: ${board.bonus.worth}</small></th>${bonusCell(ty, you, 'you')}${bonusCell(tt, them, 'them')}</tr>
       </tbody>
