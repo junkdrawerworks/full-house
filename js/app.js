@@ -38,6 +38,11 @@ const me = g => (two(g) ? g.names[0] : 'You');
 // The player whose turn it is, when it's played at this phone: yours, or either at Two players. `side` is their card.
 const hands = g => g.turn === 'you' || two(g);
 const turnName = g => (g.turn === 'you' ? me(g) : who(g).name);
+// Whether leaving game `g` part way counts against you: not at a friend's table, at Two players, or at a day's table once
+// that day's game is in (see countDay()).
+const counts = g => !(g.kind === 'friend' || two(g) || (g.kind === 'day' && !!progress.today && progress.today.day >= g.day));
+// What a card says when sitting down would end the game you're in, if you're in one.
+const ends = () => (game && !game.over ? `Sitting down here ends the game you’re in.${counts(game) ? ' It counts as a\u00a0loss.' : ''}` : '');
 // What's said of the opponent from table i: the Dealer's line changes once you've beaten him.
 const lineOf = i => (progress.beaten[i] && TABLES[i].who.beaten) || TABLES[i].who.line;
 // "Two players"; "Table 3: Triple Sixes"; a quick game, "Quick game", or at a table other than Classic, "Quick game: Wild Ones"; a
@@ -657,7 +662,8 @@ const twoNames = () => [tidy(settings.names[0], 'Black'), tidy(settings.names[1]
 function twoCard() {
   $('two-a').value = settings.names[0] || '';
   $('two-b').value = settings.names[1] || '';
-  $('two-warn').hidden = !(game && !game.over);
+  $('two-warn').textContent = ends();
+  $('two-warn').hidden = !ends();
   openSheet('sheet-two');
 }
 $('b-two').addEventListener('click', twoCard);
@@ -718,7 +724,7 @@ function intro(table, opp = table, spec = {}) {
     : '';
   $('intro-note').textContent = note;
   $('intro-note').hidden = !note;
-  $('intro-who').innerHTML = `<i class="dot big" aria-hidden="true" style="--c:${t.who.colour}">${t.who.name.replace(/^The /, '')[0]}</i><div><b>${t.who.name}</b><span>${lineOf(opp)}</span>${game && !game.over && !locked ? '<em>Sitting down here ends the game you’re in. It counts as a\u00a0loss.</em>' : ''}</div>`;
+  $('intro-who').innerHTML = `<i class="dot big" aria-hidden="true" style="--c:${t.who.colour}">${t.who.name.replace(/^The /, '')[0]}</i><div><b>${t.who.name}</b><span>${lineOf(opp)}</span>${ends() && !locked ? `<em>${ends()}</em>` : ''}</div>`;
   $('intro-locked').textContent = locked ? `Beat ${mid(TABLES[table - 1].who.name)} to sit here` : '';
   $('intro-locked').hidden = !locked;
   $('b-sit').hidden = locked;
@@ -889,7 +895,7 @@ const showMenu = () => {
 function askGiveUp(on) {
   givingUp = on;
   // At Two players nobody loses by it: the game just ends.
-  $('b-concede').textContent = game?.over ? 'Back to the tour' : two(game) ? (on ? 'Tap again to end it.' : 'End this game') : on ? 'Tap again to give up. It counts as a loss.' : 'Give up this game';
+  $('b-concede').textContent = game?.over ? 'Back to the tour' : two(game) ? (on ? 'Tap again to end it.' : 'End this game') : on ? `Tap again to give up.${counts(game) ? ' It counts as a loss.' : ''}` : 'Give up this game';
   $('b-concede').classList.toggle('asked', on);
 }
 function giveUp() {

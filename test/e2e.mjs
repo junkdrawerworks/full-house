@@ -1797,6 +1797,34 @@ try {
     assert.equal(await page.textContent('#b-two'), 'Mum and Red');
   });
 
+  await step('leaving a game that counts nowhere says it is no loss', async ({ page }) => {
+    // Part way through a friend's game: sitting down elsewhere ends it, with no loss.
+    await page.goto(`${base}#table=1&dice=1&score=100`);
+    await page.waitForSelector('#sheet-intro:not([hidden])');
+    await page.click('#b-sit');
+    await page.click('#b-menu');
+    await page.click('#b-concede');
+    assert.equal(await page.textContent('#b-concede'), 'Tap again to give up.');
+    await page.keyboard.press('Escape');
+    await page.click('#b-home');
+    await page.click('[data-table="0"]');
+    assert.match(await page.textContent('#intro-who'), /Sitting down here ends the game you’re in\.$/);
+    await page.click('#sheet-intro .plain[data-close]');
+    await page.click('#b-two');
+    assert.equal(await page.textContent('#two-warn'), 'Sitting down here ends the game you’re in.');
+    // From a two-player game, a table that counts says it does.
+    await page.click('#b-two-sit');
+    await page.click('#b-home');
+    await page.click('[data-table="0"]');
+    assert.match(await page.textContent('#intro-who'), /Sitting down here ends the game you’re in\.$/);
+    await page.click('#sheet-intro .plain[data-close]');
+    await page.evaluate(() => window.fullHouse.start(0));
+    await page.click('#b-home');
+    await page.click('#b-two');
+    assert.equal(await page.textContent('#two-warn'), 'Sitting down here ends the game you’re in. It counts as a\u00a0loss.');
+    await page.click('#sheet-two .plain[data-close]');
+  });
+
   await step('a two-player result keeps no line from the game before over its title', async ({ page, settled }) => {
     // A friend's game finished, then a two-player one: its result is labelled by its own title alone.
     for (const kind of ['friend', 'two']) {
