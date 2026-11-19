@@ -1574,7 +1574,7 @@ try {
     assert.deepEqual(await page.evaluate(() => window.fullHouse.progress.played.length), 0, 'the friend’s game given up counts nowhere');
 
     // A link that doesn't make sense opens nothing, and comes off the address all the same.
-    for (const bad of ['table=9&dice=1', 'table=2&dice=', 'table=2&dice=zzzzzzzz', 'table=0&dice=5', 'tour']) {
+    for (const bad of ['table=10&dice=1', 'table=2&dice=', 'table=2&dice=zzzzzzzz', 'table=0&dice=5', 'tour']) {
       await page.goto(`${base}#${bad}`);
       assert.ok(await page.isHidden('#sheet-intro'), bad);
       assert.equal(await page.evaluate(() => location.hash), '', bad);
@@ -1696,6 +1696,145 @@ try {
     assert.deepEqual([p.today, p.days], [{ day: d.day, you: null, them: null }, { played: 2, won: 1 }]);
     await page.reload();
     assert.equal(await page.textContent('#today-row small'), 'Today: given up · won 1 of 2 days');
+  });
+
+  await step('the back room opens once the Dealer is beaten: two twists drawn from the seed, a run of wins that a loss or giving up ends, and links that open the same table', async t => {
+    const { page, game } = t;
+    const save = beaten => page.evaluate(b => localStorage.setItem('full-house.v1', JSON.stringify({ progress: { beaten: b } })), beaten);
+    // Not before the tour is finished.
+    await save(Array(7).fill(true));
+    await page.reload();
+    assert.ok(await page.isHidden('#back-row'));
+    await save(Array(8).fill(true));
+    await page.reload();
+    assert.ok(await page.isVisible('#back-row [data-back]'));
+    assert.equal(await page.textContent('#back-row .n'), '9');
+    assert.equal(await page.textContent('#back-row b'), 'The back room');
+    assert.match(await page.textContent('#back-row .vs'), /The Dealer/);
+    assert.equal(await page.textContent('#back-row small'), 'Two of the tour’s twists at once, drawn as you sit down');
+    assert.equal(await page.textContent('#tour-h'), 'The tour · finished', 'the tour stays finished, at eight tables');
+    assert.equal(await page.locator('#tables li').count(), 8);
+
+    // The card shows the draw for the next sitting, the same each time it opens until you sit down.
+    await page.click('#back-row [data-back]');
+    await page.waitForSelector('#sheet-intro:not([hidden])');
+    const next = await page.evaluate(() => window.fullHouse.progress.back.next);
+    const drawn = await page.evaluate(async seed => { const { backRoom } = await import('./js/tour.js'); const b = backRoom(seed); return [b.name, b.blurb, b.boxes.some(x => x.mult > 1 && b.hot) ? b.boxes.filter(x => x.mult > 1).length : 0]; }, next);
+    assert.equal(await page.textContent('#intro-n'), 'The back room · after the tour');
+    assert.equal(await page.textContent('#intro-title'), drawn[0]);
+    assert.ok((await page.textContent('#intro-blurb')).startsWith(drawn[1]));
+    assert.match(await page.textContent('#intro-who'), /The Dealer.*Hadn’t lost a game in years\./);
+    assert.equal(await page.textContent('#intro-note'), 'Two of the tour’s twists at once, new each time you sit down. Win to start a run.');
+    await page.click('#sheet-intro .plain');
+    await page.reload();
+    await page.click('#back-row [data-back]');
+    assert.equal(await page.textContent('#intro-title'), drawn[0], 'walking away from a draw doesn’t change it');
+
+    // A seed whose table has Chance, for the last turn the helper plays.
+    const seed = await page.evaluate(async () => { const { backRoom } = await import('./js/tour.js'); let s = 1; while (!backRoom(s).boxes.some(x => x.id === 'chance')) s++; return s; });
+    await page.evaluate(s => { window.fullHouse.progress.back.next = s; }, seed);
+    await page.click('#sheet-intro .plain');
+    await page.click('#back-row [data-back]');
+    await page.click('#b-sit');
+    let g = await game();
+    const name = g.board.name;
+    assert.deepEqual([g.kind, g.seed, g.opp, g.table, g.board.twists.length], ['back', seed, 7, null, 2]);
+    assert.equal(await page.textContent('#g-table'), `The back room: ${name}`);
+    assert.equal(await page.evaluate(() => window.fullHouse.progress.back.next), null, 'that draw is used');
+    // How to play and the pad go by the two twists.
+    await page.click('#b-menu');
+    assert.equal(await page.textContent('#menu-title'), `The back room: ${name}`);
+    await page.click('#b-menu-rules');
+    assert.ok((await page.textContent('#rules-list li')).startsWith(`At this table: ${g.board.blurb}`));
+    await page.click('#sheet-rules .close');
+    assert.equal(await page.locator('#pad tbody tr[data-box]').count(), 13);
+    assert.equal(await page.textContent('#pad tr.sub small'), `${g.board.bonus.at} or more on top: 35`);
+    // A reload comes back to the same table.
+    await page.reload();
+    assert.deepEqual(await game(), g);
+    assert.equal(await page.textContent('#g-table'), `The back room: ${name}`);
+
+    // Won: a run of one, then two, and a new best run over one you had.
+    await win(t);
+    assert.equal(await page.textContent('#result-n'), 'The back room');
+    assert.equal(await page.textContent('#result-line'), 'That starts a run.');
+    assert.ok(await page.isHidden('#result-best'));
+    assert.match(await page.textContent('#result-says'), /Years, that was\. Well played\./);
+    let p = await page.evaluate(() => window.fullHouse.progress);
+    assert.deepEqual([p.back.run, p.back.best, p.back.played, p.back.won, p.played.length, p.quick.played], [1, 1, 1, 1, 0, 0], 'it counts in the back room, and nowhere on the tour');
+    const you = await page.textContent('#pad tfoot td.you').then(Number), them = await page.textContent('#pad tfoot td.them').then(Number);
+    await page.evaluate(() => { window.shared = null; navigator.share = async data => { window.shared = data; }; });
+    await page.click('#b-share');
+    await page.waitForFunction(() => window.shared);
+    const sent = (await page.evaluate(() => window.shared)).text;
+    assert.equal(sent, `Full House, the back room: ${name}. I beat the Dealer, ${you} to ${them}. https://full-house.junkdrawer.works/#table=9&dice=${seed.toString(36)}&score=${you}`);
+    // Play again opens the card for the next sitting, a new draw; Not yet goes back to the result.
+    assert.equal(await page.textContent('#b-next'), 'Play again');
+    assert.ok(await page.isHidden('#b-again'));
+    await page.click('#b-next');
+    await page.waitForSelector('#sheet-intro:not([hidden])');
+    assert.equal(await page.textContent('#intro-note'), 'You’re on a run of 1. Win to add to it; a loss, or giving up, ends\u00a0it.');
+    await page.click('#sheet-intro .plain');
+    assert.ok(await page.isVisible('#sheet-result'));
+    await page.evaluate(s => { window.fullHouse.progress.back.best = 1; window.fullHouse.progress.back.next = s; }, seed);
+    await page.click('#b-next');
+    await page.click('#b-sit');
+    await win(t);
+    assert.equal(await page.textContent('#result-line'), 'That’s 2 in a row.');
+    assert.equal(await page.textContent('#result-best'), 'Your best run: 2 (was 1).');
+    await page.click('#b-tour');
+    assert.equal(await page.textContent('#back-row small'), 'Run of 2 · best run 2 · won 2 of 2');
+
+    // Lost: the run ends, the best run stays.
+    await page.evaluate(s => { window.fullHouse.progress.back.next = s; }, seed);
+    await page.click('#back-row [data-back]');
+    await page.click('#b-sit');
+    await page.evaluate(() => {
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) { g.you[b.id] = b.id === 'chance' ? null : 0; g.them[b.id] = b.id === 'chance' ? null : 30; }
+      Object.assign(g, { number: 13, rolls: 0, turn: 'you' });
+      window.fullHouse.settings.pace = 'quick';
+      window.fullHouse.set(g);
+    });
+    await t.myTurn();
+    await page.click('#b-roll');
+    await t.settled();
+    await page.locator('tr.can').first().click();
+    await page.locator('tr.can').first().click();
+    await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
+    assert.equal(await page.textContent('#result-best'), 'That ends a run of 2.');
+    p = await page.evaluate(() => window.fullHouse.progress);
+    assert.deepEqual([p.back.run, p.back.best, p.back.played, p.back.won], [0, 2, 3, 2]);
+
+    // Given up with a run going: it says what it costs, and ends the run.
+    await page.evaluate(() => { window.fullHouse.progress.back.run = 3; });
+    await page.click('#b-tour');
+    await page.click('#back-row [data-back]');
+    await page.click('#b-sit');
+    await page.click('#b-menu');
+    await page.click('#b-concede');
+    assert.equal(await page.textContent('#b-concede'), 'Tap again to give up. It ends your run of 3.');
+    await page.click('#b-concede');
+    assert.equal(await page.textContent('#toast'), 'You gave up in the back room. The Dealer takes that one.');
+    assert.equal(await page.textContent('#back-row small'), 'No run going · best run 2 · won 2 of 4');
+    // Back-room games aren't a quick-game choice.
+    assert.ok(!(await page.textContent('#quick-at')).includes('back room'));
+
+    // The link opens the same two twists for anyone, whatever they've beaten, and counts nowhere.
+    await save([]);
+    await page.reload();
+    await page.goto(sent.slice(sent.indexOf('#')).replace(/^/, page.url().split('#')[0]));
+    await page.waitForSelector('#sheet-intro:not([hidden])');
+    assert.equal(await page.textContent('#intro-n'), 'The same dice your friend had');
+    assert.equal(await page.textContent('#intro-title'), name);
+    assert.match(await page.textContent('#intro-who'), /The Dealer/);
+    await page.click('#b-sit');
+    g = await game();
+    assert.deepEqual([g.kind, g.seed, g.opp, g.board.name], ['friend', seed, 7, name]);
+    await win(t);
+    p = await page.evaluate(() => window.fullHouse.progress);
+    assert.deepEqual([p.back.played, p.played.length], [0, 0]);
+    assert.ok(await page.isHidden('#back-row'));
   });
 
   await step('Two players: Black and Red take turns at one phone, Red’s dice red and the red column taking the taps, and nothing counts', async ({ page, game, settled }) => {

@@ -3,7 +3,7 @@
 // you've beaten it at its table. What it `says` at the end of a game, in red pencil under the scores: when it wins, loses
 // or ties.
 
-import { mulberry32 } from './rng.js';
+import { mulberry32, mix } from './rng.js';
 
 const STANDARD = [
   { id: 'f1', kind: 'face', face: 1 }, { id: 'f2', kind: 'face', face: 2 }, { id: 'f3', kind: 'face', face: 3 },
@@ -120,7 +120,83 @@ export const TABLES = [
 ];
 
 // The board for a table, with anything random about it settled by the seed.
+// Past the tour's eight, BACK is the back room (below).
 export function boardFor(table, seed) {
+  if (table === BACK) return backRoom(seed);
   const b = TABLES[table].board;
   return b.hot ? { ...b, ...hotBoxes(seed) } : b;
+}
+
+// ---- the back room ----
+
+// Once the Dealer is beaten, a ninth table after the tour: the Dealer again, at a table made of two of the tour's twists
+// at once, drawn each time you sit down. The draw comes from the game's seed, as Hot Boxes' boxes do, so a reload or a
+// friend's link gives the same table. Odds, a box no table of the tour has, turns up only here. In a link the back room
+// is table 9 (js/links.js).
+export const BACK = TABLES.length;
+
+// A twist as it reads on the back room's card, and what it does to a board. Each says what it changes in a sentence of
+// its own, in the tour's own words; the bonus is said once, for the two together (see backBoard()).
+const swap = (board, id, box) => ({ ...board, boxes: board.boxes.map(b => (b.id === id ? { mult: b.mult, ...box } : b)) });
+const times = (board, ids, mult) => ({ ...board, boxes: board.boxes.map(b => (ids.includes(b.id) ? { ...b, mult } : b)) });
+export const TWISTS = {
+  evens: { name: 'Evens', says: 'There’s no Ones box: Evens takes its place and adds up every even die.', make: b => swap(b, 'f1', { id: 'evens', kind: 'evens' }) },
+  odds: { name: 'Odds', says: 'There’s no Twos box: Odds takes its place and adds up every odd die.', make: b => swap(b, 'f2', { id: 'odds', kind: 'odds' }) },
+  sixes: { name: 'Triple Sixes', says: 'Sixes score three times over.', make: b => times(b, ['f6'], 3) },
+  'two-rolls': { name: 'Two Rolls', says: 'Only two rolls a turn instead of three.', make: b => ({ ...b, rolls: 2 }) },
+  wild: {
+    name: 'Wild Ones', make: b => ({ ...b, wild: true }),
+    says: 'In the bottom section, every 1 counts as whatever number scores best; the extra 100 for another five of a kind needs five dice showing the same number.',
+  },
+  // Picked last, from the board the other twist has made, so Evens, Odds, Two pairs or the Low road can be hot too. Never
+  // Ones or Five of a kind, as at Hot Boxes.
+  hot: {
+    name: 'Hot Boxes', says: 'Two boxes, picked at random, score three times over.',
+    make: (b, rand) => {
+      const pool = b.boxes.filter(x => x.kind !== 'five' && x.id !== 'f1').map(x => x.id), hot = [];
+      while (hot.length < 2) { const id = pool[Math.floor(rand() * pool.length)]; if (!hot.includes(id)) hot.push(id); }
+      return { ...times(b, hot, 3), hot: true };
+    },
+  },
+  pairs: {
+    name: 'Pairs and the Low Road', make: b => swap(swap(b, 'three', { id: 'pairs', kind: 'pairs' }), 'chance', { id: 'low', kind: 'low' }),
+    says: 'Two pairs (four of one number count) takes the place of Three of a kind, and the Low road (30 if the dice total 12 or less) the place of Chance.',
+  },
+  high: {
+    name: 'High Stakes', make: b => times({ ...b, rolls: 4 }, ['three', 'four', 'full', 'small', 'large', 'five', 'chance', 'pairs', 'low'], 2),
+    says: 'Four rolls a turn, and every box in the bottom section scores double; the extra for another five of a kind stays at 100.',
+  },
+};
+const ORDER = Object.keys(TWISTS);
+
+// Every two twists that go together, in the tour's order. Not Two Rolls with High Stakes, which both set the rolls, nor
+// Hot Boxes with Triple Sixes or High Stakes, which would triple a box that already scores more.
+const CLASH = ['two-rolls+high', 'sixes+hot', 'hot+high'];
+export const PAIRS = ORDER.flatMap((a, i) => ORDER.slice(i + 1).map(b => `${a}+${b}`)).filter(k => !CLASH.includes(k));
+
+// The top-section bonus for a back-room table: three of each number, Evens' 12 and Odds' 9 in their boxes, each times its
+// multiplier, as the tour's tables work it out; cut as Two Rolls cuts 63 to 52 when there are only two rolls a turn.
+const PAR = { face: b => 3 * b.face, evens: () => 12, odds: () => 9 };
+export function backBonus(board) {
+  const at = board.boxes.filter(b => b.kind in PAR).reduce((a, b) => a + PAR[b.kind](b) * b.mult, 0);
+  return Math.round(board.rolls === 2 ? (at * 52) / 63 : at);
+}
+
+// The board for the two twists `key` ("two-rolls+wild"), with Hot Boxes' boxes drawn by `rand`.
+export function backBoard(key, rand) {
+  const [a, b] = key.split('+').map(k => TWISTS[k]);
+  let board = { ...base, boxes: boxes() };
+  for (const k of [...key.split('+')].sort((x, y) => (x === 'hot') - (y === 'hot'))) board = TWISTS[k].make(board, rand);
+  const at = backBonus(board);
+  return {
+    ...board, id: `back:${key}`, name: `${a.name} with ${b.name}`, twists: key.split('+'),
+    blurb: `${a.says} ${b.says} The top-section bonus needs ${at}.`,
+    bonus: { at, worth: 35 },
+  };
+}
+
+// The back room's table for a game's seed: which two twists, and at Hot Boxes which boxes.
+export function backRoom(seed) {
+  const rand = mulberry32(mix(seed, 0xbac));
+  return backBoard(PAIRS[Math.floor(rand() * PAIRS.length)], rand);
 }

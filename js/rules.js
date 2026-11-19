@@ -25,7 +25,7 @@ const KINDS = {
   large: { label: () => 'Large straight', hint: b => `Five in a row: ${pays(40, b)}` },
   five: { label: () => 'Five of a kind', hint: b => `All five the same: ${pays(50, b)}` },
   chance: { label: () => 'Chance', hint: totalHint },
-  pairs: { label: () => 'Two pairs', hint: b => `Total of the four paired dice${over(b)}` },
+  pairs: { label: () => 'Two pairs', hint: (b, board) => `Total of the four paired dice${board?.wild ? ', 1s wild' : ''}${over(b)}` }, // wild only in the back room
   low: { label: () => 'Low road', hint: b => `Total of 12 or less: ${pays(30, b)}` },
 };
 

@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { score, options, jokerState, blankCard, mark, totals, filled, fiveOf, boxHint } from '../js/rules.js';
-import { TABLES, CLASSIC, boardFor } from '../js/tour.js';
+import { TABLES, CLASSIC, boardFor, BACK, PAIRS, TWISTS, backBoard, backRoom } from '../js/tour.js';
 import { Opponent, playTurn, SLIP } from '../js/ai.js';
 import { mulberry32, rollFor } from '../js/rng.js';
 import { whyLine } from '../js/why.js';
@@ -308,6 +308,8 @@ test('a box’s hint on the pad says what it pays at that table', () => {
     const b = boardFor(5, seed), hot = b.boxes.filter(x => x.mult > 1).map(x => x.id);
     if (hot.some(id => !seen.has(id))) { hot.forEach(id => seen.add(id)); boards.push(b); }
   }
+  // And every board the back room can draw, with Odds, wild Two pairs and doubled Low roads among them.
+  for (const key of PAIRS) for (let n = 0; n < (key.includes('hot') ? 6 : 1); n++) boards.push(backBoard(key, mulberry32(n)));
   for (const board of boards) {
     for (const b of board.boxes) {
       const hint = boxHint(b, board), m = b.mult || 1, where = `${board.name}, ${b.id} ×${m}: “${hint}”`;
@@ -318,10 +320,10 @@ test('a box’s hint on the pad says what it pays at that table', () => {
         const other = b.face === 6 ? 5 : 6;
         assert.equal(score(board, b, [b.face, b.face, b.face, other, other]), 3 * b.face * m, where);
       } else {
-        assert.match(hint, /^(Total of all dice|Total of the four paired dice|Add up the even dice)/, where);
+        assert.match(hint, /^(Total of all dice|Total of the four paired dice|Add up the even dice|Add up the odd dice)/, where);
         assert.equal(hint.endsWith(', tripled'), m === 3, where);
         assert.equal(hint.endsWith(', doubled'), m === 2, where);
-        assert.equal(hint.includes('1s wild'), !!board.wild, where);
+        assert.equal(hint.includes('1s wild'), !!board.wild && !['evens', 'odds'].includes(b.kind), where); // wild only in the bottom section
       }
     }
   }
@@ -394,6 +396,19 @@ test('the boxes on offer and their scores agree with a second reading of the rul
       for (const d of ROLLS) {
         const got = options(board, card, d);
         assert.equal(got.map(o => `${o.box.id}:${o.score}:${o.extra}`).sort().join(), ORACLE.options(board, card, d), `${board.name}, ${d.join('')}, card ${JSON.stringify(card)}`);
+        if (d[0] === d[4] && card.five !== null) jokers++;
+      }
+    }
+  }
+  // The back room's boards too, a few cards each: Odds, two twists at once, and boxes multiplied by either.
+  for (const key of PAIRS) {
+    for (let n = 0; n < 6; n++) {
+      const board = backBoard(key, rand), card = blankCard(board), p = rand();
+      for (const b of board.boxes) if (rand() < p) card[b.id] = rand() < 0.3 ? 0 : Math.floor(rand() * (ORACLE.most(b) + 1));
+      if (filled(board, card)) card[board.boxes[Math.floor(rand() * 13)].id] = null;
+      if (n % 2 === 0) card.five = rand() < 0.5 ? 0 : board.boxes.find(b => b.id === 'five').mult * 50;
+      for (const d of ROLLS) {
+        assert.equal(options(board, card, d).map(o => `${o.box.id}:${o.score}:${o.extra}`).sort().join(), ORACLE.options(board, card, d), `${board.name}, ${d.join('')}, card ${JSON.stringify(card)}`);
         if (d[0] === d[4] && card.five !== null) jokers++;
       }
     }
@@ -598,7 +613,11 @@ test('a friend’s link carries the table, the opponent when not the table’s o
   // As the README promises: these keep opening.
   assert.deepEqual(readLink('#table=6&dice=k3j2h1&score=288'), { table: 5, opp: 5, seed: parseInt('k3j2h1', 36), score: 288 });
   assert.deepEqual(readLink('table=3&dice=1&vs=1&other=x'), { table: 2, opp: 0, seed: 1, score: null });
-  for (const bad of ['', '#', '#table=9&dice=1', '#table=0&dice=1', '#table=2', '#table=2&dice=Z', '#table=2&dice=zzzzzzzz', '#table=2&dice=1&vs=9', '#table=1.5&dice=1', '#table=-1&dice=1']) {
+  // Table 9 is the back room, against the Dealer from table 8 unless it says otherwise.
+  assert.equal(linkFor({ table: 8, opp: 7, seed: 35, score: 300 }, 8), 'https://full-house.junkdrawer.works/#table=9&dice=z&score=300');
+  assert.deepEqual(readLink('#table=9&dice=z&score=300'), { table: 8, opp: 7, seed: 35, score: 300 });
+  assert.deepEqual(readLink('#table=9&dice=z&vs=1'), { table: 8, opp: 0, seed: 35, score: null });
+  for (const bad of ['', '#', '#table=10&dice=1', '#table=9&dice=1&vs=9', '#table=0&dice=1', '#table=2', '#table=2&dice=Z', '#table=2&dice=zzzzzzzz', '#table=2&dice=1&vs=9', '#table=1.5&dice=1', '#table=-1&dice=1']) {
     assert.equal(readLink(bad), null, bad);
   }
   assert.equal(readLink('#table=2&dice=1&score=lots').score, null, 'a score that isn’t one is left out');
@@ -635,4 +654,52 @@ test('at Two players the line on what decided a game names both players', () => 
   const low = card({ f1: 0, f2: 0, f3: 3, f4: 4, f5: 5, f6: 6, ...bottom });
   assert.equal(whyLine(CLASSIC, low, card({ f1: 3, f2: 6, f3: 9, f4: 12, f5: 15, f6: 6, ...bottom }), 'Red', 'Mum'), 'Red’s top section came to 51 and Mum’s to 18.');
   assert.equal(whyLine(CLASSIC, card({ ...bottom, five: 50 }), card({ ...bottom }), 'Red', 'Black'), 'Black’s five of a kind was the difference.');
+});
+
+test('the back room: two of the tour’s twists at once, drawn from the seed, with a bonus three of each number still earns', () => {
+  assert.equal(BACK, 8);
+  assert.equal(PAIRS.length, new Set(PAIRS).size);
+  // Two twists that both set the rolls, or that would triple a box already multiplied, never come up together.
+  for (const clash of ['two-rolls+high', 'sixes+hot', 'hot+high']) assert.ok(!PAIRS.includes(clash), clash);
+  const seen = new Set();
+  for (let seed = 0; seed < 3000; seed++) {
+    const board = boardFor(BACK, seed), [a, b] = board.twists, key = `${a}+${b}`;
+    seen.add(key);
+    assert.ok(PAIRS.includes(key), key);
+    assert.deepEqual(board, backRoom(seed), 'the same table for the same seed');
+    assert.equal(board.name, `${TWISTS[a].name} with ${TWISTS[b].name}`);
+    assert.ok(board.blurb.startsWith(`${TWISTS[a].says} ${TWISTS[b].says} The top-section bonus needs ${board.bonus.at}.`), board.blurb);
+    assert.equal(board.boxes.length, 13);
+    assert.equal(new Set(board.boxes.map(x => x.id)).size, 13);
+    assert.equal(board.rolls, b === 'two-rolls' || a === 'two-rolls' ? 2 : board.twists.includes('high') ? 4 : 3, key);
+    assert.equal(!!board.wild, board.twists.includes('wild'), key);
+    assert.equal(board.extra, 100, 'the extra for another five of a kind is never multiplied');
+    assert.equal(!!box(board, 'evens'), board.twists.includes('evens'), key);
+    assert.equal(!!box(board, 'odds'), board.twists.includes('odds'), key);
+    assert.equal(!!box(board, 'pairs') && !!box(board, 'low'), board.twists.includes('pairs'), key);
+    const hot = board.boxes.filter(x => x.mult === 3 && !(x.id === 'f6' && board.twists.includes('sixes')));
+    assert.equal(hot.length, board.twists.includes('hot') ? 2 : 0, `${key}, seed ${seed}`);
+    assert.ok(hot.every(x => x.kind !== 'five' && x.id !== 'f1'), `${key}: ${hot.map(x => x.id)}`);
+    for (const x of board.boxes) assert.equal(x.mult, board.twists.includes('high') && !['face', 'evens', 'odds'].includes(x.kind) ? 2 : x.mult === 3 ? 3 : 1, `${key}, ${x.id}`);
+    // Three of each number, Evens' 12 and Odds' 9, each times its multiplier: the bonus, cut as Two Rolls cuts 63 to 52.
+    const par = board.boxes.reduce((s, x) => s + (x.kind === 'face' ? 3 * x.face : x.kind === 'evens' ? 12 : x.kind === 'odds' ? 9 : 0) * x.mult, 0);
+    assert.equal(board.bonus.at, Math.round(board.rolls === 2 ? (par * 52) / 63 : par), `${key}, seed ${seed}`);
+  }
+  assert.equal(seen.size, PAIRS.length, 'every pair comes up');
+  // Odds turns up only in the back room.
+  for (let t = 0; t < TABLES.length; t++) assert.ok(!boardFor(t, 1).boxes.some(x => x.kind === 'odds'));
+  const odds = backBoard('evens+odds', mulberry32(1));
+  assert.equal(score(odds, box(odds, 'odds'), [1, 3, 5, 2, 6]), 9);
+  assert.equal(score(odds, box(odds, 'evens'), [1, 3, 5, 2, 6]), 8);
+  assert.equal(odds.bonus.at, 75);
+  // Wild ones count in Two pairs, and the Dealer plays every pair through to a full card, on the boxes the rules allow.
+  const wild = backBoard('wild+pairs', mulberry32(1));
+  assert.equal(score(wild, box(wild, 'pairs'), [1, 6, 5, 5, 2]), 22, 'a 1 reads as a 6');
+  const dealer = new Opponent(TABLES[BACK - 1].play), rand = mulberry32(9);
+  for (const key of PAIRS) {
+    const board = backBoard(key, rand);
+    let card = blankCard(board), turns = 0;
+    while (!filled(board, card)) { card = mark(card, playTurn(dealer, board, card, rand).option); turns++; }
+    assert.equal(turns, 13, key);
+  }
 });
