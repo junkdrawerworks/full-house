@@ -2517,7 +2517,7 @@ try {
     for (const width of [320, 390]) {
       await page.setViewportSize({ width, height: 844 });
       await page.evaluate(() => { document.body.dataset.screen = 'home'; });
-      assert.equal(await page.locator('#home .jd-foot a, #home .jd-foot button, .people button').count(), 4);
+      assert.equal(await page.locator('#home .jd-foot a, #home .jd-foot button, .people button').count(), 5); // with Two players
       assert.deepEqual(await small('#home .jd-foot a, #home .jd-foot button, .people button'), [], `at ${width} wide, on the tour`);
       const foot = await page.evaluate(() => [...document.querySelectorAll('#home .jd-foot a, #home .jd-foot button')].map(e => e.getBoundingClientRect().top));
       assert.ok(foot.every(t => t === foot[0]), `at ${width} wide, the footer’s links take more than one line`);
