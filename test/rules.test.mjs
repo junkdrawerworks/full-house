@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { score, options, jokerState, blankCard, mark, totals, filled, fiveOf, boxHint } from '../js/rules.js';
 import { TABLES, CLASSIC, boardFor } from '../js/tour.js';
-import { Opponent, playTurn } from '../js/ai.js';
+import { Opponent, playTurn, SLIP } from '../js/ai.js';
 import { mulberry32, rollFor } from '../js/rng.js';
 import { whyLine } from '../js/why.js';
 import { bonusPace } from '../js/pad.js';
@@ -170,6 +170,18 @@ function cardWith(board, open, top) {
   for (const b of board.boxes) if (!open.includes(b.id)) card[b.id] = top[b.id] ?? BOTTOM[b.kind] * (b.mult || 1);
   return card;
 }
+
+test('Pip may slip by up to 20 points in choosing a box; everyone else by up to 10', () => {
+  // Made to slip at every chance, with only Sixes and Fours open: the second-best box when it's within 20 points of the
+  // best, never further. With 10, as the others have, his slips cost so little the rule-of-thumb player beat him only
+  // about 84% of the time; with 20 and his rate it's about 86.5% (3 seeds of 2,000 games), the 87% planned.
+  const slip = () => 0, card = cardWith(CLASSIC, ['f6', 'f4'], {}), pip = new Opponent(TABLES[0].play);
+  assert.equal(pip.box(CLASSIC, card, [6, 6, 6, 4, 1], slip).box.id, 'f4', 'Sixes 18, Fours 4: 14 apart');
+  assert.equal(pip.box(CLASSIC, card, [6, 6, 6, 6, 4], slip).box.id, 'f4', 'Sixes 24, Fours 4: 20 apart');
+  assert.equal(pip.box(CLASSIC, card, [6, 6, 6, 6, 1], slip).box.id, 'f6', 'Sixes 24, Fours 0: 24 apart');
+  for (const t of TABLES.slice(1)) assert.equal(new Opponent(t.play).p.slipBy, SLIP, `${t.who.name} slips by up to ${new Opponent(t.play).p.slipBy}`);
+  assert.equal(SLIP, 10);
+});
 
 test('on the last turn the planner keeps dice within half a point of the best play there is', () => {
   // test/exact.mjs works out the best expected final total over every roll and keep, and what the planner's own
@@ -402,7 +414,7 @@ test('an opponent’s turn comes out the same from the same seed and turn number
   // say so in the commit and write the new turns in here.
   const seed = 20261118;
   const want = [
-    'chance 21, four 9, three 24, f4 8, f6 12, f3 3, f1 1, f5 15, full 0, small 0, f2 0, large 0, five 0',
+    'f5 10, four 9, three 24, f4 8, f6 12, f2 8, f3 9, chance 25, full 0, small 0, f1 0, large 0, five 0',
     'small 30, evens 10, three 27, chance 20, full 25, f2 4, f5 10, four 0, f6 6, f4 8, f3 3, large 40, five 0',
     'small 30, chance 20, f6 54, f1 1, f2 2, four 0, three 19, full 25, f5 20, five 0, f4 8, large 40, f3 6',
     'small 30, chance 17, four 0, f2 4, f1 1, three 13, f3 9, full 25, f5 20, f6 18, five 0, f4 4, large 0',

@@ -39,7 +39,7 @@ export const TABLES = [
   {
     board: CLASSIC,
     who: { name: 'Pip', line: 'New to the game. Keeps whatever there’s most of.', colour: '#5b8c5a' },
-    play: { look: false, slip: 0.5 },
+    play: { look: false, slip: 0.65, slipBy: 20 },
   },
   {
     board: {
