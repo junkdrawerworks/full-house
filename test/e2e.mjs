@@ -2886,6 +2886,36 @@ try {
     assert.match(text.join(' '), new RegExp(`Reach ${hot.bonus.at} across the six boxes for a 35-point bonus \\(three of each number gets you there\\)`));
   });
 
+  await step('on a computer the opponent’s card sits under Roll, with the table’s twist, clear of the pad; not on a phone, nor at Two players', async ({ page }) => {
+    const card = () => page.evaluate(() => {
+      const el = document.getElementById('opp-card'), r = el.getBoundingClientRect(), pad = document.getElementById('pad').getBoundingClientRect();
+      return { shown: !!el.offsetParent, text: [...el.querySelectorAll('b, span, .twist')].map(e => e.textContent).join('\n'), bottom: r.bottom, right: r.right, padLeft: pad.left, height: innerHeight };
+    });
+    await page.evaluate(() => window.fullHouse.start(5)); // Hot Boxes, against Otto
+    for (const [width, height] of [[1280, 800], [1024, 768]]) {
+      await page.setViewportSize({ width, height });
+      const c = await card();
+      assert.ok(c.shown, `no opponent’s card at ${width} x ${height}`);
+      const { board } = await page.evaluate(() => window.fullHouse.game);
+      const hot = board.boxes.filter(b => b.mult > 1).length;
+      assert.equal(hot, 2);
+      assert.match(c.text, /Otto\s+Steady\. Hardly puts a foot wrong\.\s+Two boxes, picked at random.*This time it’s \w[\w ]* and \w[\w ]*\.$/s, 'the card is not Otto’s, with the twist and the hot boxes');
+      assert.ok(c.bottom <= c.height, `the card runs off the foot of the screen at ${width} x ${height}`);
+      assert.ok(c.right <= c.padLeft, `the card runs into the pad at ${width} x ${height}`);
+    }
+    // A table with no hot boxes says only its twist; a phone, upright or sideways, has no card, nor a window too short for it.
+    await page.evaluate(() => window.fullHouse.start(7));
+    assert.match((await card()).text, /^The Dealer\s+Hasn’t lost a game in years\.\s+Four rolls a turn/);
+    for (const [width, height] of [[390, 844], [932, 430], [900, 600]]) {
+      await page.setViewportSize({ width, height });
+      assert.equal((await card()).shown, false, `an opponent’s card at ${width} x ${height}, a phone or a short window`);
+    }
+    // At Two players the other side of the pad is a person: no card.
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.evaluate(() => window.fullHouse.start(null, 0, 0, { kind: 'two', names: ['Black', 'Red'] }));
+    assert.equal((await card()).shown, false, 'an opponent’s card at Two players');
+  }, { desktop: true });
+
   await step('a phone held sideways has the pad beside the dice, with room to read it', async ({ page, settled }) => {
     await page.evaluate(() => window.fullHouse.start(7)); // High Stakes, whose ×2 badges make the widest pad
     await page.click('#b-roll');

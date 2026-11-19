@@ -540,6 +540,7 @@ function render() {
   const offers = opts && Object.fromEntries(opts.map(o => [o.box.id, o.score]));
   const you = totals(b, g.you).total, them = totals(b, g.them).total;
   const winner = g.over ? (you > them ? 'you' : them > you ? 'them' : 'both') : null;
+  oppCard(g);
   pad.render({ board: b, you: g.you, them: g.them, name: opp.name, me: me(g), side, offers, picked, fresh, hints: settings.hints, theirPick, winner });
   if ((fresh.you || fresh.them) && heard()) sound.scratch(); // as the score is pencilled in
   fresh = {};
@@ -565,6 +566,19 @@ function render() {
     else if (left > 0) status('Hold dice and roll again, or pick a box to score.');
     else status('Pick a box to score.');
   }
+}
+
+// The opponent's card from the table's intro, under Roll where a wide screen has room for it (css/app.css): their disc,
+// name and line, and the table's twist in small print, naming the hot boxes at Hot Boxes. Not at Two players, where the
+// other side of the pad is a person at the same phone.
+function oppCard(g) {
+  const card = $('opp-card');
+  card.hidden = two(g);
+  if (two(g)) return;
+  const t = TABLES[g.opp], name = t.who.name, twist = `${g.board.blurb}${hotNames(g.board) ? ` This time it’s ${hotNames(g.board)}.` : ''}`;
+  const html = `<i class="dot big" aria-hidden="true" style="--c:${t.who.colour}">${name.replace(/^The /, '')[0]}</i><div><b>${name}</b><span>${lineOf(g.opp)}</span></div>`;
+  if ($('opp-who').innerHTML !== html) $('opp-who').innerHTML = html;
+  if ($('opp-twist').textContent !== twist) $('opp-twist').textContent = twist;
 }
 
 // A second five of a kind lights only the boxes the joker rules allow, so the line says which, and what it earns.
