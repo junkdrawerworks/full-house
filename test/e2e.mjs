@@ -853,6 +853,7 @@ try {
     await page.click('#tray');
     await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
     assert.equal(await page.textContent('#result-line'), 'Table 8 is open: High Stakes, against the Dealer.');
+    assert.ok(await page.isHidden('#result-n'), 'a win before the last table says the tour is done');
     // At his table: the bar, the menu and Carry on.
     await page.click('#b-next');
     await page.click('#b-sit');
@@ -864,6 +865,10 @@ try {
     await page.click('#b-home');
     assert.equal(await page.textContent('#b-continue span'), 'Table 8: High Stakes, against the Dealer. Turn 1 of 13.');
     assert.match(await page.textContent('#tables li:nth-child(8)'), /The Dealer/);
+    // Not finished yet: no ticks, no total, and the heading says only The tour.
+    assert.equal(await page.textContent('#tour-h'), 'The tour');
+    assert.equal(await page.locator('#tables .tick').count(), 0);
+    assert.ok(await page.isHidden('#tour-sum'));
     // Beat him, and the result's title has the small "the" too; his own turn starts with the capital.
     await page.click('#b-continue');
     await page.evaluate(() => {
@@ -878,8 +883,19 @@ try {
     await page.click('#tray');
     await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
     assert.equal(await page.textContent('#result-title'), 'You beat the Dealer');
-    // Beaten, his line is in the past tense: on his card on the tour, in a quick game's, and in the menu at his table.
+    // That finishes the tour: the result says so above its title, and the tour card is finished, a tick pencilled on each
+    // table's number and your best at each added up at its foot.
+    assert.equal(await page.textContent('#result-n'), 'Table 8 of 8 · the tour');
+    assert.ok(await page.isVisible('#result-n'));
+    assert.equal(await page.getAttribute('#sheet-result .panel', 'aria-labelledby'), 'result-n result-title');
+    const bests = await page.evaluate(() => window.fullHouse.progress.best);
+    assert.equal(bests.length, 8);
     await page.click('#b-tour');
+    assert.equal(await page.textContent('#tour-h'), 'The tour · finished');
+    assert.equal(await page.locator('#tables li.beaten .n .tick').count(), 8);
+    assert.equal(await page.textContent('#tour-sum'), `Totalyour best at each table, added up${bests.reduce((a, b) => a + b, 0)}`);
+    assert.ok(await page.isVisible('#tour-sum'));
+    // Beaten, his line is in the past tense: on his card on the tour, in a quick game's, and in the menu at his table.
     await page.click('[data-table="7"]');
     assert.equal(await page.textContent('#intro-who span'), 'Hadn’t lost a game in years.');
     await page.click('#b-sit');

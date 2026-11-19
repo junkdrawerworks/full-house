@@ -286,6 +286,9 @@ function finish(lead = '') {
 
   $('result-title').textContent = won ? `You beat ${mid(name)}` : tie ? 'A tie' : `${name} wins`;
   const last = g.table === TABLES.length - 1;
+  // Beating the Dealer at the last table finishes the tour, and the result says so above its title.
+  $('result-n').textContent = won && last ? `Table ${TABLES.length} of ${TABLES.length} · the tour` : '';
+  $('result-n').hidden = !(won && last);
   const onward = won && g.table !== null && !last && !(before && progress.beaten[g.table + 1]); // a table to send you on to
   $('result-line').textContent = won
     ? g.table === null ? (progress.beaten[g.opp] ? 'A good game.' : `A good game. It doesn’t count on the tour: ${mid(name)} is waiting at table ${g.opp + 1}.`)
@@ -438,16 +441,21 @@ function say(text) {
 }
 
 function renderHome() {
-  const list = $('tables');
+  const list = $('tables'), done = finished();
+  $('tour-h').textContent = done ? 'The tour · finished' : 'The tour';
   list.innerHTML = TABLES.map((t, i) => {
     const beaten = !!progress.beaten[i], unlocked = i === 0 || !!progress.beaten[i - 1];
     const state = unlocked ? [beaten ? 'Beaten' : 'Next up', record(i), progress.best[i] && `your best ${progress.best[i]}`].filter(Boolean).join(' · ') : 'Locked';
     return `<li class="${beaten ? 'beaten' : unlocked ? 'next' : 'locked'}">
       <button type="button" data-table="${i}" ${unlocked ? '' : 'disabled'}>
-        <span class="n">${i + 1}</span>
+        <span class="n">${i + 1}${done && beaten ? TICK : ''}</span>
         <span class="txt"><b>${t.board.name}</b><span class="vs"><i class="dot" style="--c:${t.who.colour}"></i>${t.who.name}</span><small>${state}</small></span>
       </button></li>`;
   }).join('');
+  // Once the tour is finished, your best at each table added up: a number to beat on a second time round.
+  const sum = TABLES.reduce((a, t, i) => a + (progress.best[i] || 0), 0);
+  $('tour-sum').innerHTML = done ? `<span>Total<small>your best at each table, added up</small></span><b>${sum}</b>` : '';
+  $('tour-sum').hidden = !done;
   // Quick games open once you've beaten Pip, so the first game you win is always one that counts on the tour.
   $('quick').hidden = !progress.beaten[0];
   const q = progress.quick;
@@ -459,6 +467,11 @@ function renderHome() {
   c.hidden = !going;
   if (going) c.innerHTML = `<b>Carry on</b><span>${where(game)}, against ${mid(who(game).name)}. Turn ${Math.min(game.number, game.board.boxes.length)} of ${game.board.boxes.length}.</span>`;
 }
+
+// The tour is finished once the Dealer, at the last table, is beaten.
+const finished = () => !!progress.beaten[TABLES.length - 1];
+// A tick pencilled on a beaten table's number, a little out of true, once the tour is finished.
+const TICK = '<svg class="tick" viewBox="0 0 30 26" aria-hidden="true" focusable="false"><path class="halo" d="M4 14.5C6.5 16 8.5 18.5 10.5 22C14 13.5 19.5 7 27 2.5"/><path d="M4 14.5C6.5 16 8.5 18.5 10.5 22C14 13.5 19.5 7 27 2.5"/></svg>';
 
 // The games played at a table, on its line on the tour: "won 2 of 5" once it's beaten, "lost 2" until then. A game
 // given up, or tied, is one played and not won. Nothing before the first game, nor for a count that doesn't add up.

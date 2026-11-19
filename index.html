@@ -34,7 +34,10 @@
     <button type="button" class="continue" id="b-continue" hidden></button>
     <section class="tour" aria-labelledby="tour-h">
       <h2 id="tour-h">The tour</h2>
-      <ol class="tables" id="tables"></ol>
+      <div class="card">
+        <ol class="tables" id="tables"></ol>
+        <p class="sum" id="tour-sum" hidden></p>
+      </div>
     </section>
     <section class="quick" id="quick" hidden>
       <h2>Quick game</h2>
@@ -93,7 +96,8 @@
 
   <div class="sheet" id="sheet-result" hidden>
     <div class="scrim"></div>
-    <section class="panel" role="dialog" aria-modal="true" aria-labelledby="result-title" aria-describedby="result-line result-scores">
+    <section class="panel" role="dialog" aria-modal="true" aria-labelledby="result-n result-title" aria-describedby="result-line result-scores">
+      <p class="eyebrow" id="result-n" hidden></p>
       <h2 id="result-title"></h2>
       <p id="result-line"></p>
       <div class="scores" id="result-scores"></div>
