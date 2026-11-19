@@ -131,7 +131,7 @@ test('a first-turn five of a kind goes in Five of a kind for 50, not in its numb
   }
 });
 
-test('an opponent’s slips are ones a person might make: never rolling again on a made five of a kind, nor writing 0 with 25 on offer', () => {
+test('an opponent’s slips are ones a person might make: never rolling again on a made five of a kind, nor writing it anywhere else, nor 0 with 25 on offer', () => {
   // Made to slip at every chance (rand() is always 0), on part-filled cards at each opponent's own table.
   const slip = () => 0, rand = mulberry32(77), MADE = ['full', 'small', 'large', 'five'];
   let made = 0;
@@ -147,6 +147,9 @@ test('an opponent’s slips are ones a person might make: never rolling again on
         const dice = [f, f, f, f, f], where = `${TABLES[t].who.name} at ${board.name}, five ${f}s, card ${JSON.stringify(card)}`;
         // Five of a kind open, or holding a score so another one earns the extra: there's no reason to roll again.
         if (card[five.id] !== 0) for (let r = 1; r < board.rolls; r++) assert.equal(opp.keep(board, card, dice, r, slip), null, `${where}: rolled again with ${r} to go`);
+        // Five of a kind open and the best place for them: they go there. (Five 6s are 30 in Sixes, 20 behind, a
+        // gap Pip's slips would otherwise cross.)
+        if (card[five.id] === null && sharp.box(board, card, dice, slip).box.id === five.id) assert.equal(opp.box(board, card, dice, slip).box.id, five.id, `${where}: wrote them elsewhere`);
       }
       for (let d = 0; d < 60; d++) {
         const dice = Array.from({ length: 5 }, () => 1 + Math.floor(rand() * 6)), opts = options(board, card, dice);
@@ -174,7 +177,7 @@ function cardWith(board, open, top) {
 test('Pip may slip by up to 20 points in choosing a box; everyone else by up to 10', () => {
   // Made to slip at every chance, with only Sixes and Fours open: the second-best box when it's within 20 points of the
   // best, never further. With 10, as the others have, his slips cost so little the rule-of-thumb player beat him only
-  // about 84% of the time; with 20 and his rate it's about 86.5% (3 seeds of 2,000 games), the 87% planned.
+  // about 84% of the time; with 20, and his rate as it is, it's about 86% (3 seeds of 2,000 games), the 87% planned.
   const slip = () => 0, card = cardWith(CLASSIC, ['f6', 'f4'], {}), pip = new Opponent(TABLES[0].play);
   assert.equal(pip.box(CLASSIC, card, [6, 6, 6, 4, 1], slip).box.id, 'f4', 'Sixes 18, Fours 4: 14 apart');
   assert.equal(pip.box(CLASSIC, card, [6, 6, 6, 6, 4], slip).box.id, 'f4', 'Sixes 24, Fours 4: 20 apart');
@@ -414,7 +417,7 @@ test('an opponent’s turn comes out the same from the same seed and turn number
   // say so in the commit and write the new turns in here.
   const seed = 20261118;
   const want = [
-    'f5 10, four 9, three 24, f4 8, f6 12, f2 8, f3 9, chance 25, full 0, small 0, f1 0, large 0, five 0',
+    'f5 10, four 9, chance 24, f3 6, f2 2, f1 0, f6 6, three 25, full 0, small 0, large 0, f4 8, five 0',
     'small 30, evens 10, three 27, chance 20, full 25, f2 4, f5 10, four 0, f6 6, f4 8, f3 3, large 40, five 0',
     'small 30, chance 20, f6 54, f1 1, f2 2, four 0, three 19, full 25, f5 20, five 0, f4 8, large 40, f3 6',
     'small 30, chance 17, four 0, f2 4, f1 1, three 13, f3 9, full 25, f5 20, f6 18, five 0, f4 4, large 0',

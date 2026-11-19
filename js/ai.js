@@ -182,7 +182,8 @@ export const ranked = (k, s) => [...new Set(SUBSETS[s])].sort((a, b) => (Math.ab
 // would make: rolling again on a made five of a kind, or writing a 0 with a full house on offer. (At Wild Ones, five 6s
 // with two rolls to go are worth only about 5 points more than four of them and a roll for a 6 or a 1, by Jules's
 // reckoning, so the points alone don't stop him rolling again.) Pip alone may slip by up to 20 (js/tour.js): he only
-// ever slips in choosing a box, where 20 still keeps a 0 behind a full house's 25.
+// ever slips in choosing a box, where 20 still keeps a 0 behind a full house's 25, though not five 6s' 30 in Sixes
+// behind their 50 in Five of a kind, so a slip never passes over a made five of a kind either.
 export const SLIP = 10;
 
 export class Opponent {
@@ -208,8 +209,10 @@ export class Opponent {
     const opts = options(board, card, dice);
     // The beginner takes the most points, but would rather not cross out Five of a kind.
     const value = this.p.look ? valueFor(board, card, this.p) : o => o.score + o.extra - (o.box.kind === 'five' && !o.score ? 30 : 0);
-    const ranked = opts.map(o => ({ o, v: value(o) })).sort((a, b) => b.v - a.v);
-    return (ranked.length > 1 && rand() < this.p.slip && ranked[0].v - ranked[1].v <= this.p.slipBy ? ranked[1] : ranked[0]).o;
+    const ranked = opts.map(o => ({ o, v: value(o) })).sort((a, b) => b.v - a.v), [first, second] = ranked;
+    // Never a slip away from a made five of a kind: that's no close call, whatever the points say.
+    const made = first.o.box.kind === 'five' && first.o.score > 0;
+    return (second && rand() < this.p.slip && first.v - second.v <= this.p.slipBy && !made ? second : first).o;
   }
 
   // The beginner's way: keep the most common number (the higher one in a tie).

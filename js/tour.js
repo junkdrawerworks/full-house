@@ -41,7 +41,7 @@ export const TABLES = [
     board: CLASSIC,
     who: { name: 'Pip', line: 'New to the game. Keeps whatever there’s most of.', colour: '#5b8c5a',
       says: { wins: 'Beginner’s luck. Mine, I mean.', loses: 'I kept all the fours. Was that wrong?', ties: 'Is that allowed? Let’s do it again.' } },
-    play: { look: false, slip: 0.65, slipBy: 20 },
+    play: { look: false, slip: 0.85, slipBy: 20 },
   },
   {
     board: {
