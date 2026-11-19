@@ -1576,6 +1576,58 @@ try {
     }
   });
 
+  await step('Share sends who won and a link with the same dice: the share sheet where there is one, or a copy', async t => {
+    const { page, ctx, game } = t;
+    await page.evaluate(() => { navigator.share = async data => { window.shared = data; }; });
+    await page.evaluate(() => window.fullHouse.start(0));
+    await win(t);
+    const g = await game(), total = side => page.textContent(`#pad tfoot td.${side}`).then(Number);
+    const [you, them] = [await total('you'), await total('them')];
+    await page.click('#b-share');
+    await page.waitForFunction(() => window.shared);
+    assert.deepEqual(await page.evaluate(() => window.shared), { text: `Full House, table 1: Classic. I beat Pip, ${you} to ${them}. https://full-house.junkdrawer.works/#table=1&dice=${g.seed.toString(36)}&score=${you}` });
+    assert.equal(await page.textContent('#b-share'), 'Share', 'the share sheet says it all itself');
+
+    // Closed without sending: nothing more. Where there's no share sheet: a copy, and the button says so.
+    await page.evaluate(() => { navigator.share = async () => { throw new DOMException('closed', 'AbortError'); }; });
+    await page.click('#b-share');
+    assert.equal(await page.textContent('#b-share'), 'Share');
+    await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: base });
+    await page.evaluate(() => { delete navigator.share; Object.defineProperty(navigator, 'share', { value: undefined, configurable: true, writable: true }); });
+    await page.click('#b-share');
+    await page.waitForFunction(() => document.getElementById('b-share').textContent === 'Copied.');
+    assert.match(await page.evaluate(() => navigator.clipboard.readText()), /^Full House, table 1: Classic\. I beat Pip, \d+ to \d+\. https:\/\/full-house\.junkdrawer\.works\/#table=1&dice=/);
+    await page.waitForFunction(() => document.getElementById('b-share').textContent === 'Share', null, { timeout: 5000 });
+
+    // A loss, the Dealer at the last table, and a quick game against someone from another table.
+    await page.evaluate(() => { navigator.share = async data => { window.shared = data; }; window.shared = null; });
+    const finishAs = (table, opp, at, mine, theirs) => page.evaluate(([table, opp, at, mine, theirs]) => {
+      window.fullHouse.progress.beaten = [true, true, true, true, true, true, true];
+      window.fullHouse.start(table, opp, at);
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) { g.you[b.id] = mine; g.them[b.id] = theirs; }
+      g.you.chance = null;
+      Object.assign(g, { number: 13, rolls: 3, turn: 'you', dice: [1, 1, 2, 2, 3] });
+      window.fullHouse.set(g);
+    }, [table, opp, at, mine, theirs]);
+    const shareFrom = async () => {
+      await page.locator('tr[data-box="chance"]').click();
+      await page.locator('tr[data-box="chance"]').click();
+      await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
+      await page.evaluate(() => { window.shared = null; });
+      await page.click('#b-share');
+      await page.waitForFunction(() => window.shared);
+      return page.evaluate(() => window.shared.text);
+    };
+    await page.evaluate(() => { window.fullHouse.settings.pace = 'score'; });
+    await finishAs(1, 1, 1, 0, 20);
+    assert.match(await shareFrom(), /^Full House, table 2: Evens\. Maud beat me, 2\d\d to 9\. https:\/\/full-house\.junkdrawer\.works\/#table=2&dice=[0-9a-z]+&score=9$/);
+    await finishAs(7, 7, 7, 30, 0);
+    assert.match(await shareFrom(), /^Full House, table 8: High Stakes\. I beat the Dealer, \d+ to 0\. That’s the whole tour\. https:\/\/full-house\.junkdrawer\.works\/#table=8&dice=[0-9a-z]+&score=\d+$/);
+    await finishAs(null, 2, 0, 30, 0);
+    assert.match(await shareFrom(), /^Full House, quick game: Classic\. I beat Bea, \d+ to 0\. https:\/\/full-house\.junkdrawer\.works\/#table=1&dice=[0-9a-z]+&vs=3&score=\d+$/);
+  });
+
   await step('with all five dice held there is nothing to roll', async ({ page, game, settled }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
@@ -1770,7 +1822,7 @@ try {
     await page.click('[data-table="0"]');
     assert.equal(await page.getAttribute('#sheet-intro .dot.big', 'aria-hidden'), 'true', 'the avatar’s letter is read out');
     const describedBy = await page.getAttribute('#sheet-intro [role="dialog"]', 'aria-describedby');
-    assert.deepEqual(describedBy.split(' '), ['intro-blurb', 'intro-who', 'intro-locked']);
+    assert.deepEqual(describedBy.split(' '), ['intro-blurb', 'intro-who', 'intro-note', 'intro-locked']);
     await page.click('#b-sit');
     assert.equal(await page.title(), 'Table 1: Classic · Full House');
     assert.ok(await page.isVisible('main #tray[role="group"][aria-label="Dice"]'));

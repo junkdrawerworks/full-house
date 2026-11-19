@@ -7,7 +7,7 @@ import { Tray } from './dice.js';
 import { Pad, ring } from './pad.js';
 import { mulberry32, rollFor } from './rng.js';
 import { whyLine } from './why.js';
-import { readLink } from './links.js';
+import { readLink, linkFor } from './links.js';
 
 const KEY = 'full-house.v1';
 const $ = id => document.getElementById(id);
@@ -331,6 +331,7 @@ function finish(lead = '') {
   if (onward) { next.textContent = `On to table ${g.table + 2}`; next.onclick = () => { intro(g.table + 1); under = 'sheet-result'; }; }
   else { next.textContent = friend ? 'Play the same dice again' : 'Play again'; next.onclick = () => again(g); }
   $('b-again').hidden = !onward;
+  shareSaid('Share');
   const t = token;
   setTimeout(() => { if (t === token && game === g && !resultSeen) showResult(); }, 900); // unless a new game has started, or it's been opened already
 }
@@ -341,6 +342,44 @@ function friendLine(you, score, won, why) {
   if (score === null) return won ? 'A good game.' : why || 'The dice owe you one.';
   const had = `Your friend had ${score} with the same dice`;
   return you > score ? `${had}: you beat them by ${you - score}.` : you < score ? `${had}, ${score - you} more than you.` : `${had}, the same as you.`;
+}
+
+// What Share sends: where, who won and by what, and a link that opens the same table with the same dice, against the score
+// you had with them. "Full House, table 6: Hot Boxes. I beat Otto, 288 to 251. https://..."
+function shareText(g) {
+  const b = g.board, you = totals(b, g.you).total, them = totals(b, g.them).total, name = who(g).name;
+  const at = g.kind === 'friend' ? `${b.name}, with the same dice as a friend` : g.table !== null ? `table ${g.table + 1}: ${b.name}` : `quick game: ${b.name}`;
+  const result = you > them ? `I beat ${mid(name)}, ${you} to ${them}.` : them > you ? `${name} beat me, ${them} to ${you}.` : `${name} and I tied, ${you} all.`;
+  const whole = you > them && g.table === TABLES.length - 1 ? ' That’s the whole tour.' : '';
+  return `Full House, ${at}. ${result}${whole} ${linkFor({ table: rulesOf(g), opp: g.opp, seed: g.seed, score: you })}`;
+}
+// The phone's share sheet where there is one, and otherwise a copy to paste, which the button says it's made.
+async function share() {
+  const g = game;
+  if (!g?.over) return;
+  const text = shareText(g);
+  if (navigator.share) {
+    try { await navigator.share({ text }); return; } catch (e) { if (e?.name === 'AbortError') return; } // closed without sending
+  }
+  const copied = await copy(text);
+  if (game !== g) return;
+  shareSaid(copied ? 'Copied.' : 'Couldn’t copy it.');
+  say($('b-share').textContent);
+  shareTimer = setTimeout(() => shareSaid('Share'), 2500);
+}
+let shareTimer = 0;
+function shareSaid(text) { clearTimeout(shareTimer); $('b-share').textContent = text; }
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch { /* not allowed here: the old way */ }
+  const back = document.activeElement, box = document.createElement('textarea');
+  try {
+    box.value = text;
+    box.setAttribute('readonly', '');
+    box.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.append(box);
+    box.select();
+    return document.execCommand('copy');
+  } catch { return false; } finally { box.remove(); back?.focus?.({ preventScroll: true }); }
 }
 
 // The same again: another game at a table of the tour or a quick game, or the same dice again at a friend's table.
@@ -710,6 +749,7 @@ $('b-tour').addEventListener('click', () => { closeSheets(); game = null; save()
 $('b-again').addEventListener('click', () => start(game.table, game.opp, rulesOf(game)));
 // The result put aside, to look over the finished pad under it: See the result, where the focus goes back to, opens it again.
 $('b-look').addEventListener('click', closeSheets);
+$('b-share').addEventListener('click', share);
 $('b-rules').addEventListener('click', () => { showRules(CLASSIC, false); openSheet('sheet-rules'); });
 // From the menu, which closes as How to play opens: afterwards the focus goes back to the menu button.
 $('b-menu-rules').addEventListener('click', () => { showRules(game?.board || CLASSIC, !!game); openSheet('sheet-rules', $('b-menu')); });
