@@ -671,6 +671,10 @@ body[data-screen='home'] .toast { top: auto; bottom: calc(16px + env(safe-area-i
 .scores b { font: 700 46px/1 var(--hand); }
 .panel .best { margin: 8px 0 0; text-align: center; font: 700 24px/1.1 var(--hand); }
 .scores .them b { color: var(--red-score); }
+/* At a friend's table, their score between yours and the opponent's. */
+.scores.three { grid-template-columns: 1fr 1fr 1fr; }
+.panel .note { margin: 12px 0 0; font-weight: 600; color: var(--accent-text); }
+.panel .note[hidden] { display: none; }
 .scores .ring { width: 92px; height: 56px; translate: -50% -46%; }
 .scores .ring path { animation-delay: 0.25s; }
 .toggle { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0; font-size: 14.5px; line-height: 1.4; color: var(--muted); cursor: pointer; }

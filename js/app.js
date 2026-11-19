@@ -7,6 +7,7 @@ import { Tray } from './dice.js';
 import { Pad, ring } from './pad.js';
 import { mulberry32, rollFor } from './rng.js';
 import { whyLine } from './why.js';
+import { readLink } from './links.js';
 
 const KEY = 'full-house.v1';
 const $ = id => document.getElementById(id);
@@ -31,8 +32,10 @@ const pad = new Pad($('pad'), { onPick: pick });
 const who = g => TABLES[g.opp].who;
 // What's said of the opponent from table i: the Dealer's line changes once you've beaten him.
 const lineOf = i => (progress.beaten[i] && TABLES[i].who.beaten) || TABLES[i].who.line;
-// "Table 3: Triple Sixes"; a quick game, "Quick game", or at a table other than Classic, "Quick game: Wild Ones".
-const where = g => (g.table !== null ? `Table ${g.table + 1}: ${g.board.name}` : g.board.id === CLASSIC.id ? 'Quick game' : `Quick game: ${g.board.name}`);
+// "Table 3: Triple Sixes"; a quick game, "Quick game", or at a table other than Classic, "Quick game: Wild Ones"; a
+// game from a friend's link, "A friend’s table: Hot Boxes".
+const where = g => (g.kind === 'friend' ? `A friend’s table: ${g.board.name}`
+  : g.table !== null ? `Table ${g.table + 1}: ${g.board.name}` : g.board.id === CLASSIC.id ? 'Quick game' : `Quick game: ${g.board.name}`);
 // The table whose rules a game is played by: its own on the tour, the one chosen for a quick game (Classic unless another).
 const rulesOf = g => Math.max(0, TABLES.findIndex(t => t.board.id === g.board.id));
 // The table chosen for quick games: one you've beaten, once you've beaten two, and otherwise Classic.
@@ -239,13 +242,16 @@ function yourTurn(g) {
 
 // A game at table `table` of the tour, or a quick game (table null) against the opponent from table `opp`, by the rules of
 // table `at` (Classic unless it says otherwise). A quick game never counts on the tour, whatever its rules.
-function start(table, opp = table, at = table ?? 0) {
-  const seed = (Math.random() * 2 ** 31) | 0;
+// `spec` is for a game that isn't one of those: { kind: 'friend', seed, score } plays the dice from a friend's link
+// (see js/links.js), against the score they had with them, if the link has it. It counts nowhere.
+function start(table, opp = table, at = table ?? 0, spec = {}) {
+  const seed = spec.seed ?? ((Math.random() * 2 ** 31) | 0);
   const board = boardFor(at, seed);
   if (game && !game.over) concede(true);
   token++;
   game = {
     table, opp, seed, board,
+    ...(spec.kind === 'friend' && { kind: 'friend', score: spec.score ?? null }),
     you: blankCard(board), them: blankCard(board),
     turn: 'you', number: 1, rolls: 0, last: null,
     dice: [die(), die(), die(), die(), die()], held: [false, false, false, false, false],
@@ -276,7 +282,7 @@ function finish(lead = '') {
   const you = totals(b, g.you).total, them = totals(b, g.them).total, name = who(g).name;
   const won = you > them, tie = you === them;
   let before = false, best = ''; // you'd beaten this table already; a new best there, over one you had
-  if (g.table !== null) {
+  if (g.kind) { /* a friend's table counts nowhere */ } else if (g.table !== null) {
     const i = g.table, was = progress.best[i] || 0;
     before = !!progress.beaten[i];
     if (was && you > was) best = `Your best here: ${you} (was ${was}).`;
@@ -297,30 +303,48 @@ function finish(lead = '') {
   $('result-title').textContent = won ? `You beat ${mid(name)}` : tie ? 'A tie' : `${name} wins`;
   const last = g.table === TABLES.length - 1;
   // Beating the Dealer at the last table finishes the tour, and the result says so above its title.
-  $('result-n').textContent = won && last ? `Table ${TABLES.length} of ${TABLES.length} · the tour` : '';
-  $('result-n').hidden = !(won && last);
+  // A friend's table says so there instead.
+  const friend = g.kind === 'friend';
+  $('result-n').textContent = friend ? 'The same dice your friend had' : won && last ? `Table ${TABLES.length} of ${TABLES.length} · the tour` : '';
+  $('result-n').hidden = !$('result-n').textContent;
   const why = whyLine(b, g.you, g.them, name);
   const onward = won && g.table !== null && !last && !(before && progress.beaten[g.table + 1]); // a table to send you on to
-  $('result-line').textContent = won
+  $('result-line').textContent = friend ? friendLine(you, g.score, won, why) : won
     ? g.table === null ? (progress.beaten[g.opp] ? 'A good game.' : `A good game. It doesn’t count on the tour: ${mid(name)} is waiting at table ${g.opp + 1}.`)
       : last ? (before ? `You’ve beaten ${mid(name)} before. That’s still the whole tour.` : 'That’s the whole tour. Nobody at these tables has anything left to teach you.')
       : before ? (onward ? `You’ve beaten ${mid(name)} before; table ${g.table + 2} is still open.` : `You’ve beaten ${mid(name)} before.`)
       : `Table ${g.table + 2} is open: ${TABLES[g.table + 1].board.name}, against ${mid(TABLES[g.table + 1].who.name)}.`
     : tie ? 'Play it again to settle it.' : why || 'The dice owe you one.';
   // Why it went that way, from the two cards, unless it was close: on a loss in place of the line above, on a win under it.
-  $('result-why').textContent = won ? why : '';
-  $('result-why').hidden = !(won && why);
+  // At a friend's table it goes under the line about your friend, win or lose, unless that line is the reason itself.
+  const beneath = won || (friend && g.score !== null) ? why : '';
+  $('result-why').textContent = beneath;
+  $('result-why').hidden = !beneath;
   const tile = (n, ringed) => (ringed ? `<b class="ringed">${n}${ring()}</b>` : `<b>${n}</b>`);
-  $('result-scores').innerHTML = `<div><span>You</span>${tile(you, you >= them)}</div><div class="them"><span>${escape(name)}</span>${tile(them, them >= you)}</div>`;
+  // A friend's score goes between yours and the opponent's: both of you against the same opponent, with the same dice.
+  const theirs = friend && g.score !== null ? `<div class="friend"><span>Your friend</span><b>${g.score}</b></div>` : '';
+  $('result-scores').classList.toggle('three', !!theirs);
+  $('result-scores').innerHTML = `<div><span>You</span>${tile(you, you >= them)}</div>${theirs}<div class="them"><span>${escape(name)}</span>${tile(them, them >= you)}</div>`;
   $('result-best').textContent = best;
   $('result-best').hidden = !best;
   const next = $('b-next');
   if (onward) { next.textContent = `On to table ${g.table + 2}`; next.onclick = () => { intro(g.table + 1); under = 'sheet-result'; }; }
-  else { next.textContent = 'Play again'; next.onclick = () => start(g.table, g.opp, rulesOf(g)); }
+  else { next.textContent = friend ? 'Play the same dice again' : 'Play again'; next.onclick = () => again(g); }
   $('b-again').hidden = !onward;
   const t = token;
   setTimeout(() => { if (t === token && game === g && !resultSeen) showResult(); }, 900); // unless a new game has started, or it's been opened already
 }
+
+// What a friend's table says on the result: how you did against the score they had with the same dice. A link without a
+// score says what any game says.
+function friendLine(you, score, won, why) {
+  if (score === null) return won ? 'A good game.' : why || 'The dice owe you one.';
+  const had = `Your friend had ${score} with the same dice`;
+  return you > score ? `${had}: you beat them by ${you - score}.` : you < score ? `${had}, ${score - you} more than you.` : `${had}, the same as you.`;
+}
+
+// The same again: another game at a table of the tour or a quick game, or the same dice again at a friend's table.
+const again = g => start(g.table, g.opp, rulesOf(g), g.kind === 'friend' ? { kind: 'friend', seed: g.seed, score: g.score } : {});
 
 // The result of the game that's just finished, as finish() wrote it. It can be closed, to look over the pad, and opened again.
 function showResult() {
@@ -336,7 +360,7 @@ function concede(quietly) {
   if (!g) return;
   if (!g.over) {
     token++;
-    if (g.table !== null) progress.played[g.table] = (progress.played[g.table] || 0) + 1;
+    if (g.kind) { /* counts nowhere */ } else if (g.table !== null) progress.played[g.table] = (progress.played[g.table] || 0) + 1;
     else progress.quick.played++;
     g.over = true;
   }
@@ -524,17 +548,22 @@ function open(screen, { focus = true } = {}) {
 
 // A table on the tour, or a quick game (table null) against the opponent from table `opp`, by the rules chosen for it.
 // A table not yet open shows its card too, its twist and its opponent, with what it takes to sit there in place of Sit down.
-function intro(table, opp = table) {
-  const at = table ?? quickAt(), t = TABLES[opp], board = TABLES[at].board;
+// With `spec` (see start()), a friend's table, by the rules of table `spec.at`: open to all, whatever's beaten, and with its
+// dice settled by the link, a Hot Boxes table says which boxes are hot.
+function intro(table, opp = table, spec = {}) {
+  const at = spec.at ?? table ?? quickAt(), t = TABLES[opp], board = spec.kind ? boardFor(at, spec.seed) : TABLES[at].board;
   const locked = table !== null && table > 0 && !progress.beaten[table - 1];
-  $('intro-n').textContent = table === null ? 'Quick game' : `Table ${table + 1} of ${TABLES.length}`;
+  $('intro-n').textContent = spec.kind === 'friend' ? 'The same dice your friend had' : table === null ? 'Quick game' : `Table ${table + 1} of ${TABLES.length}`;
   $('intro-title').textContent = board.name;
-  $('intro-blurb').textContent = board.blurb;
+  $('intro-blurb').textContent = `${board.blurb}${spec.kind && hotNames(board) ? ` This time it’s ${hotNames(board)}.` : ''}`;
+  const note = spec.kind === 'friend' ? `${spec.score !== null ? `Score to beat: ${spec.score}. ` : ''}It doesn’t count on the tour.` : '';
+  $('intro-note').textContent = note;
+  $('intro-note').hidden = !note;
   $('intro-who').innerHTML = `<i class="dot big" aria-hidden="true" style="--c:${t.who.colour}">${t.who.name.replace(/^The /, '')[0]}</i><div><b>${t.who.name}</b><span>${lineOf(opp)}</span>${game && !game.over && !locked ? '<em>Sitting down here ends the game you’re in. It counts as a\u00a0loss.</em>' : ''}</div>`;
   $('intro-locked').textContent = locked ? `Beat ${mid(TABLES[table - 1].who.name)} to sit here` : '';
   $('intro-locked').hidden = !locked;
   $('b-sit').hidden = locked;
-  $('b-sit').onclick = locked ? null : () => start(table, opp, at);
+  $('b-sit').onclick = locked ? null : () => start(table, opp, at, spec);
   openSheet('sheet-intro');
 }
 
@@ -831,8 +860,28 @@ if ('serviceWorker' in navigator && !('single' in document.documentElement.datas
 
 // ---- starting up ----
 
+// A friend's link (see js/links.js) opens their table's card on the tour, with the game you're in, if any, under Carry on.
+// The link comes off the address once read, so a reload doesn't open it again.
+function takeLink() {
+  if (!location.hash) return null;
+  const link = readLink(location.hash, TABLES.length);
+  try { history.replaceState(history.state, '', location.pathname + location.search); } catch { /* it stays: harmless */ }
+  return link;
+}
+const friendCard = link => intro(null, link.opp, { kind: 'friend', at: link.table, seed: link.seed, score: link.score });
+// One opened in a tab the game is in already only changes what's after the #.
+addEventListener('hashchange', () => {
+  const link = takeLink();
+  if (!link) return;
+  closeSheets();
+  open('home', { focus: false });
+  friendCard(link);
+});
+
+const link = takeLink();
 open('home', { focus: false });
-if (game) {
+if (link) friendCard(link);
+else if (game) {
   // A game in progress comes back where you left it. An opponent's turn that was cut short starts over, the same turn.
   open('game', { focus: false });
   showDice();

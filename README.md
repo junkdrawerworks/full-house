@@ -32,6 +32,7 @@
 - **Watch them play.** Their red dice tumble in your tray and their scores go into the pad in red pencil. Tap the dice to hurry a turn along, or choose Quick in the game's menu, or Just their score to see only where their dice end up and what they score.
 - **The result.** Who won and, when it wasn't within 20 points, the biggest gap between the two cards in one line: the top section, the bonus, five of a kind or the rest of the bottom section ("Maud got the 35 bonus; you were 9 short."). Look at the pad puts the result aside to read the finished pad, and See the result brings it back.
 - **Quick game.** Classic rules against anyone you've met on the tour, once you've beaten Pip at table 1. Once you've beaten two tables, the rules of any table you've beaten instead, if you choose (the header says which: Quick game: Wild Ones). Quick games never count on the tour.
+- **A friend's table.** A link with a table and a game's dice in it opens that table's card, whatever you've beaten, with the score to beat: "The same dice your friend had". Your rolls and your opponent's whole game come from the dice in the link, so you play exactly the luck your friend had, and the result shows your score, your friend's and the opponent's. It never counts on the tour.
 - **Your progress.** Each table's line on the tour says whether you've beaten it, the games you've won and played there (or lost, until you beat it), and your best score there; Quick game says how many of those you've won. Giving up part way counts as a loss. Beat the Dealer and the tour is finished: a tick pencilled on each table, and your best at each added up at the foot of the card, a total to beat.
 - **On a keyboard,** Space or R rolls and 1 to 5 hold the dice. Tab reaches the boxes, the arrows go between them, and Enter picks one, then scores it. Space or Enter hurries the opponent along. How to play says so on a computer, and Keyboard shortcuts in the game's menu turns the single keys off.
 - No ads, no account and no server. Your progress and any game in progress stay in your browser. It works offline and installs to a phone's home screen.
@@ -51,6 +52,10 @@ node dev/strength.mjs 300 all  # how each opponent scores at its own table, agai
 npm run sim                    # how often a rule-of-thumb player and the best planner beat each table's opponent
 ```
 
+### Links
+
+A link to a friend's table is the game's address with what it opens after a `#`, so it opens offline too and nothing in it reaches a server: `https://full-house.junkdrawer.works/#table=6&dice=k3j2h1&score=288`. `table` is the table whose rules it's played by (1 to 8); `dice` is the game's seed in base 36, which settles every roll of yours, the opponent's whole game and, at Hot Boxes, which boxes are hot; `score` is what the sender scored (left out, there's no score to beat); `vs` names the opponent by their table's number when it isn't that table's own. Links in this form keep opening.
+
 To put it online with GitHub Pages: **Settings → Pages → Build and deployment → Deploy from a branch**, then pick `main` and `/ (root)`.
 
 ### Files
@@ -60,6 +65,7 @@ To put it online with GitHub Pages: **Settings → Pages → Build and deploymen
 - `js/rules.js`: the rules. Boxes as plain data, scoring (wild ones and multipliers included), the five-of-a-kind bonus and joker rules, and the totals.
 - `js/tour.js`: the eight tables, each a board and an opponent.
 - `js/rng.js`: seeded random numbers, so a Hot Boxes table comes out the same from its seed, an opponent's turn cut short by a reload plays out the same way again, and your own dice are the same for anyone playing from the same seed: the die in place 3 on roll 2 of turn 5 is the same whatever they held.
+- `js/links.js`: the links that open a friend's table (see below).
 - `js/why.js`: the line on the result that says what decided a game, worked out from the two cards.
 - `js/ai.js`: how the opponents play. Every roll and every handful of dice you might keep, worked out ahead, and the values that make one opponent better than another.
 - `js/dice.js`: the dice, drawn as real cubes that tumble and land face up.

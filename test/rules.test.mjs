@@ -7,6 +7,7 @@ import { Opponent, playTurn } from '../js/ai.js';
 import { mulberry32, rollFor } from '../js/rng.js';
 import { whyLine } from '../js/why.js';
 import { bonusPace } from '../js/pad.js';
+import { linkFor, readLink } from '../js/links.js';
 import { best, planned } from './exact.mjs';
 
 const box = (board, id) => board.boxes.find(b => b.id === id);
@@ -571,4 +572,19 @@ test('your dice come from the game’s seed, the turn and the roll: the same for
     if (theirs.join() === rollFor(seed, 1, 1).join()) same++;
   }
   assert.ok(same < 3, `${same} first rolls the same as the opponent's`);
+});
+
+test('a friend’s link carries the table, the opponent when not the table’s own, the dice and the score, and reads back the same', () => {
+  assert.equal(linkFor({ table: 5, seed: 1234567, score: 288 }), 'https://full-house.junkdrawer.works/#table=6&dice=qglj&score=288');
+  assert.equal(linkFor({ table: 0, opp: 7, seed: 1 }), 'https://full-house.junkdrawer.works/#table=1&dice=1&vs=8');
+  for (const want of [{ table: 5, opp: 5, seed: 1234567, score: 288 }, { table: 0, opp: 7, seed: 2 ** 31 - 1, score: null }, { table: 7, opp: 0, seed: 0, score: 0 }]) {
+    assert.deepEqual(readLink(new URL(linkFor(want)).hash), want);
+  }
+  // As the README promises: these keep opening.
+  assert.deepEqual(readLink('#table=6&dice=k3j2h1&score=288'), { table: 5, opp: 5, seed: parseInt('k3j2h1', 36), score: 288 });
+  assert.deepEqual(readLink('table=3&dice=1&vs=1&other=x'), { table: 2, opp: 0, seed: 1, score: null });
+  for (const bad of ['', '#', '#table=9&dice=1', '#table=0&dice=1', '#table=2', '#table=2&dice=Z', '#table=2&dice=zzzzzzzz', '#table=2&dice=1&vs=9', '#table=1.5&dice=1', '#table=-1&dice=1']) {
+    assert.equal(readLink(bad), null, bad);
+  }
+  assert.equal(readLink('#table=2&dice=1&score=lots').score, null, 'a score that isn’t one is left out');
 });

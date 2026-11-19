@@ -1516,6 +1516,66 @@ try {
     }
   });
 
+  await step('a friend’s link opens their table with their dice and their score to beat, at any table, counting nowhere', async t => {
+    const { page, game } = t;
+    const seed = parseInt('k3j2h1', 36);
+    await page.goto(`${base}#table=6&dice=k3j2h1&score=288`);
+    await page.waitForSelector('#sheet-intro:not([hidden])');
+    assert.equal(await page.evaluate(() => location.hash), '', 'the link stays on the address, to open again on a reload');
+    assert.equal(await page.textContent('#intro-n'), 'The same dice your friend had');
+    assert.equal(await page.textContent('#intro-title'), 'Hot Boxes');
+    assert.match(await page.textContent('#intro-blurb'), /This time it’s \w+.* and .*\.$/, 'the hot boxes the link’s dice draw');
+    assert.match(await page.textContent('#intro-who'), /Otto/);
+    assert.equal(await page.textContent('#intro-note'), 'Score to beat: 288. It doesn’t count on the tour.');
+    assert.ok(await page.isVisible('#b-sit'), 'table 6 is open from a link, though nothing on the tour is beaten');
+    await page.click('#b-sit');
+    let g = await game();
+    assert.deepEqual([g.kind, g.seed, g.opp, g.table, g.score, g.board.id], ['friend', seed, 5, null, 288, 'hot']);
+    assert.equal(await page.textContent('#g-table'), 'A friend’s table: Hot Boxes');
+    const expected = await page.evaluate(async seed => {
+      const [{ rollFor }, { boardFor }] = await Promise.all([import('./js/rng.js'), import('./js/tour.js')]);
+      return { dice: rollFor(seed, 1, 1), hot: boardFor(5, seed).boxes.filter(b => b.mult > 1).map(b => b.id) };
+    }, seed);
+    assert.deepEqual(g.board.boxes.filter(b => b.mult > 1).map(b => b.id), expected.hot);
+    await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
+    await page.click('#b-roll');
+    await t.settled();
+    assert.deepEqual((await game()).dice, expected.dice, 'your first roll is the one your friend had');
+
+    // The result: you, your friend and Otto, and how you did against your friend. Nothing counts on the tour.
+    await win(t);
+    const you = await page.evaluate(() => { const g = window.fullHouse.game; return Object.values(g.you).reduce((a, v) => a + (v || 0), 0); });
+    assert.equal(await page.textContent('#result-n'), 'The same dice your friend had');
+    assert.deepEqual(await page.locator('#result-scores span').allTextContents(), ['You', 'Your friend', 'Otto']);
+    assert.equal(await page.textContent('#result-scores .friend b'), '288');
+    assert.match(await page.textContent('#result-line'), /^Your friend had 288 with the same dice(: you beat them by \d+\.|, \d+ more than you\.|, the same as you\.)$/);
+    assert.ok(you > 0);
+    assert.deepEqual(await page.evaluate(() => { const p = window.fullHouse.progress; return [p.played.length, p.won.length, p.beaten.length, p.quick.played]; }), [0, 0, 0, 0]);
+    assert.equal(await page.textContent('#b-next'), 'Play the same dice again');
+    await page.click('#b-next');
+    g = await game();
+    assert.deepEqual([g.kind, g.seed, g.score, g.over], ['friend', seed, 288, undefined]);
+
+    // A link opened in a tab the game is in: a quick game's, against someone other than the table's own, with no score.
+    // The game in progress waits under Carry on, and sitting down says it ends it.
+    await page.evaluate(() => { location.hash = 'table=1&vs=8&dice=1'; });
+    await page.waitForFunction(() => document.getElementById('intro-title').textContent === 'Classic');
+    assert.equal(await page.evaluate(() => document.body.dataset.screen), 'home');
+    assert.ok(await page.isVisible('#b-continue'));
+    assert.match(await page.textContent('#intro-who'), /The Dealer.*Sitting down here ends the game you’re in/);
+    assert.equal(await page.textContent('#intro-note'), 'It doesn’t count on the tour.');
+    await page.click('#b-sit');
+    assert.deepEqual(await page.evaluate(() => { const g = window.fullHouse.game; return [g.kind, g.seed, g.opp, g.board.id, g.score]; }), ['friend', 1, 7, 'classic', null]);
+    assert.deepEqual(await page.evaluate(() => window.fullHouse.progress.played.length), 0, 'the friend’s game given up counts nowhere');
+
+    // A link that doesn't make sense opens nothing, and comes off the address all the same.
+    for (const bad of ['table=9&dice=1', 'table=2&dice=', 'table=2&dice=zzzzzzzz', 'table=0&dice=5', 'tour']) {
+      await page.goto(`${base}#${bad}`);
+      assert.ok(await page.isHidden('#sheet-intro'), bad);
+      assert.equal(await page.evaluate(() => location.hash), '', bad);
+    }
+  });
+
   await step('with all five dice held there is nothing to roll', async ({ page, game, settled }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
