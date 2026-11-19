@@ -7,7 +7,7 @@ import { Opponent, playTurn } from '../js/ai.js';
 import { mulberry32, rollFor } from '../js/rng.js';
 import { whyLine } from '../js/why.js';
 import { bonusPace } from '../js/pad.js';
-import { linkFor, readLink } from '../js/links.js';
+import { linkFor, readLink, today, dayName } from '../js/links.js';
 import { best, planned } from './exact.mjs';
 
 const box = (board, id) => board.boxes.find(b => b.id === id);
@@ -587,4 +587,26 @@ test('a friend’s link carries the table, the opponent when not the table’s o
     assert.equal(readLink(bad), null, bad);
   }
   assert.equal(readLink('#table=2&dice=1&score=lots').score, null, 'a score that isn’t one is left out');
+});
+
+test('today’s table comes from the date: the same all day for everyone, a different table and dice from day to day', () => {
+  const a = today(new Date(2026, 10, 19, 0, 1)), b = today(new Date(2026, 10, 19, 23, 59));
+  assert.deepEqual(a, b);
+  assert.equal(a.day, '2026-11-19');
+  assert.equal(dayName(a.day), '19 November');
+  assert.equal(dayName('2027-01-02'), '2 January');
+  const tables = [0, 0, 0, 0, 0, 0, 0, 0], seeds = new Set();
+  let repeats = 0, last = -1;
+  for (let i = 0; i < 400; i++) {
+    const d = today(new Date(2026, 0, 1 + i));
+    assert.ok(Number.isInteger(d.table) && d.table >= 0 && d.table < 8);
+    assert.ok(Number.isInteger(d.seed) && d.seed >= 0 && d.seed < 2 ** 31);
+    tables[d.table]++;
+    seeds.add(d.seed);
+    if (d.table === last) repeats++;
+    last = d.table;
+  }
+  assert.equal(seeds.size, 400, 'a new seed every day');
+  assert.ok(tables.every(n => n > 30), `every table comes round: ${tables}`);
+  assert.ok(repeats < 80, `${repeats} days with the same table as the day before`);
 });

@@ -1628,6 +1628,71 @@ try {
     assert.match(await shareFrom(), /^Full House, quick game: Classic\. I beat Bea, \d+ to 0\. https:\/\/full-house\.junkdrawer\.works\/#table=1&dice=[0-9a-z]+&vs=3&score=\d+$/);
   });
 
+  await step('today’s table is open to all with the same dice for everyone, and its first game, won or given up, is the one that counts', async t => {
+    const { page, game } = t;
+    // A day whose table is Triple Sixes, which has the Chance box the last turn here is played in.
+    await page.clock.setFixedTime(new Date(2026, 10, 17, 12));
+    await page.reload();
+    assert.equal(await page.textContent('#today-row b'), 'Triple Sixes');
+    const d = await page.evaluate(async () => (await import('./js/links.js')).today());
+    const name = await page.evaluate(async i => { const { TABLES } = await import('./js/tour.js'); return [TABLES[i].board.name, TABLES[i].who.name]; }, d.table);
+    const month = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][Number(d.day.slice(5, 7)) - 1];
+    const dated = `${Number(d.day.slice(8))} ${month}`;
+    // On the tour from the first visit, with nothing beaten.
+    assert.ok(await page.isVisible('#today-row [data-day]'));
+    assert.equal(await page.textContent('#today-row b'), name[0]);
+    assert.match(await page.textContent('#today-row .vs'), new RegExp(name[1]));
+    assert.equal(await page.textContent('#today-row small'), 'The same dice for everyone today');
+    assert.equal(await page.textContent('#today-row .n'), String(Number(d.day.slice(8))));
+    await page.click('#today-row [data-day]');
+    await page.waitForSelector('#sheet-intro:not([hidden])');
+    assert.equal(await page.textContent('#intro-n'), `Today’s table · ${dated}`);
+    assert.equal(await page.textContent('#intro-title'), name[0]);
+    assert.equal(await page.textContent('#intro-note'), 'Everyone has the same dice today. Your first game is the one that counts, here and not on the tour.');
+    await page.click('#b-sit');
+    let g = await game();
+    assert.deepEqual([g.kind, g.day, g.seed, g.opp, g.table, g.board.id === (await page.evaluate(async i => (await import('./js/tour.js')).TABLES[i].board.id, d.table))], ['day', d.day, d.seed, d.table, null, true]);
+    assert.equal(await page.textContent('#g-table'), `Today’s table: ${name[0]}`);
+
+    // Won: it counts for today, and the tour says so.
+    await win(t);
+    assert.equal(await page.textContent('#result-n'), `Today’s table · ${dated}`);
+    assert.equal(await page.textContent('#result-line'), 'That one counts for today. There’s a new table tomorrow.');
+    let p = await page.evaluate(() => window.fullHouse.progress);
+    const you = await page.textContent('#pad tfoot td.you').then(Number), them = await page.textContent('#pad tfoot td.them').then(Number);
+    assert.deepEqual([p.today, p.days, p.played.length, p.quick.played], [{ day: d.day, you, them }, { played: 1, won: 1 }, 0, 0]);
+    await page.evaluate(() => { window.shared = null; navigator.share = async data => { window.shared = data; }; });
+    await page.click('#b-share');
+    await page.waitForFunction(() => window.shared);
+    assert.equal((await page.evaluate(() => window.shared)).text, `Full House, today’s table (${dated}): ${name[0]}. I beat ${name[1].replace(/^The /, 'the ')}, ${you} to ${them}. https://full-house.junkdrawer.works/#table=${d.table + 1}&dice=${d.seed.toString(36)}&score=${you}`);
+
+    // Again: the same dice, just practice, counting for nothing.
+    assert.equal(await page.textContent('#b-next'), 'Play the same dice again');
+    await page.click('#b-next');
+    g = await game();
+    assert.deepEqual([g.kind, g.seed, g.day], ['day', d.seed, d.day]);
+    await win(t);
+    assert.equal(await page.textContent('#result-line'), 'Just practice: your first game today is the one that counts.');
+    p = await page.evaluate(() => window.fullHouse.progress);
+    assert.deepEqual([p.today.you, p.days], [you, { played: 1, won: 1 }]);
+    await page.click('#b-tour');
+    assert.equal(await page.textContent('#today-row small'), `Today: you ${you}, ${name[1].replace(/^The /, 'the ')} ${them} · won 1 of 1 day`);
+    assert.equal(await page.getAttribute('#today-row > div', 'class'), 'beaten');
+    await page.click('#today-row [data-day]');
+    assert.equal(await page.textContent('#intro-note'), `Today’s game is in: you ${you}, ${name[1].replace(/^The /, 'the ')} ${them}. Another go is just practice.`);
+
+    // Given up as the day's first game: it counts, as a game played and not won, and survives a reload.
+    await page.evaluate(() => { window.fullHouse.progress.today = null; });
+    await page.click('#b-sit');
+    await page.click('#b-menu');
+    await page.click('#b-concede');
+    await page.click('#b-concede');
+    p = await page.evaluate(() => window.fullHouse.progress);
+    assert.deepEqual([p.today, p.days], [{ day: d.day, you: null, them: null }, { played: 2, won: 1 }]);
+    await page.reload();
+    assert.equal(await page.textContent('#today-row small'), 'Today: given up · won 1 of 2 days');
+  });
+
   await step('with all five dice held there is nothing to roll', async ({ page, game, settled }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');

@@ -116,14 +116,14 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 .continue span { font-size: 14.5px; opacity: 0.92; }
 .continue[hidden] { display: none; }
 
-.tour h2, .quick h2 {
+.tour h2, .today h2, .quick h2 {
   margin: 28px 0 10px;
   font: 700 15px var(--cond);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
 }
-.tour .card {
+.tour .card, .today .card {
   border-radius: 8px;
   background: var(--paper);
   color: var(--print);

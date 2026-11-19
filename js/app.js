@@ -7,7 +7,7 @@ import { Tray } from './dice.js';
 import { Pad, ring } from './pad.js';
 import { mulberry32, rollFor } from './rng.js';
 import { whyLine } from './why.js';
-import { readLink, linkFor } from './links.js';
+import { readLink, linkFor, today, dayName } from './links.js';
 
 const KEY = 'full-house.v1';
 const $ = id => document.getElementById(id);
@@ -33,8 +33,8 @@ const who = g => TABLES[g.opp].who;
 // What's said of the opponent from table i: the Dealer's line changes once you've beaten him.
 const lineOf = i => (progress.beaten[i] && TABLES[i].who.beaten) || TABLES[i].who.line;
 // "Table 3: Triple Sixes"; a quick game, "Quick game", or at a table other than Classic, "Quick game: Wild Ones"; a
-// game from a friend's link, "A friend’s table: Hot Boxes".
-const where = g => (g.kind === 'friend' ? `A friend’s table: ${g.board.name}`
+// game from a friend's link, "A friend’s table: Hot Boxes"; today's table, "Today’s table: Hot Boxes".
+const where = g => (g.kind === 'friend' ? `A friend’s table: ${g.board.name}` : g.kind === 'day' ? `Today’s table: ${g.board.name}`
   : g.table !== null ? `Table ${g.table + 1}: ${g.board.name}` : g.board.id === CLASSIC.id ? 'Quick game' : `Quick game: ${g.board.name}`);
 // The table whose rules a game is played by: its own on the tour, the one chosen for a quick game (Classic unless another).
 const rulesOf = g => Math.max(0, TABLES.findIndex(t => t.board.id === g.board.id));
@@ -243,7 +243,8 @@ function yourTurn(g) {
 // A game at table `table` of the tour, or a quick game (table null) against the opponent from table `opp`, by the rules of
 // table `at` (Classic unless it says otherwise). A quick game never counts on the tour, whatever its rules.
 // `spec` is for a game that isn't one of those: { kind: 'friend', seed, score } plays the dice from a friend's link
-// (see js/links.js), against the score they had with them, if the link has it. It counts nowhere.
+// (see js/links.js), against the score they had with them, if the link has it. It counts nowhere. { kind: 'day', seed, day }
+// is the table of the day `day` ("2026-11-19"): the first game finished or given up there counts for that day, and only there.
 function start(table, opp = table, at = table ?? 0, spec = {}) {
   const seed = spec.seed ?? ((Math.random() * 2 ** 31) | 0);
   const board = boardFor(at, seed);
@@ -252,6 +253,7 @@ function start(table, opp = table, at = table ?? 0, spec = {}) {
   game = {
     table, opp, seed, board,
     ...(spec.kind === 'friend' && { kind: 'friend', score: spec.score ?? null }),
+    ...(spec.kind === 'day' && { kind: 'day', day: spec.day }),
     you: blankCard(board), them: blankCard(board),
     turn: 'you', number: 1, rolls: 0, last: null,
     dice: [die(), die(), die(), die(), die()], held: [false, false, false, false, false],
@@ -282,7 +284,9 @@ function finish(lead = '') {
   const you = totals(b, g.you).total, them = totals(b, g.them).total, name = who(g).name;
   const won = you > them, tie = you === them;
   let before = false, best = ''; // you'd beaten this table already; a new best there, over one you had
-  if (g.kind) { /* a friend's table counts nowhere */ } else if (g.table !== null) {
+  let counted = false; // the day's first game, at today's table
+  if (g.kind === 'day') counted = countDay(g, you, them);
+  else if (g.kind) { /* a friend's table counts nowhere */ } else if (g.table !== null) {
     const i = g.table, was = progress.best[i] || 0;
     before = !!progress.beaten[i];
     if (was && you > was) best = `Your best here: ${you} (was ${was}).`;
@@ -303,13 +307,15 @@ function finish(lead = '') {
   $('result-title').textContent = won ? `You beat ${mid(name)}` : tie ? 'A tie' : `${name} wins`;
   const last = g.table === TABLES.length - 1;
   // Beating the Dealer at the last table finishes the tour, and the result says so above its title.
-  // A friend's table says so there instead.
-  const friend = g.kind === 'friend';
-  $('result-n').textContent = friend ? 'The same dice your friend had' : won && last ? `Table ${TABLES.length} of ${TABLES.length} · the tour` : '';
+  // A friend's table, and today's, say so there instead.
+  const friend = g.kind === 'friend', day = g.kind === 'day';
+  $('result-n').textContent = friend ? 'The same dice your friend had' : day ? `Today’s table · ${dayName(g.day)}` : won && last ? `Table ${TABLES.length} of ${TABLES.length} · the tour` : '';
   $('result-n').hidden = !$('result-n').textContent;
   const why = whyLine(b, g.you, g.them, name);
   const onward = won && g.table !== null && !last && !(before && progress.beaten[g.table + 1]); // a table to send you on to
-  $('result-line').textContent = friend ? friendLine(you, g.score, won, why) : won
+  $('result-line').textContent = friend ? friendLine(you, g.score, won, why)
+    : day ? (counted ? 'That one counts for today. There’s a new table tomorrow.' : 'Just practice: your first game today is the one that counts.')
+    : won
     ? g.table === null ? (progress.beaten[g.opp] ? 'A good game.' : `A good game. It doesn’t count on the tour: ${mid(name)} is waiting at table ${g.opp + 1}.`)
       : last ? (before ? `You’ve beaten ${mid(name)} before. That’s still the whole tour.` : 'That’s the whole tour. Nobody at these tables has anything left to teach you.')
       : before ? (onward ? `You’ve beaten ${mid(name)} before; table ${g.table + 2} is still open.` : `You’ve beaten ${mid(name)} before.`)
@@ -317,7 +323,7 @@ function finish(lead = '') {
     : tie ? 'Play it again to settle it.' : why || 'The dice owe you one.';
   // Why it went that way, from the two cards, unless it was close: on a loss in place of the line above, on a win under it.
   // At a friend's table it goes under the line about your friend, win or lose, unless that line is the reason itself.
-  const beneath = won || (friend && g.score !== null) ? why : '';
+  const beneath = won || day || (friend && g.score !== null) ? why : '';
   $('result-why').textContent = beneath;
   $('result-why').hidden = !beneath;
   const tile = (n, ringed) => (ringed ? `<b class="ringed">${n}${ring()}</b>` : `<b>${n}</b>`);
@@ -329,11 +335,21 @@ function finish(lead = '') {
   $('result-best').hidden = !best;
   const next = $('b-next');
   if (onward) { next.textContent = `On to table ${g.table + 2}`; next.onclick = () => { intro(g.table + 1); under = 'sheet-result'; }; }
-  else { next.textContent = friend ? 'Play the same dice again' : 'Play again'; next.onclick = () => again(g); }
+  else { next.textContent = g.kind ? 'Play the same dice again' : 'Play again'; next.onclick = () => again(g); }
   $('b-again').hidden = !onward;
   shareSaid('Share');
   const t = token;
   setTimeout(() => { if (t === token && game === g && !resultSeen) showResult(); }, 900); // unless a new game has started, or it's been opened already
+}
+
+// The first game finished, or given up, at a day's table counts for that day (and a game from a day before today's, once
+// today's has counted, for none). Whether this one did.
+function countDay(g, you, them) {
+  if (progress.today && progress.today.day >= g.day) return false;
+  progress.today = { day: g.day, you, them };
+  progress.days.played++;
+  if (you !== null && you > them) progress.days.won++;
+  return true;
 }
 
 // What a friend's table says on the result: how you did against the score they had with the same dice. A link without a
@@ -348,7 +364,7 @@ function friendLine(you, score, won, why) {
 // you had with them. "Full House, table 6: Hot Boxes. I beat Otto, 288 to 251. https://..."
 function shareText(g) {
   const b = g.board, you = totals(b, g.you).total, them = totals(b, g.them).total, name = who(g).name;
-  const at = g.kind === 'friend' ? `${b.name}, with the same dice as a friend` : g.table !== null ? `table ${g.table + 1}: ${b.name}` : `quick game: ${b.name}`;
+  const at = g.kind === 'friend' ? `${b.name}, with the same dice as a friend` : g.kind === 'day' ? `today’s table (${dayName(g.day)}): ${b.name}` : g.table !== null ? `table ${g.table + 1}: ${b.name}` : `quick game: ${b.name}`;
   const result = you > them ? `I beat ${mid(name)}, ${you} to ${them}.` : them > you ? `${name} beat me, ${them} to ${you}.` : `${name} and I tied, ${you} all.`;
   const whole = you > them && g.table === TABLES.length - 1 ? ' That’s the whole tour.' : '';
   return `Full House, ${at}. ${result}${whole} ${linkFor({ table: rulesOf(g), opp: g.opp, seed: g.seed, score: you })}`;
@@ -383,7 +399,7 @@ async function copy(text) {
 }
 
 // The same again: another game at a table of the tour or a quick game, or the same dice again at a friend's table.
-const again = g => start(g.table, g.opp, rulesOf(g), g.kind === 'friend' ? { kind: 'friend', seed: g.seed, score: g.score } : {});
+const again = g => start(g.table, g.opp, rulesOf(g), g.kind ? { kind: g.kind, seed: g.seed, score: g.score, day: g.day } : {});
 
 // The result of the game that's just finished, as finish() wrote it. It can be closed, to look over the pad, and opened again.
 function showResult() {
@@ -399,7 +415,8 @@ function concede(quietly) {
   if (!g) return;
   if (!g.over) {
     token++;
-    if (g.kind) { /* counts nowhere */ } else if (g.table !== null) progress.played[g.table] = (progress.played[g.table] || 0) + 1;
+    if (g.kind === 'day') countDay(g, null, null);
+    else if (g.kind) { /* counts nowhere */ } else if (g.table !== null) progress.played[g.table] = (progress.played[g.table] || 0) + 1;
     else progress.quick.played++;
     g.over = true;
   }
@@ -533,6 +550,13 @@ function renderHome() {
   const sum = TABLES.reduce((a, t, i) => a + (progress.best[i] || 0), 0);
   $('tour-sum').innerHTML = done ? `<span>Total<small>your best at each table, added up</small></span><b>${sum}</b>` : '';
   $('tour-sum').hidden = !done;
+  // Today's table: open to all, whatever's beaten, and unlocking nothing.
+  const day = today(new Date(), TABLES.length), sat = TABLES[day.table], dayIn = dayDone(day.day), days = progress.days;
+  const said = [dayIn ? `Today: ${dayScore(dayIn, sat.who.name)}` : 'The same dice for everyone today', days.played && `won ${days.won} of ${days.played} day${days.played === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
+  $('today-row').innerHTML = `<div class="${dayIn ? 'beaten' : 'next'}"><button type="button" data-day="${day.day}">
+      <span class="n">${Number(day.day.slice(8))}</span>
+      <span class="txt"><b>${sat.board.name}</b><span class="vs"><i class="dot" style="--c:${sat.who.colour}"></i>${sat.who.name}</span><small>${said}</small></span>
+    </button></div>`;
   // Quick games open once you've beaten Pip, so the first game you win is always one that counts on the tour.
   $('quick').hidden = !progress.beaten[0];
   const q = progress.quick;
@@ -548,6 +572,16 @@ function renderHome() {
   const c = $('b-continue'), going = game && !game.over;
   c.hidden = !going;
   if (going) c.innerHTML = `<b>Carry on</b><span>${where(game)}, against ${mid(who(game).name)}. Turn ${Math.min(game.number, game.board.boxes.length)} of ${game.board.boxes.length}.</span>`;
+}
+
+// The counted game at the table of day `day`, if it's been played: { you, them }, both null if it was given up.
+const dayDone = day => (progress.today?.day === day ? progress.today : null);
+// "you 288, Otto 251", or "given up".
+const dayScore = (done, name) => (done.you === null ? 'given up' : `you ${done.you}, ${mid(name)} ${done.them}`);
+// Today's table, as its card opens: by the rules of a table picked by the date, against that table's own opponent.
+function dayCard() {
+  const d = today(new Date(), TABLES.length);
+  intro(null, d.table, { kind: 'day', at: d.table, seed: d.seed, day: d.day });
 }
 
 // The tour is finished once the Dealer, at the last table, is beaten.
@@ -592,10 +626,12 @@ function open(screen, { focus = true } = {}) {
 function intro(table, opp = table, spec = {}) {
   const at = spec.at ?? table ?? quickAt(), t = TABLES[opp], board = spec.kind ? boardFor(at, spec.seed) : TABLES[at].board;
   const locked = table !== null && table > 0 && !progress.beaten[table - 1];
-  $('intro-n').textContent = spec.kind === 'friend' ? 'The same dice your friend had' : table === null ? 'Quick game' : `Table ${table + 1} of ${TABLES.length}`;
+  $('intro-n').textContent = spec.kind === 'friend' ? 'The same dice your friend had' : spec.kind === 'day' ? `Today’s table · ${dayName(spec.day)}` : table === null ? 'Quick game' : `Table ${table + 1} of ${TABLES.length}`;
   $('intro-title').textContent = board.name;
   $('intro-blurb').textContent = `${board.blurb}${spec.kind && hotNames(board) ? ` This time it’s ${hotNames(board)}.` : ''}`;
-  const note = spec.kind === 'friend' ? `${spec.score !== null ? `Score to beat: ${spec.score}. ` : ''}It doesn’t count on the tour.` : '';
+  const note = spec.kind === 'friend' ? `${spec.score !== null ? `Score to beat: ${spec.score}. ` : ''}It doesn’t count on the tour.`
+    : spec.kind === 'day' ? (dayDone(spec.day) ? `Today’s game is in: ${dayScore(dayDone(spec.day), t.who.name)}. Another go is just practice.` : 'Everyone has the same dice today. Your first game is the one that counts, here and not on the tour.')
+    : '';
   $('intro-note').textContent = note;
   $('intro-note').hidden = !note;
   $('intro-who').innerHTML = `<i class="dot big" aria-hidden="true" style="--c:${t.who.colour}">${t.who.name.replace(/^The /, '')[0]}</i><div><b>${t.who.name}</b><span>${lineOf(opp)}</span>${game && !game.over && !locked ? '<em>Sitting down here ends the game you’re in. It counts as a\u00a0loss.</em>' : ''}</div>`;
@@ -706,9 +742,11 @@ function settingsFrom(s) {
   return { hints: true, keys: true, quickAt: 0, ...rest, pace: ['normal', 'quick', 'score'].includes(rest.pace) ? rest.pace : fast ? 'quick' : 'normal' };
 }
 function progressFrom(p) {
-  const out = { beaten: [], best: [], played: [], won: [], quick: { played: 0, won: 0 }, ...p };
+  const out = { beaten: [], best: [], played: [], won: [], quick: { played: 0, won: 0 }, today: null, days: { played: 0, won: 0 }, ...p };
   for (const k of ['beaten', 'best', 'played', 'won']) if (!Array.isArray(out[k])) out[k] = [];
   out.quick = { played: 0, won: 0, ...(out.quick && typeof out.quick === 'object' ? out.quick : {}) };
+  out.days = { played: 0, won: 0, ...(out.days && typeof out.days === 'object' ? out.days : {}) };
+  if (!(out.today && typeof out.today === 'object' && typeof out.today.day === 'string')) out.today = null;
   return out;
 }
 // A saved game still being played, with every part the page reads there to pick it up again.
@@ -736,6 +774,7 @@ function carryOn() {
   if (game?.turn === 'them' && !busy) theirTurn();
 }
 $('b-continue').addEventListener('click', carryOn);
+$('today-row').addEventListener('click', e => { if (e.target.closest('[data-day]')) dayCard(); });
 $('tables').addEventListener('click', e => { const b = e.target.closest('[data-table]'); if (b) intro(+b.dataset.table); });
 // A quick game starts straight away, unless it would end the game you're in: then it asks first, as a table on the tour does.
 $('people').addEventListener('click', e => {

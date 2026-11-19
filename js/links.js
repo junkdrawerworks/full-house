@@ -1,11 +1,13 @@
-// Links that open a table with the dice somebody else had. Nothing here needs a server: the dice come from a seed
-// carried in the link.
+// Links that open a table with the dice somebody else had, and today's table, the same for everyone on the same date.
+// Nothing here needs a server: the dice come from a seed carried in the link, or worked out from the date.
 //
 // A link is the game's address with what it opens after a #, so it works offline too, and none of it reaches a server:
 //   https://full-house.junkdrawer.works/#table=6&dice=k3j2h1&score=288
 // table: the table whose rules it's played by, 1 to 8. dice: the game's seed, in base 36. score: what the person who
 // sent it scored with those dice (left out, it's a table to try without a score to beat). vs: the opponent, by the
 // number of their table, when it isn't that table's own (a quick game's). The README promises these keep opening.
+
+import { mix } from './rng.js';
 
 export const HOME = 'https://full-house.junkdrawer.works/';
 
@@ -28,3 +30,18 @@ export function readLink(hash, tables = 8) {
   const score = p.has('score') ? n('score') : NaN;
   return { table, opp, seed, score: Number.isInteger(score) ? score : null };
 }
+
+// Today's table, from the date where you are: which table, and the seed its dice come from. Everyone playing it on the
+// same date has the same dice, and the same opponent's game, since that comes from the seed as well.
+export function today(date = new Date(), tables = 8) {
+  const y = date.getFullYear(), m = date.getMonth() + 1, d = date.getDate();
+  const h = mix(y, m, d, 0xda7e);
+  return { day: `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`, table: h % tables, seed: mix(h, 1) & 0x7fffffff };
+}
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+// "2026-11-19" as "19 November".
+export const dayName = day => {
+  const [, m, d] = String(day).split('-').map(Number);
+  return MONTHS[m - 1] ? `${d} ${MONTHS[m - 1]}` : '';
+};
