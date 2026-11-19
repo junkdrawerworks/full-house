@@ -572,6 +572,20 @@ test('the bonus row says whether the top section is on pace: three of each numbe
   // Hot Boxes: a hot number box's three of each counts three times over, as its raised target does.
   const hot = { ...boardFor(5, 1), boxes: boardFor(5, 1).boxes.map(b => ({ ...b, mult: b.id === 'f5' ? 3 : 1 })), bonus: { at: 63 + 30, worth: 35 } };
   assert.equal(pace(hot, { f5: 45 }), 'on pace');
+  // The back room: Odds counts its 9 and Evens its 12, and with Two Rolls all of them scale down to the cut target.
+  const back = key => backBoard(key, mulberry32(1));
+  assert.equal(pace(back('evens+odds'), { evens: 12 }), 'on pace');
+  assert.equal(pace(back('evens+odds'), { odds: 9 }), 'on pace');
+  assert.equal(pace(back('evens+odds'), { odds: 15, f6: 18 }), '6 ahead');
+  assert.equal(pace(back('evens+two-rolls'), { evens: 10 }), 'on pace', '12 of the 72, scaled to 59');
+  assert.equal(pace(back('evens+two-rolls'), { evens: 10, f6: 15 }), 'on pace');
+  assert.equal(pace(back('odds+two-rolls'), { odds: 7, f6: 15 }), 'on pace', '9 and 18 of the 66, scaled to 54');
+  for (const key of PAIRS) {
+    const b = back(key), top = b.boxes.filter(x => ['face', 'evens', 'odds'].includes(x.kind));
+    const three = top.map(x => (x.kind === 'face' ? 3 * x.face : x.kind === 'evens' ? 12 : 9) * x.mult), all = three.reduce((a, v) => a + v, 0);
+    // Each top box at three of each, scaled to the table's target: on pace.
+    top.forEach((x, i) => assert.equal(pace(b, { [x.id]: Math.round((three[i] * b.bonus.at) / all) }), 'on pace', `${key}, ${x.id}`));
+  }
   // Every top box filled: the pad pencils the bonus in, but the line has nothing to measure toward.
   for (const b of TABLES.map((t, i) => boardFor(i, 1))) assert.equal(bonusPace(b, card(b, Object.fromEntries(b.boxes.filter(x => /^f\d|evens/.test(x.id)).map(x => [x.id, 0])))), '');
 });

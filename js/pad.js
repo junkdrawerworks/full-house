@@ -132,8 +132,9 @@ export class Pad {
 
 // How the top section is doing against the bonus: "on pace", "2 ahead" or "6 behind", measured against three of each
 // number in the boxes filled so far, scaled so the six boxes add up to this table's own target (63 on Classic, 99 at
-// Triple Sixes, 52 at Two Rolls). A box that isn't a number (Evens) takes what's left of the target once the numbers
-// have theirs. Nothing before the first number box is filled, once the bonus is made, or once it's out of reach.
+// Triple Sixes, 52 at Two Rolls). A box that isn't a number counts what three of each number puts in it: 12 in Evens, 9
+// in Odds (the back room's), so at Evens the numbers take three of each and Evens what's left of the 72. Nothing before
+// the first number box is filled, once the bonus is made, or once it's out of reach.
 export function bonusPace(board, card) {
   const upper = board.boxes.filter(isUpper), at = board.bonus.at;
   if (!upper.some(b => card[b.id] !== null)) return '';
@@ -141,9 +142,8 @@ export function bonusPace(board, card) {
   if (t.bonus) return '';
   const most = b => 5 * (b.kind === 'face' ? b.face : b.kind === 'evens' ? 6 : b.kind === 'odds' ? 5 : 6) * (b.mult || 1);
   if (t.upper + upper.filter(b => card[b.id] === null).reduce((a, b) => a + most(b), 0) < at) return ''; // out of reach
-  const three = upper.map(b => (b.kind === 'face' ? 3 * b.face * (b.mult || 1) : null));
-  const known = three.reduce((a, v) => a + (v ?? 0), 0), others = three.filter(v => v === null).length;
-  const par = others ? three.map(v => v ?? Math.max(0, at - known) / others) : three.map(v => (v * at) / known);
+  const three = upper.map(b => (b.kind === 'face' ? 3 * b.face : b.kind === 'evens' ? 12 : 9) * (b.mult || 1));
+  const known = three.reduce((a, v) => a + v, 0), par = three.map(v => (v * at) / known);
   const due = upper.reduce((a, b, i) => a + (card[b.id] !== null ? par[i] : 0), 0);
   const d = Math.round(t.upper - due);
   return d === 0 ? 'on pace' : d > 0 ? `${d} ahead` : `${-d} behind`;
