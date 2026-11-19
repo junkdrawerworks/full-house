@@ -6,6 +6,7 @@ import { TABLES, CLASSIC, boardFor } from '../js/tour.js';
 import { Opponent, playTurn } from '../js/ai.js';
 import { mulberry32 } from '../js/rng.js';
 import { whyLine } from '../js/why.js';
+import { bonusPace } from '../js/pad.js';
 import { best, planned } from './exact.mjs';
 
 const box = (board, id) => board.boxes.find(b => b.id === id);
@@ -513,4 +514,33 @@ test('the result says what decided a game that was not close, from your side of 
   // A table's own numbers: Triple Sixes' bonus needs 99, and its top section counts the sixes three times over.
   const t1 = card(sixes, { ...top(3, 6, 9, 12, 15, 54), ...bottom }), t2 = card(sixes, { ...top(3, 6, 9, 12, 15, 36), ...bottom });
   assert.equal(whyLine(sixes, t2, t1, 'Bea'), 'Bea got the 35 bonus; you were 18 short.');
+});
+
+test('the bonus row says whether the top section is on pace: three of each number, scaled to the table’s target', () => {
+  const card = (board, scores) => ({ ...blankCard(board), ...scores });
+  const pace = (board, scores) => bonusPace(board, card(board, scores));
+  // Nothing before a number box is filled, once the bonus is made, or once it can't be.
+  assert.equal(pace(CLASSIC, {}), '');
+  assert.equal(pace(CLASSIC, { chance: 20 }), '');
+  assert.equal(pace(CLASSIC, { f6: 30, f5: 25, f4: 8 }), '');
+  assert.equal(pace(CLASSIC, { f6: 18, f5: 10, f4: 4 }), '', 'out of reach: 32, and at most 30 to come');
+  assert.equal(pace(CLASSIC, { f6: 18, f5: 10, f4: 8 }), '9 behind', 'just within reach: 36, and at most 30 to come');
+  // Classic: three of each.
+  assert.equal(pace(CLASSIC, { f6: 18 }), 'on pace');
+  assert.equal(pace(CLASSIC, { f6: 24, f1: 1 }), '4 ahead');
+  assert.equal(pace(CLASSIC, { f4: 8, f5: 10 }), '9 behind');
+  assert.equal(pace(CLASSIC, { f1: 0 }), '3 behind');
+  // Triple Sixes counts three sixes as 54; Two Rolls scales three of each down to its 52.
+  assert.equal(pace(TABLES[2].board, { f6: 54 }), 'on pace');
+  assert.equal(pace(TABLES[2].board, { f6: 36 }), '18 behind');
+  assert.equal(pace(TABLES[3].board, { f6: 18 }), '3 ahead');
+  assert.equal(pace(TABLES[3].board, { f6: 12, f5: 10 }), '5 behind');
+  // Evens: the number boxes take three of each, and Evens what's left of the 72 (12).
+  assert.equal(pace(TABLES[1].board, { evens: 12 }), 'on pace');
+  assert.equal(pace(TABLES[1].board, { evens: 20, f2: 6 }), '8 ahead');
+  // Hot Boxes: a hot number box's three of each counts three times over, as its raised target does.
+  const hot = { ...boardFor(5, 1), boxes: boardFor(5, 1).boxes.map(b => ({ ...b, mult: b.id === 'f5' ? 3 : 1 })), bonus: { at: 63 + 30, worth: 35 } };
+  assert.equal(pace(hot, { f5: 45 }), 'on pace');
+  // Every top box filled: the pad pencils the bonus in, but the line has nothing to measure toward.
+  for (const b of TABLES.map((t, i) => boardFor(i, 1))) assert.equal(bonusPace(b, card(b, Object.fromEntries(b.boxes.filter(x => /^f\d|evens/.test(x.id)).map(x => [x.id, 0])))), '');
 });

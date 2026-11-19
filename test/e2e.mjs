@@ -1368,7 +1368,7 @@ try {
       Object.assign(g, { number: 6, rolls: 1, dice: [6, 6, 6, 6, 2] });
       window.fullHouse.set(g);
     });
-    assert.match((await bonus('you')).text, /^45\/63$/);
+    assert.match((await bonus('you')).text, /^45\/63on pace$/); // the bonus so far, and three of each so far
     await page.click('tr[data-box="f6"]');
     assert.equal(await status(), 'Tap Sixes again to score 24 and make the\u00a0bonus.');
     await page.click('tr[data-box="f6"]');
@@ -1455,6 +1455,34 @@ try {
     p = await pad();
     assert.deepEqual(p.bonus, [{ text: '30/63', pencil: false }, { text: '0/63', pencil: false }]);
     assert.deepEqual(p.totals, ['30', '20'], 'a column with a box written in has its total');
+  });
+
+  await step('the bonus row says whether each column is on pace for the bonus, in small print that fits the row', async ({ page }) => {
+    const bonus = () => page.$$eval('#pad tr.sub td', tds => tds.slice(0, 2).map(td => [...td.querySelectorAll('small')].map(e => e.textContent)));
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.evaluate(() => window.fullHouse.start(7)); // the Dealer's wider columns
+    assert.deepEqual(await bonus(), [['0/63'], ['0/63']], 'a pace before any number box is filled');
+    // Ahead, behind, on pace, and out of reach, in either column.
+    const set = (you, them) => page.evaluate(([you, them]) => {
+      const g = structuredClone(window.fullHouse.game);
+      Object.assign(g.you, you); Object.assign(g.them, them);
+      window.fullHouse.set(g);
+    }, [you, them]);
+    await set({ f6: 24, f1: 1 }, { f5: 10, f4: 8 });
+    assert.deepEqual(await bonus(), [['25/63', '4 ahead'], ['18/63', '9 behind']]);
+    await set({ f6: 18, f1: null }, { f5: 0, f4: 0, f6: 6, f3: 3 });
+    assert.deepEqual(await bonus(), [['18/63', 'on pace'], ['9/63']], 'a pace on a bonus out of reach');
+    const m = await page.evaluate(() => ({
+      row: document.querySelector('#pad tr.sub').getBoundingClientRect().height,
+      size: parseFloat(getComputedStyle(document.querySelector('#pad small.par')).fontSize),
+      over: [...document.querySelectorAll('#pad small.par')].some(e => e.scrollWidth > e.parentElement.clientWidth),
+    }));
+    assert.ok(m.row <= 34.5, `the bonus row is ${m.row}px tall with its pace`);
+    assert.ok(m.size >= 12.5, `the pace is ${m.size}px`);
+    assert.equal(m.over, false, 'the pace runs past its column');
+    // Made: the bonus is pencilled in, with no pace under it.
+    await set({ f6: 30, f5: 25, f4: 8 }, {});
+    assert.deepEqual((await bonus())[0], []);
   });
 
   await step('with all five dice held there is nothing to roll', async ({ page, game, settled }) => {

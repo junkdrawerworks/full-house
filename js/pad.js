@@ -103,9 +103,12 @@ export class Pad {
     const upper = board.boxes.filter(isUpper), lower = board.boxes.filter(b => !isUpper(b));
     // The bonus, once made, is pencilled in like a box: as you watch, when the score that made it has just gone in.
     // Missed, with the top all filled, it's a pencilled 0. Until then, how far there is to go, in small print.
-    const bonusCell = (t, card, who) => (t.bonus || upper.every(b => card[b.id] !== null)
-      ? `<td class="${who}${t.bonus && fresh.bonus === who ? ' fresh' : ''}"><span>${t.bonus}</span></td>`
-      : `<td class="${who}"><small>${t.upper}/${board.bonus.at}</small></td>`);
+    // Under it, once a number box is filled, whether that's on pace for the bonus: see bonusPace().
+    const bonusCell = (t, card, who) => {
+      if (t.bonus || upper.every(b => card[b.id] !== null)) return `<td class="${who}${t.bonus && fresh.bonus === who ? ' fresh' : ''}"><span>${t.bonus}</span></td>`;
+      const pace = bonusPace(board, card);
+      return `<td class="${who}"><small>${t.upper}/${board.bonus.at}</small>${pace ? `<small class="par">${pace}</small>` : ''}</td>`;
+    };
     // A column with nothing written in it yet has no total, as on a fresh sheet of paper.
     const total = (t, card, who) => (winner === who || winner === 'both' ? `<span class="ringed">${t.total}${ring(!fresh.ring)}</span>`
       : board.boxes.some(b => card[b.id] !== null) ? t.total : '');
@@ -123,6 +126,25 @@ export class Pad {
       <tfoot><tr class="total"><th scope="row">Total</th><td class="you">${total(ty, you, 'you')}</td><td class="them">${total(tt, them, 'them')}</td></tr></tfoot>`;
     if (focused) this.el.querySelector(`tr.can[data-box="${focused}"]`)?.focus({ preventScroll: true });
   }
+}
+
+// How the top section is doing against the bonus: "on pace", "2 ahead" or "6 behind", measured against three of each
+// number in the boxes filled so far, scaled so the six boxes add up to this table's own target (63 on Classic, 99 at
+// Triple Sixes, 52 at Two Rolls). A box that isn't a number (Evens) takes what's left of the target once the numbers
+// have theirs. Nothing before the first number box is filled, once the bonus is made, or once it's out of reach.
+export function bonusPace(board, card) {
+  const upper = board.boxes.filter(isUpper), at = board.bonus.at;
+  if (!upper.some(b => card[b.id] !== null)) return '';
+  const t = totals(board, card);
+  if (t.bonus) return '';
+  const most = b => 5 * (b.kind === 'face' ? b.face : b.kind === 'evens' ? 6 : b.kind === 'odds' ? 5 : 6) * (b.mult || 1);
+  if (t.upper + upper.filter(b => card[b.id] === null).reduce((a, b) => a + most(b), 0) < at) return ''; // out of reach
+  const three = upper.map(b => (b.kind === 'face' ? 3 * b.face * (b.mult || 1) : null));
+  const known = three.reduce((a, v) => a + (v ?? 0), 0), others = three.filter(v => v === null).length;
+  const par = others ? three.map(v => v ?? Math.max(0, at - known) / others) : three.map(v => (v * at) / known);
+  const due = upper.reduce((a, b, i) => a + (card[b.id] !== null ? par[i] : 0), 0);
+  const d = Math.round(t.upper - due);
+  return d === 0 ? 'on pace' : d > 0 ? `${d} ahead` : `${-d} behind`;
 }
 
 // A ring pencilled round a winning score, by hand: a loop a little out of true that runs past where it started. In the

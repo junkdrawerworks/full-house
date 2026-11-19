@@ -463,7 +463,8 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
   color: var(--pencil);
 }
 .pad td.them { color: var(--red-pencil); }
-.pad td small { font: 600 13px var(--cond); color: var(--small-print); letter-spacing: 0.03em; }
+.pad td small { display: block; font: 600 13px/1.05 var(--cond); color: var(--small-print); letter-spacing: 0.03em; }
+.pad td small.par { font-size: 12.5px; letter-spacing: 0.02em; white-space: nowrap; } /* under the bonus so far: on pace, 2 ahead */
 .pad td.offer span { color: var(--offer); font-weight: 500; }
 .pad td.offer span.nil { font-weight: 400; opacity: 0.6; } /* nothing to score there: a light dash until it's picked */
 .pad tr.can { cursor: pointer; }
