@@ -5,6 +5,7 @@ import { score, options, jokerState, blankCard, mark, totals, filled, fiveOf, bo
 import { TABLES, CLASSIC, boardFor } from '../js/tour.js';
 import { Opponent, playTurn } from '../js/ai.js';
 import { mulberry32 } from '../js/rng.js';
+import { whyLine } from '../js/why.js';
 import { best, planned } from './exact.mjs';
 
 const box = (board, id) => board.boxes.find(b => b.id === id);
@@ -472,4 +473,44 @@ test('the joker rules in the corners: a full bottom section, multiplied boxes, T
   assert.equal(jokerState(CLASSIC, blankCard(CLASSIC), [3, 3, 3, 3, 3]), null, 'a first five of a kind is no joker');
   assert.equal(jokerState(wild, card(wild, { five: 50 }), [1, 6, 6, 6, 6]), null, 'nor a wild one');
   assert.equal(jokerState(CLASSIC, card(CLASSIC, { five: 50, f4: 8, ...bottom }), [4, 4, 4, 4, 4]).topOnly, true);
+});
+
+test('the result says what decided a game that was not close, from your side of the table', () => {
+  // A card from { box id: score }, with `extras` extra five of a kinds.
+  const card = (board, scores, extras = 0) => ({ ...blankCard(board), ...scores, extras });
+  const top = (n1, n2, n3, n4, n5, n6) => ({ f1: n1, f2: n2, f3: n3, f4: n4, f5: n5, f6: n6 });
+  const bottom = { three: 20, four: 15, full: 25, small: 30, large: 0, five: 0, chance: 22 };
+  const sixes = TABLES[2].board;
+  // Close (20 or less) or a tie: nothing to say.
+  const a = card(CLASSIC, { ...top(3, 6, 9, 12, 15, 18), ...bottom });
+  assert.equal(whyLine(CLASSIC, a, card(CLASSIC, { ...top(3, 6, 9, 12, 15, 18), ...bottom, chance: 2 }), 'Pip'), '');
+  assert.equal(whyLine(CLASSIC, a, a, 'Pip'), '');
+  // The bonus, when it is the biggest gap: how far short the loser was, each way round.
+  const short = card(CLASSIC, { ...top(3, 6, 9, 12, 15, 9), ...bottom });
+  assert.equal(whyLine(CLASSIC, short, a, 'Maud'), 'Maud got the 35 bonus; you were 9 short.');
+  assert.equal(whyLine(CLASSIC, a, short, 'Maud'), 'You got the 35 bonus; Maud was 9 short.');
+  // The top section, when it outweighs the bonus.
+  const low = card(CLASSIC, { ...top(1, 2, 3, 4, 10, 13), ...bottom });
+  const high = card(CLASSIC, { ...top(4, 8, 12, 16, 20, 24), ...bottom });
+  assert.equal(whyLine(CLASSIC, low, high, 'Maud'), 'Maud’s top section came to 84 and yours to 33.');
+  assert.equal(whyLine(CLASSIC, high, low, 'The Dealer'), 'Your top section came to 84 and the Dealer’s to 33.');
+  // Five of a kind that alone outweighs the margin was the difference; two, against one, are counted.
+  const five = card(CLASSIC, { ...top(3, 6, 9, 12, 15, 18), ...bottom, five: 50 });
+  assert.equal(whyLine(CLASSIC, a, five, 'Bea'), 'Bea’s five of a kind was the difference.');
+  assert.equal(whyLine(CLASSIC, five, a, 'The Dealer'), 'Your five of a kind was the difference.');
+  const twice = card(CLASSIC, { ...top(3, 6, 9, 12, 15, 18), ...bottom, five: 50 }, 1);
+  assert.equal(whyLine(CLASSIC, five, twice, 'Sol'), 'Sol rolled five of a kind twice; you did once.');
+  assert.equal(whyLine(CLASSIC, a, twice, 'Sol'), 'Sol rolled five of a kind twice; you never did.');
+  // Five of a kind that isn't the whole story: the winner was ahead elsewhere too.
+  const more = card(CLASSIC, { ...top(3, 6, 9, 12, 15, 30), ...bottom, five: 50 });
+  assert.equal(whyLine(CLASSIC, a, more, 'Bea'), 'Bea rolled five of a kind; you didn’t.');
+  // The bottom section, as the pad adds it up; without five of a kind when that went differently, saying so.
+  const weak = card(CLASSIC, { ...top(3, 6, 9, 12, 15, 18), three: 0, four: 0, full: 0, small: 30, large: 0, five: 0, chance: 22 });
+  assert.equal(whyLine(CLASSIC, weak, a, 'Wren'), 'Wren’s bottom section came to 112 and yours to 52.');
+  const weakFive = card(CLASSIC, { ...top(3, 6, 9, 12, 15, 18), three: 0, four: 0, full: 0, small: 30, large: 0, five: 50, chance: 22 });
+  const strong = card(CLASSIC, { ...top(3, 6, 9, 12, 15, 18), three: 25, four: 25, full: 25, small: 30, large: 40, five: 0, chance: 25 });
+  assert.equal(whyLine(CLASSIC, weakFive, strong, 'The Dealer'), 'Leaving out five of a kind, the Dealer’s bottom section came to 170 and yours to 52.');
+  // A table's own numbers: Triple Sixes' bonus needs 99, and its top section counts the sixes three times over.
+  const t1 = card(sixes, { ...top(3, 6, 9, 12, 15, 54), ...bottom }), t2 = card(sixes, { ...top(3, 6, 9, 12, 15, 36), ...bottom });
+  assert.equal(whyLine(sixes, t2, t1, 'Bea'), 'Bea got the 35 bonus; you were 18 short.');
 });

@@ -837,7 +837,10 @@ try {
     await page.click('tr[data-box="chance"]');
     await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
     assert.equal(await page.textContent('#result-title'), 'Sol wins');
-    assert.equal(await page.textContent('#result-line'), 'The dice owe you one.');
+    // Lost by a lot: the line says what decided it, from the two cards, in place of the dice owing you one.
+    assert.match(await page.textContent('#result-line'), /^Sol’s (top|bottom) section came to \d+ and yours to \d+\.$/);
+    assert.equal(await page.textContent('#result-line'), await page.evaluate(async () => { const g = window.fullHouse.game; return (await import('./js/why.js')).whyLine(g.board, g.you, g.them, 'Sol'); }));
+    assert.ok(await page.isHidden('#result-why'), 'a loss says why twice');
     assert.equal(await page.textContent('#b-next'), 'Play again');
   });
 
@@ -937,6 +940,30 @@ try {
     const p = await page.evaluate(() => window.fullHouse.progress);
     assert.equal(p.played[0], 1);
     assert.ok(!p.won[0] && !p.beaten[0], 'a tie counted as a win');
+  });
+
+  await step('a loss by 20 or less says the dice owe you one, and a win by as little says nothing more', async ({ page }) => {
+    // The last turn is Pip's, from the game's seed: work out what Pip will score, and give yourself a total `by` off it.
+    for (const by of [-20, 20, -21]) {
+      await page.evaluate(async by => {
+        const [{ Opponent, playTurn }, { TABLES }, R, { mulberry32 }] = await Promise.all(['./js/ai.js', './js/tour.js', './js/rules.js', './js/rng.js'].map(u => import(u)));
+        window.fullHouse.settings.pace = 'score';
+        window.fullHouse.start(0);
+        const g = structuredClone(window.fullHouse.game);
+        for (const b of g.board.boxes) { g.them[b.id] = b.id === 'chance' ? null : b.id === 'five' ? 0 : 5; g.you[b.id] = 0; }
+        Object.assign(g, { number: 13, rolls: 0, turn: 'them' });
+        const { option } = playTurn(new Opponent(TABLES[0].play), g.board, g.them, mulberry32((g.seed ^ Math.imul(13, 0x9E3779B1)) >>> 0));
+        g.you.chance = R.totals(g.board, R.mark(g.them, option)).total + by;
+        window.fullHouse.set(g);
+      }, by);
+      await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
+      const line = await page.textContent('#result-line');
+      if (by === -20) assert.equal(line, 'The dice owe you one.');
+      if (by === -21) assert.match(line, /^Pip’s (top|bottom) section came to \d+ and yours to \d+\.$/);
+      if (by === 20) assert.equal(line, 'Table 2 is open: Evens, against Maud.');
+      assert.ok(await page.isHidden('#result-why'), `a game won or lost by ${Math.abs(by)} says why under the line`);
+      await page.keyboard.press('Escape');
+    }
   });
 
   await step('a second five of a kind says where it has to go and what it earns, in two lines on a small phone', async t => {
@@ -1090,7 +1117,8 @@ try {
       await page.click('tr[data-box="chance"]');
       await page.click('#tray');
       await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
-      return { line: await page.textContent('#result-line'), best: await page.isVisible('#result-best') ? await page.textContent('#result-best') : null, next: await page.textContent('#b-next'), you: +(await page.textContent('#result-scores div:first-child b')) };
+      const why = await page.evaluate(async () => { const g = window.fullHouse.game; return (await import('./js/why.js')).whyLine(g.board, g.you, g.them, window.fullHouse.game.opp === 7 ? 'The Dealer' : 'Pip'); });
+      return { why, shown: await page.isVisible('#result-why') ? await page.textContent('#result-why') : null, line: await page.textContent('#result-line'), best: await page.isVisible('#result-best') ? await page.textContent('#result-best') : null, next: await page.textContent('#b-next'), you: +(await page.textContent('#result-scores div:first-child b')) };
     };
     // A quick game won against Pip before table 1 is beaten: it says why the tour hasn't moved, and where Pip is.
     const early = await play(null, 20);
@@ -1101,6 +1129,9 @@ try {
     const first = await play(0, 10);
     assert.equal(first.line, 'Table 2 is open: Evens, against Maud.');
     assert.equal(first.best, null);
+    // Won by a lot: what decided it, under the line.
+    assert.match(first.why, /^Your (top|bottom) section came to \d+ and Pip’s to \d+\.$/);
+    assert.equal(first.shown, first.why);
     // A better win there: a new best, and table 2 isn't opened a second time.
     const better = await play(0, 20);
     assert.equal(better.line, 'You’ve beaten Pip before; table 2 is still open.');
@@ -1109,14 +1140,17 @@ try {
     // A lesser win, a loss and a quick game say nothing about a best. A loss with more than your best does.
     assert.equal((await play(0, 15)).best, null);
     const lost = await play(0, 0);
-    assert.equal(lost.line, 'The dice owe you one.');
+    assert.match(lost.why, /^Pip’s (top|bottom) section came to \d+ and yours to \d+\.$/);
+    assert.equal(lost.line, lost.why);
+    assert.equal(lost.shown, null);
     assert.equal(lost.best, null);
+
     const quick = await play(null, 20);
     assert.equal(quick.best, null);
     assert.equal(quick.line, 'A good game.', 'a quick game against an opponent already beaten');
     await page.evaluate(() => { window.fullHouse.progress.best[0] = 3; });
     const close = await play(0, 0);
-    assert.equal(close.line, 'The dice owe you one.');
+    assert.equal(close.line, close.why || 'The dice owe you one.');
     assert.equal(close.best, `Your best here: ${close.you} (was 3).`);
     assert.equal((await page.evaluate(() => window.fullHouse.progress)).best[0], close.you);
     // The last table, beaten a second time.
@@ -1614,7 +1648,7 @@ try {
     assert.equal(await pace.getByRole('radio', { name: 'Unhurried', exact: true }).isChecked(), true, 'a new player’s pace is not Unhurried');
     assert.equal(await page.getByRole('switch', { name: 'Show what each box would score', exact: true }).count(), 1);
     await page.keyboard.press('Escape');
-    assert.equal(await page.getAttribute('#sheet-result [role="dialog"]', 'aria-describedby'), 'result-line result-scores');
+    assert.equal(await page.getAttribute('#sheet-result [role="dialog"]', 'aria-describedby'), 'result-line result-why result-scores');
     await page.click('#b-home');
     assert.equal(await page.title(), 'Full House');
   });

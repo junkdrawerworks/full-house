@@ -6,6 +6,7 @@ import { Opponent } from './ai.js';
 import { Tray } from './dice.js';
 import { Pad, ring } from './pad.js';
 import { mulberry32 } from './rng.js';
+import { whyLine } from './why.js';
 
 const KEY = 'full-house.v1';
 const $ = id => document.getElementById(id);
@@ -289,13 +290,17 @@ function finish(lead = '') {
   // Beating the Dealer at the last table finishes the tour, and the result says so above its title.
   $('result-n').textContent = won && last ? `Table ${TABLES.length} of ${TABLES.length} · the tour` : '';
   $('result-n').hidden = !(won && last);
+  const why = whyLine(b, g.you, g.them, name);
   const onward = won && g.table !== null && !last && !(before && progress.beaten[g.table + 1]); // a table to send you on to
   $('result-line').textContent = won
     ? g.table === null ? (progress.beaten[g.opp] ? 'A good game.' : `A good game. It doesn’t count on the tour: ${mid(name)} is waiting at table ${g.opp + 1}.`)
       : last ? (before ? `You’ve beaten ${mid(name)} before. That’s still the whole tour.` : 'That’s the whole tour. Nobody at these tables has anything left to teach you.')
       : before ? (onward ? `You’ve beaten ${mid(name)} before; table ${g.table + 2} is still open.` : `You’ve beaten ${mid(name)} before.`)
       : `Table ${g.table + 2} is open: ${TABLES[g.table + 1].board.name}, against ${mid(TABLES[g.table + 1].who.name)}.`
-    : tie ? 'Play it again to settle it.' : 'The dice owe you one.';
+    : tie ? 'Play it again to settle it.' : why || 'The dice owe you one.';
+  // Why it went that way, from the two cards, unless it was close: on a loss in place of the line above, on a win under it.
+  $('result-why').textContent = won ? why : '';
+  $('result-why').hidden = !(won && why);
   const tile = (n, ringed) => (ringed ? `<b class="ringed">${n}${ring()}</b>` : `<b>${n}</b>`);
   $('result-scores').innerHTML = `<div><span>You</span>${tile(you, you >= them)}</div><div class="them"><span>${escape(name)}</span>${tile(them, them >= you)}</div>`;
   $('result-best').textContent = best;

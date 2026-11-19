@@ -650,6 +650,8 @@ body[data-screen='home'] .toast { top: auto; bottom: calc(16px + env(safe-area-i
 .plain[hidden] { display: none; }
 .plain.warn { margin-top: 18px; color: var(--muted); }
 .plain.warn.asked { background: var(--line); color: var(--accent-text); }
+.panel .why { margin-top: -6px; color: var(--muted); }
+.panel .why[hidden] { display: none; }
 .scores { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 6px 0 4px; }
 .scores div { display: grid; justify-items: center; padding: 10px; border-radius: 14px; background: var(--line); }
 .scores span { font: 700 13px var(--cond); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }

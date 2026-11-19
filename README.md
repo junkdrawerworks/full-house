@@ -30,6 +30,7 @@
   8. **High Stakes** against the Dealer: four rolls a turn, and the bottom section scores double, though the extra for another five of a kind stays at 100.
 - **Opponents who plan.** Five dice can only land 252 different ways, so an opponent works out, for every possible roll, which dice to keep for the best result over the rest of its turn. It values each box by what it scores now, what it might be worth later, and the top-section bonus. The early opponents leave parts of that out and make mistakes on purpose, though only close calls a person might get wrong. Past Pip, the further up the tour, the more patient an opponent is and the fewer slips it makes. On classic rules Pip averages about 151, and the Dealer about 244 (`node dev/strength.mjs 600 classic`); the best possible play averages 254.59 (Tom Verhoeff, *Optimal Solitaire Yahtzee Player*, Eindhoven University of Technology, 1999).
 - **Watch them play.** Their red dice tumble in your tray and their scores go into the pad in red pencil. Tap the dice to hurry a turn along, or choose Quick in the game's menu, or Just their score to see only where their dice end up and what they score.
+- **The result.** Who won and, when it wasn't within 20 points, the biggest gap between the two cards in one line: the top section, the bonus, five of a kind or the rest of the bottom section ("Maud got the 35 bonus; you were 9 short."). Look at the pad puts the result aside to read the finished pad, and See the result brings it back.
 - **Quick game.** Classic rules against anyone you've met on the tour, once you've beaten Pip at table 1.
 - **Your progress.** Each table's line on the tour says whether you've beaten it, the games you've won and played there (or lost, until you beat it), and your best score there; Quick game says how many of those you've won. Giving up part way counts as a loss. Beat the Dealer and the tour is finished: a tick pencilled on each table, and your best at each added up at the foot of the card, a total to beat.
 - **On a keyboard,** Space or R rolls and 1 to 5 hold the dice. Tab reaches the boxes, the arrows go between them, and Enter picks one, then scores it. Space or Enter hurries the opponent along. How to play says so on a computer, and Keyboard shortcuts in the game's menu turns the single keys off.
@@ -59,6 +60,7 @@ To put it online with GitHub Pages: **Settings → Pages → Build and deploymen
 - `js/rules.js`: the rules. Boxes as plain data, scoring (wild ones and multipliers included), the five-of-a-kind bonus and joker rules, and the totals.
 - `js/tour.js`: the eight tables, each a board and an opponent.
 - `js/rng.js`: seeded random numbers, so a Hot Boxes table comes out the same from its seed, and an opponent's turn cut short by a reload plays out the same way again.
+- `js/why.js`: the line on the result that says what decided a game, worked out from the two cards.
 - `js/ai.js`: how the opponents play. Every roll and every handful of dice you might keep, worked out ahead, and the values that make one opponent better than another.
 - `js/dice.js`: the dice, drawn as real cubes that tumble and land face up.
 - `js/pad.js`: the score pad.
