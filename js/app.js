@@ -384,6 +384,7 @@ function finishTwo(g, lead, a, r) {
   if (document.body.dataset.screen === 'home') renderHome();
   status(tie ? 'A tie.' : `${winner} wins.`);
   say(`${lead ? `${lead} ` : ''}${tie ? `A tie, ${a} all.` : `${winner} wins, ${Math.max(a, r)} to ${Math.min(a, r)}.`}`);
+  $('result-n').textContent = ''; // emptied as well: aria-labelledby reads it out even while it's hidden
   $('result-n').hidden = true;
   $('result-title').textContent = tie ? 'A tie' : `${winner} wins`;
   // What decided it, unless it was close (see js/why.js).

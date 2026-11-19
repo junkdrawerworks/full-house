@@ -1797,6 +1797,28 @@ try {
     assert.equal(await page.textContent('#b-two'), 'Mum and Red');
   });
 
+  await step('a two-player result keeps no line from the game before over its title', async ({ page, settled }) => {
+    // A friend's game finished, then a two-player one: its result is labelled by its own title alone.
+    for (const kind of ['friend', 'two']) {
+      await page.evaluate(k => {
+        const fh = window.fullHouse;
+        fh.start(null, 0, 0, k === 'two' ? { kind: 'two', names: ['Black', 'Red'] } : { kind: 'friend', seed: 1, score: 100 });
+        const g = structuredClone(fh.game);
+        for (const b of g.board.boxes) { g.you[b.id] = b.id === 'chance' ? null : 20; g.them[b.id] = 5; }
+        Object.assign(g, { number: 13, rolls: 0, turn: 'you' });
+        fh.settings.pace = 'quick';
+        fh.set(g);
+      }, kind);
+      await page.click('#b-roll');
+      await settled();
+      await page.locator('tr.can').first().click();
+      await page.locator('tr.can').first().click();
+      await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
+      assert.equal(await page.textContent('#result-n'), kind === 'friend' ? 'The same dice your friend had' : '');
+      await page.click('#b-look');
+    }
+  });
+
   await step('with all five dice held there is nothing to roll', async ({ page, game, settled }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
