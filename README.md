@@ -74,7 +74,7 @@ To put it online with GitHub Pages: **Settings → Pages → Build and deploymen
 - `js/pad.js`: the score pad.
 - `js/app.js`: the tour, your turns, the opponent's turns played out on the table, and saving.
 - `manifest.webmanifest`, `icon.svg` and the `icon-*.png` files: what a phone needs to install it to the home screen.
-- `og.png`: the picture a link to the game shows when it's shared; `docs/`: the screenshots in this README.
+- `og.png`: the picture a link to the game shows when it's shared; `docs/`: the screenshots in this README, three of which Android's install sheet shows too (they're listed in `manifest.webmanifest`).
 - `fonts/`: Barlow, Barlow Condensed and Caveat (SIL Open Font License), served from here so nothing loads from elsewhere.
 - `sw.js`: keeps a copy for playing offline. On a connection that isn't answering, a page opens from that copy after four seconds. `FILES` in it is a fingerprint of the files it keeps: change one and `npm test` says what to set it to, so a release never leaves the copy half old.
 - `carry.js`: brings saves over from the old address, junkdrawer.works/full-house/, the first time the game opens here.

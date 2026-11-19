@@ -2635,6 +2635,34 @@ try {
     assert.ok(has('maskable'), 'the manifest has no maskable icon, the one Android crops to its own shape');
   });
 
+  // Chrome on Android shows its large install sheet, with the pictures, only when the manifest lists screenshots it can
+  // use: each at least 320 and at most 3840 pixels a side, the long side no more than 2.3 times the short one, and all of
+  // one form factor the same shape. A fixed id keeps an installed copy the same app if the start address ever changes.
+  await step('the install sheet has the README’s phone pictures, of the size the manifest says, and the app a fixed id', async ({ page }) => {
+    const at = new URL(await page.getAttribute('link[rel="manifest"]', 'href'), base);
+    const manifest = await (await fetch(at)).json();
+    assert.equal(new URL(manifest.id, new URL(manifest.start_url, at)).href, base, 'the app’s id is not the game’s address');
+    assert.ok(manifest.description, 'the install sheet has no description');
+    const shots = manifest.screenshots || [];
+    assert.ok(shots.length >= 3, 'the install sheet has fewer than three pictures');
+    const shapes = new Set();
+    for (const shot of shots) {
+      assert.match(shot.src, /^docs\/phone-[a-z]+\.png$/, `${shot.src} is not one of the README’s phone pictures`);
+      const res = await fetch(new URL(shot.src, at));
+      assert.equal(res.status, 200, `${shot.src} is not there`);
+      assert.equal(res.headers.get('content-type'), shot.type, `${shot.src} is not served as ${shot.type}`);
+      const bytes = Buffer.from(await res.arrayBuffer());
+      assert.equal(bytes.toString('latin1', 1, 4), 'PNG', `${shot.src} is not a PNG`);
+      const [w, h] = [bytes.readUInt32BE(16), bytes.readUInt32BE(20)];
+      assert.equal(`${w}x${h}`, shot.sizes, `${shot.src} is not the size the manifest says`);
+      assert.ok(Math.min(w, h) >= 320 && Math.max(w, h) <= 3840 && Math.max(w, h) / Math.min(w, h) <= 2.3, `${shot.src} is a size Chrome won’t show`);
+      assert.equal(shot.form_factor, 'narrow', `${shot.src} is not marked as a phone picture`);
+      assert.ok(shot.label, `${shot.src} has no words for a screen reader`);
+      shapes.add((w / h).toFixed(3));
+    }
+    assert.equal(shapes.size, 1, 'the phone pictures are not all the same shape');
+  });
+
   await step('a quick game asks first when it would end the game you’re in', async ({ page, game }) => {
     await pipBeaten(page);
     const progress = () => page.evaluate(() => window.fullHouse.progress);

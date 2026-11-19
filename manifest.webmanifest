@@ -2,6 +2,7 @@
   "name": "Full House",
   "short_name": "Full House",
   "description": "Five dice against eight opponents, on tables that change the rules. No ads.",
+  "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -29,6 +30,29 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "docs/phone-tour.png",
+      "sizes": "780x1688",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "The tour: eight tables on a paper card, each with its own twist and its own opponent"
+    },
+    {
+      "src": "docs/phone-play.png",
+      "sizes": "780x1688",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Your turn: three sixes held in the felt tray, and the Sixes box picked on the score pad"
+    },
+    {
+      "src": "docs/phone-theirs.png",
+      "sizes": "780x1688",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "The opponent’s turn: red dice in the tray and both columns of pencilled scores"
     }
   ]
 }
