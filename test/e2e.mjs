@@ -1521,7 +1521,7 @@ try {
     const seed = parseInt('k3j2h1', 36);
     await page.goto(`${base}#table=6&dice=k3j2h1&score=288`);
     await page.waitForSelector('#sheet-intro:not([hidden])');
-    assert.equal(await page.evaluate(() => location.hash), '', 'the link stays on the address, to open again on a reload');
+    assert.equal(await page.evaluate(() => location.hash), '', 'the link comes off the address, so a reload doesn’t open it again');
     assert.equal(await page.textContent('#intro-n'), 'The same dice your friend had');
     assert.equal(await page.textContent('#intro-title'), 'Hot Boxes');
     assert.match(await page.textContent('#intro-blurb'), /This time it’s \w+.* and .*\.$/, 'the hot boxes the link’s dice draw');
