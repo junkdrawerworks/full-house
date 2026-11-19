@@ -966,6 +966,10 @@ try {
     assert.equal(await page.textContent('#result-title'), 'A tie');
     assert.equal(await page.textContent('#result-line'), 'Play it again to settle it.');
     assert.equal(await page.textContent('#result-scores'), `You${total}Pip${total}`);
+    // Pip's word on it, under the scores in his red pencil, named for a screen reader only.
+    assert.equal(await page.textContent('#result-says'), 'Pip: Is that allowed? Let’s do it again.');
+    assert.equal(await page.textContent('#result-says .vh'), 'Pip: ');
+    assert.equal(await page.$eval('#result-says', e => getComputedStyle(e).color), await page.$eval('#result-scores .them b', e => getComputedStyle(e).color), 'not in the red pencil of the opponent’s score');
     assert.equal(await page.textContent('#b-next'), 'Play again');
     assert.equal(await page.textContent('#status'), 'A tie.');
     const p = await page.evaluate(() => window.fullHouse.progress);
@@ -992,6 +996,7 @@ try {
       if (by === -20) assert.equal(line, 'The dice owe you one.');
       if (by === -21) assert.match(line, /^Pip’s (top|bottom) section came to \d+ and yours to \d+\.$/);
       if (by === 20) assert.equal(line, 'Table 2 is open: Evens, against Maud.');
+      assert.equal(await page.textContent('#result-says'), by > 0 ? 'Pip: I kept all the fours. Was that wrong?' : 'Pip: Beginner’s luck. Mine, I mean.');
       assert.ok(await page.isHidden('#result-why'), `a game won or lost by ${Math.abs(by)} says why under the line`);
       await page.keyboard.press('Escape');
     }
@@ -1775,6 +1780,7 @@ try {
     assert.equal(await page.textContent('#result-title'), 'Mum wins');
     assert.match(await page.textContent('#result-line'), /^Mum’s (top|bottom) section came to \d+ and Red’s to \d+\.$/);
     assert.deepEqual(await page.locator('#result-scores span').allTextContents(), ['Mum', 'Red']);
+    assert.ok(await page.isHidden('#result-says'), 'Red has an opponent’s line');
     assert.ok(await page.isHidden('#b-share'));
     assert.ok(await page.isHidden('#b-again'));
     assert.ok(await page.isHidden('#result-n'));
@@ -1843,6 +1849,9 @@ try {
       await page.locator('tr.can').first().click();
       await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
       assert.equal(await page.textContent('#result-n'), kind === 'friend' ? 'The same dice your friend had' : '');
+      // Pip has his word at a friend's table; at Two players nobody has, not even the opponent from the game before.
+      if (kind === 'friend') assert.equal(await page.textContent('#result-says'), 'Pip: I kept all the fours. Was that wrong?');
+      else assert.ok(await page.isHidden('#result-says'), 'a two-player result has a line from the opponent');
       await page.click('#b-look');
     }
   });
@@ -2068,7 +2077,7 @@ try {
     assert.equal(await pace.getByRole('radio', { name: 'Unhurried', exact: true }).isChecked(), true, 'a new player’s pace is not Unhurried');
     assert.equal(await page.getByRole('switch', { name: 'Show what each box would score', exact: true }).count(), 1);
     await page.keyboard.press('Escape');
-    assert.equal(await page.getAttribute('#sheet-result [role="dialog"]', 'aria-describedby'), 'result-line result-why result-scores');
+    assert.equal(await page.getAttribute('#sheet-result [role="dialog"]', 'aria-describedby'), 'result-line result-why result-scores result-says');
     await page.click('#b-home');
     assert.equal(await page.title(), 'Full House');
   });

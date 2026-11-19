@@ -712,6 +712,9 @@ body[data-screen='home'] .toast { top: auto; bottom: calc(16px + env(safe-area-i
 .scores span { font: 700 13px var(--cond); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .scores b { font: 700 46px/1 var(--hand); }
 .panel .best { margin: 8px 0 0; text-align: center; font: 700 24px/1.1 var(--hand); }
+/* The opponent's word on the game, in their red pencil. */
+.panel .says { margin: 8px 0 0; text-align: center; font: 700 24px/1.1 var(--hand); color: var(--red-score); }
+.panel .says[hidden] { display: none; }
 .scores .them b { color: var(--red-score); }
 /* At a friend's table, their score between yours and the opponent's. */
 .scores.three { grid-template-columns: 1fr 1fr 1fr; }

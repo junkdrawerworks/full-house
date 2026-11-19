@@ -372,6 +372,10 @@ function finish(lead = '') {
   const theirs = friend && g.score !== null ? `<div class="friend"><span>Your friend</span><b>${g.score}</b></div>` : '';
   $('result-scores').classList.toggle('three', !!theirs);
   $('result-scores').innerHTML = `<div><span>You</span>${tile(you, you >= them)}</div>${theirs}<div class="them"><span>${escape(name)}</span>${tile(them, them >= you)}</div>`;
+  // What the opponent makes of it, in their red pencil under the scores (js/tour.js), named for a screen reader.
+  const says = TABLES[g.opp].who.says;
+  $('result-says').innerHTML = `<span class="vh">${escape(name)}: </span>${escape(won ? says.loses : tie ? says.ties : says.wins)}`;
+  $('result-says').hidden = false;
   $('result-best').textContent = best;
   $('result-best').hidden = !best;
   const next = $('b-next');
@@ -403,6 +407,7 @@ function finishTwo(g, lead, a, r) {
   const tile = (n, ringed) => (ringed ? `<b class="ringed">${n}${ring()}</b>` : `<b>${n}</b>`);
   $('result-scores').classList.remove('three');
   $('result-scores').innerHTML = `<div><span>${escape(black)}</span>${tile(a, a >= r)}</div><div class="them"><span>${escape(red)}</span>${tile(r, r >= a)}</div>`;
+  $('result-says').hidden = true; // nobody at the table but the two of you
   $('result-best').hidden = true;
   $('b-next').textContent = 'Play again';
   $('b-next').onclick = () => again(g);

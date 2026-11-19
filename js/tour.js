@@ -1,6 +1,7 @@
 // The tour: eight tables, each with its own twist on the rules and a sharper opponent than the last.
 // Beat an opponent to move on to the next table. An opponent's `beaten` line, if it has one, replaces its `line` once
-// you've beaten it at its table.
+// you've beaten it at its table. What it `says` at the end of a game, in red pencil under the scores: when it wins, loses
+// or ties.
 
 import { mulberry32 } from './rng.js';
 
@@ -38,7 +39,8 @@ function hotBoxes(seed) {
 export const TABLES = [
   {
     board: CLASSIC,
-    who: { name: 'Pip', line: 'New to the game. Keeps whatever there’s most of.', colour: '#5b8c5a' },
+    who: { name: 'Pip', line: 'New to the game. Keeps whatever there’s most of.', colour: '#5b8c5a',
+      says: { wins: 'Beginner’s luck. Mine, I mean.', loses: 'I kept all the fours. Was that wrong?', ties: 'Is that allowed? Let’s do it again.' } },
     play: { look: false, slip: 0.65, slipBy: 20 },
   },
   {
@@ -48,7 +50,8 @@ export const TABLES = [
       boxes: boxes({ f1: { id: 'evens', kind: 'evens', face: undefined } }),
       bonus: { at: 72, worth: 35 },
     },
-    who: { name: 'Maud', line: 'Plays it safe and takes the points in front of her.', colour: '#8a6d3b' },
+    who: { name: 'Maud', line: 'Plays it safe and takes the points in front of her.', colour: '#8a6d3b',
+      says: { wins: 'Points in the hand. Never fails.', loses: 'You took chances. They came off. Hmph.', ties: 'All square. Evens, you might say.' } },
     play: { patience: 0.35, bonus: 0.3, slip: 0.63 },
   },
   {
@@ -58,7 +61,8 @@ export const TABLES = [
       boxes: boxes({ f6: { mult: 3 } }),
       bonus: { at: 99, worth: 35 },
     },
-    who: { name: 'Bea', line: 'Patient. Waits for the big numbers.', colour: '#b0503a' },
+    who: { name: 'Bea', line: 'Patient. Waits for the big numbers.', colour: '#b0503a',
+      says: { wins: 'Sixes, every time.', loses: 'The sixes kept me waiting.', ties: 'Patience got us both here.' } },
     play: { patience: 0.6, bonus: 0.6, slip: 0.44, style: { boost: { face: 1.1 } } },
   },
   {
@@ -68,7 +72,8 @@ export const TABLES = [
       boxes: boxes(), rolls: 2,
       bonus: { at: 52, worth: 35 },
     },
-    who: { name: 'Sol', line: 'Quick hands. Not many slips.', colour: '#3f6f9a' },
+    who: { name: 'Sol', line: 'Quick hands. Not many slips.', colour: '#3f6f9a',
+      says: { wins: 'Two rolls is plenty.', loses: 'Too quick for my own good.', ties: 'Fast, and still level.' } },
     play: { patience: 0.8, bonus: 0.8, slip: 0.35, style: { boost: { chance: 0.7 } } },
   },
   {
@@ -77,7 +82,8 @@ export const TABLES = [
       blurb: 'In the bottom section, every 1 counts as whatever number scores best. In the top section a 1 is just a\u00a01. The extra 100 for another five of a kind needs five dice showing the same number.',
       boxes: boxes(), wild: true,
     },
-    who: { name: 'Jules', line: 'Knows the odds and rarely forgets them.', colour: '#7a4f8f' },
+    who: { name: 'Jules', line: 'Knows the odds and rarely forgets them.', colour: '#7a4f8f',
+      says: { wins: 'The odds said so.', loses: 'Against the odds. Well played.', ties: 'Less likely than five of a kind. Again?' } },
     play: { patience: 0.9, bonus: 0.8, slip: 0.3, endgame: true, style: { boost: { five: 1.8 } } },
   },
   {
@@ -86,7 +92,8 @@ export const TABLES = [
       blurb: 'Two boxes, picked at random each time you sit down, score three times over. When one is a number box, the top-section bonus rises so three of each number still earns it.',
       hot: true,
     },
-    who: { name: 'Otto', line: 'Steady. Hardly puts a foot wrong.', colour: '#2f7d74' },
+    who: { name: 'Otto', line: 'Steady. Hardly puts a foot wrong.', colour: '#2f7d74',
+      says: { wins: 'Steady does it.', loses: 'A foot wrong, somewhere.', ties: 'Neither of us put a foot wrong.' } },
     play: { patience: 1, bonus: 1.2, slip: 0.14, endgame: true },
   },
   {
@@ -95,7 +102,8 @@ export const TABLES = [
       blurb: 'Three of a kind becomes Two pairs: add up the four paired dice (four of one number count as two pairs). Chance becomes the Low road: 30 if the dice total 12 or less.',
       boxes: boxes({ three: { id: 'pairs', kind: 'pairs' }, chance: { id: 'low', kind: 'low' } }),
     },
-    who: { name: 'Wren', line: 'Sharp, and getting sharper.', colour: '#9a7a2f' },
+    who: { name: 'Wren', line: 'Sharp, and getting sharper.', colour: '#9a7a2f',
+      says: { wins: 'Sharper every game.', loses: 'Noted. I’ll be sharper.', ties: 'Sharp, both of us. Again.' } },
     play: { patience: 1, bonus: 1, slip: 0.05, endgame: true },
   },
   {
@@ -105,7 +113,8 @@ export const TABLES = [
       boxes: boxes(Object.fromEntries(['three', 'four', 'full', 'small', 'large', 'five', 'chance'].map(id => [id, { mult: 2 }]))),
       rolls: 4,
     },
-    who: { name: 'The Dealer', line: 'Hasn’t lost a game in years.', beaten: 'Hadn’t lost a game in years.', colour: '#3a3a44' },
+    who: { name: 'The Dealer', line: 'Hasn’t lost a game in years.', beaten: 'Hadn’t lost a game in years.', colour: '#3a3a44',
+      says: { wins: 'The house usually does.', loses: 'Years, that was. Well played.', ties: 'The house doesn’t do draws. Deal again.' } },
     play: { patience: 1, bonus: 1, slip: 0, endgame: true },
   },
 ];
