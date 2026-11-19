@@ -5,7 +5,7 @@ import { TABLES, boardFor, CLASSIC } from './tour.js';
 import { Opponent } from './ai.js';
 import { Tray } from './dice.js';
 import { Pad, ring } from './pad.js';
-import { mulberry32 } from './rng.js';
+import { mulberry32, rollFor } from './rng.js';
 import { whyLine } from './why.js';
 
 const KEY = 'full-house.v1';
@@ -40,7 +40,7 @@ const quickAt = () => (quickTables().includes(settings.quickAt) ? settings.quick
 const quickTables = () => (progress.beaten.filter(Boolean).length >= 2 ? TABLES.map((t, i) => i).filter(i => progress.beaten[i]) : []);
 // A name inside a sentence: "against the Dealer". At the start of one, and on the pad and the tour, it keeps its capital.
 const mid = name => name.replace(/^The /, 'the ');
-const die = () => 1 + Math.floor(Math.random() * 6);
+const die = () => 1 + Math.floor(Math.random() * 6); // a new game's dice, before anything is rolled
 // Quick or Just their score: the opponent plays faster, and your own dice land sooner too.
 const quick = () => settings.pace !== 'normal';
 
@@ -52,8 +52,9 @@ function roll() {
   const g = game;
   if (!g || g.over || busy || g.turn !== 'you' || g.rolls >= g.board.rolls || allHeld(g)) return;
   picked = null;
-  const rolled = [];
-  g.dice = g.dice.map((d, i) => (g.held[i] && g.rolls > 0 ? d : (rolled.push(i), die())));
+  // From the game's seed: anyone playing from it gets the same number in each place on this roll of this turn.
+  const thrown = rollFor(g.seed, g.number, g.rolls + 1), rolled = [];
+  g.dice = g.dice.map((d, i) => (g.held[i] && g.rolls > 0 ? d : (rolled.push(i), thrown[i])));
   if (g.rolls === 0) g.held = [false, false, false, false, false];
   g.rolls++;
   busy = true;

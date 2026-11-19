@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { score, options, jokerState, blankCard, mark, totals, filled, fiveOf, boxHint } from '../js/rules.js';
 import { TABLES, CLASSIC, boardFor } from '../js/tour.js';
 import { Opponent, playTurn } from '../js/ai.js';
-import { mulberry32 } from '../js/rng.js';
+import { mulberry32, rollFor } from '../js/rng.js';
 import { whyLine } from '../js/why.js';
 import { bonusPace } from '../js/pad.js';
 import { best, planned } from './exact.mjs';
@@ -543,4 +543,32 @@ test('the bonus row says whether the top section is on pace: three of each numbe
   assert.equal(pace(hot, { f5: 45 }), 'on pace');
   // Every top box filled: the pad pencils the bonus in, but the line has nothing to measure toward.
   for (const b of TABLES.map((t, i) => boardFor(i, 1))) assert.equal(bonusPace(b, card(b, Object.fromEntries(b.boxes.filter(x => /^f\d|evens/.test(x.id)).map(x => [x.id, 0])))), '');
+});
+
+test('your dice come from the game’s seed, the turn and the roll: the same for anyone playing from that seed, and fair', () => {
+  assert.deepEqual(rollFor(12345, 5, 2), rollFor(12345, 5, 2));
+  const seen = new Set(), counts = [0, 0, 0, 0, 0, 0, 0];
+  for (let seed = 0; seed < 400; seed++) {
+    for (let turn = 1; turn <= 13; turn++) {
+      for (let roll = 1; roll <= 4; roll++) {
+        for (const side of [0, 1]) {
+          const dice = rollFor(seed, turn, roll, side);
+          assert.equal(dice.length, 5);
+          for (const d of dice) { assert.ok(Number.isInteger(d) && d >= 1 && d <= 6); counts[d]++; }
+          seen.add(`${seed}.${dice.join('')}`);
+        }
+      }
+    }
+  }
+  // Every turn, roll and side of a game throws its own dice: hardly any two the same within one seed.
+  assert.ok(seen.size > 400 * 13 * 4 * 2 * 0.99, `${seen.size} different throws`);
+  const n = counts.reduce((a, b) => a + b, 0);
+  for (let d = 1; d <= 6; d++) assert.ok(Math.abs(counts[d] / n - 1 / 6) < 0.005, `${d} came up ${counts[d]} times in ${n}`);
+  // Not the opponent's dice: their first roll of a turn comes from a stream of its own.
+  let same = 0;
+  for (let seed = 0; seed < 2000; seed++) {
+    const rand = mulberry32((seed ^ Math.imul(1, 0x9E3779B1)) >>> 0), theirs = Array.from({ length: 5 }, () => 1 + Math.floor(rand() * 6));
+    if (theirs.join() === rollFor(seed, 1, 1).join()) same++;
+  }
+  assert.ok(same < 3, `${same} first rolls the same as the opponent's`);
 });

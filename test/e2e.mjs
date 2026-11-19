@@ -1347,8 +1347,12 @@ try {
     assert.match(await status(), /^Five of a kind again\./);
     await rolled(0, [5, 5, 5, 5, 4]);
     assert.equal(await status(), 'Hold dice and roll again, or pick a box to score.');
-    // Rolled for real (with dice that can only come up 5), and heard as well as seen.
-    await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; window.fullHouse.start(0); Math.random = () => 0.7; });
+    // Rolled for real (from a seed whose first roll is five 5s), and heard as well as seen.
+    await page.evaluate(() => {
+      window.fullHouse.settings.pace = 'quick';
+      window.fullHouse.start(0);
+      window.fullHouse.set({ ...structuredClone(window.fullHouse.game), seed: 1263 });
+    });
     await page.click('#b-roll');
     await settled();
     assert.equal(await status(), 'Five of a kind. 50 in its box, if you want it.');
@@ -1485,6 +1489,31 @@ try {
     // Made: the bonus is pencilled in, with no pace under it.
     await set({ f6: 30, f5: 25, f4: 8 }, {});
     assert.deepEqual((await bonus())[0], []);
+  });
+
+  await step('your dice come from the game’s seed: the same in each place on a roll for anyone playing from it, whatever they held', async ({ page, game, settled }) => {
+    const expected = await page.evaluate(async () => {
+      const { rollFor } = await import('./js/rng.js');
+      return [rollFor(4242, 1, 1), rollFor(4242, 1, 2)];
+    });
+    // The same seed twice, holding different dice: each roll throws the same numbers into the places it throws.
+    for (const hold of [[0, 1], [2, 3, 4]]) {
+      await page.evaluate(() => {
+        window.fullHouse.start(0);
+        const g = structuredClone(window.fullHouse.game);
+        g.seed = 4242;
+        window.fullHouse.settings.pace = 'quick';
+        window.fullHouse.set(g);
+      });
+      await page.click('#b-roll');
+      await settled();
+      assert.deepEqual((await game()).dice, expected[0], 'the first roll');
+      for (const i of hold) await page.click(`.die >> nth=${i}`);
+      await page.click('#b-roll');
+      await settled();
+      const dice = (await game()).dice;
+      for (let i = 0; i < 5; i++) assert.equal(dice[i], hold.includes(i) ? expected[0][i] : expected[1][i], `place ${i + 1}, holding ${hold}`);
+    }
   });
 
   await step('with all five dice held there is nothing to roll', async ({ page, game, settled }) => {

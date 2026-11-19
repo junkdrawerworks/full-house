@@ -59,7 +59,7 @@ To put it online with GitHub Pages: **Settings → Pages → Build and deploymen
 - `css/app.css`: how it looks, in light and dark, on a phone (upright or sideways), a tablet and a desktop.
 - `js/rules.js`: the rules. Boxes as plain data, scoring (wild ones and multipliers included), the five-of-a-kind bonus and joker rules, and the totals.
 - `js/tour.js`: the eight tables, each a board and an opponent.
-- `js/rng.js`: seeded random numbers, so a Hot Boxes table comes out the same from its seed, and an opponent's turn cut short by a reload plays out the same way again.
+- `js/rng.js`: seeded random numbers, so a Hot Boxes table comes out the same from its seed, an opponent's turn cut short by a reload plays out the same way again, and your own dice are the same for anyone playing from the same seed: the die in place 3 on roll 2 of turn 5 is the same whatever they held.
 - `js/why.js`: the line on the result that says what decided a game, worked out from the two cards.
 - `js/ai.js`: how the opponents play. Every roll and every handful of dice you might keep, worked out ahead, and the values that make one opponent better than another.
 - `js/dice.js`: the dice, drawn as real cubes that tumble and land face up.
