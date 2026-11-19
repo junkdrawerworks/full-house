@@ -182,6 +182,15 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 .quick p { margin: -4px 0 10px; color: var(--muted); font-size: 14.5px; }
 .quick .record { margin: -6px 0 10px; font: 600 13px var(--text); color: var(--muted); }
 .quick .record[hidden] { display: none; }
+/* The table a quick game takes its rules from: one chip per table beaten, the one chosen filled in. */
+.rules-at { min-width: 0; margin: 0 0 14px; padding: 0; border: 0; }
+.rules-at[hidden] { display: none; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips label { position: relative; display: grid; }
+.chips input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.chips span { display: grid; place-items: center; min-height: 44px; padding: 4px 12px; border-radius: 10px; background: var(--line); font: 700 15px var(--cond); letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink); }
+.chips input:checked + span { background: var(--accent); color: var(--accent-ink); }
+.chips input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 .people { display: flex; flex-wrap: wrap; gap: 8px; }
 .people button {
   padding: 10px 14px;
@@ -721,6 +730,8 @@ body[data-screen='home'] .toast { top: auto; bottom: calc(16px + env(safe-area-i
   .toggle input::after { display: none; }
   .seg span { border: 1px solid ButtonText; }
   .seg input:checked + span { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+  .chips span { border: 1px solid ButtonText; }
+  .chips input:checked + span { forced-color-adjust: none; background: Highlight; color: HighlightText; }
   .panel, .toast { border: 2px solid CanvasText; }
   .tables .beaten .n { forced-color-adjust: none; }
   .mult { border: 1px solid CanvasText; }

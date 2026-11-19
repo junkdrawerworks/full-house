@@ -2269,6 +2269,69 @@ try {
     assert.equal((await progress()).played[0], 1);
   });
 
+  await step('once two tables are beaten, a quick game can be played by the rules of any table you’ve beaten, and never counts on the tour', async ({ page, game }) => {
+    // One table beaten: no choice, Classic rules.
+    await pipBeaten(page);
+    assert.ok(await page.isHidden('#quick-tables'), 'a choice of tables with only one beaten');
+    assert.equal(await page.textContent('#quick-blurb'), 'Classic rules against anyone you’ve met on the tour.');
+    // Three beaten: Classic, Evens and Triple Sixes, Classic chosen.
+    await page.evaluate(() => localStorage.setItem('full-house.v1', JSON.stringify({ progress: { beaten: [true, true, true], best: [200, 210, 220], played: [1, 1, 1], won: [1, 1, 1] } })));
+    await page.reload();
+    assert.ok(await page.isVisible('#quick-tables'));
+    assert.equal(await page.textContent('#quick-blurb'), 'The rules of any table you’ve beaten, against anyone you’ve met on the tour. They don’t count on the tour.');
+    const group = page.getByRole('group', { name: 'Rules', exact: true });
+    assert.deepEqual(await group.getByRole('radio').evaluateAll(rs => rs.map(r => r.labels[0].textContent)), ['Classic', 'Evens', 'Triple Sixes']);
+    assert.ok(await group.getByRole('radio', { name: 'Classic', exact: true }).isChecked());
+    assert.deepEqual(await page.$$eval('#quick-at span', ss => ss.filter(e => e.getBoundingClientRect().height < 44 || e.getBoundingClientRect().width < 44).map(e => e.textContent)), [], 'a table to choose is smaller than a thumb');
+    // Classic still plays as before.
+    await page.click('[data-quick="2"]');
+    assert.equal(await page.textContent('#g-table'), 'Quick game');
+    assert.equal((await game()).board.id, 'classic');
+    await page.click('#b-home');
+    // Wild Ones isn't beaten, so it isn't offered; Triple Sixes is, against Pip.
+    await page.click('#quick-at label:nth-child(3)');
+    await page.click('[data-quick="0"]');
+    await page.waitForSelector('#sheet-intro:not([hidden])'); // it would end the Classic game in progress, so it asks first
+    assert.equal(await page.textContent('#intro-title'), 'Triple Sixes');
+    assert.equal(await page.textContent('#intro-n'), 'Quick game');
+    await page.click('#b-sit');
+    let g = await game();
+    assert.equal(g.table, null);
+    assert.equal(g.opp, 0);
+    assert.equal(g.board.id, 'sixes');
+    assert.equal(await page.textContent('#g-table'), 'Quick game: Triple Sixes');
+    assert.equal(await page.locator('tr[data-box="f6"] .mult').count(), 1, 'the Sixes box is not marked ×3');
+    await page.click('#b-home');
+    assert.equal(await page.textContent('#b-continue span'), 'Quick game: Triple Sixes, against Pip. Turn 1 of 13.');
+    // The choice is kept for next time.
+    await page.reload();
+    await page.click('#b-home');
+    assert.ok(await page.getByRole('radio', { name: 'Triple Sixes', exact: true }).isChecked(), 'the table chosen was forgotten');
+    // Win it: counted as a quick game, not at table 3, and Play again keeps Triple Sixes' rules.
+    await page.click('#b-continue');
+    const before = await page.evaluate(() => structuredClone(window.fullHouse.progress));
+    await page.evaluate(() => {
+      window.fullHouse.settings.pace = 'score';
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) { g.you[b.id] = b.id === 'chance' ? null : 20; g.them[b.id] = b.id === 'chance' ? null : b.id === 'five' ? 0 : 5; }
+      Object.assign(g, { number: 13, rolls: 1, turn: 'you' });
+      window.fullHouse.set(g);
+    });
+    await page.click('tr[data-box="chance"]');
+    await page.click('tr[data-box="chance"]');
+    await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
+    const after = await page.evaluate(() => window.fullHouse.progress);
+    assert.deepEqual([after.played, after.won, after.best, after.beaten], [before.played, before.won, before.best, before.beaten], 'a quick game counted on the tour');
+    assert.equal(after.quick.played, before.quick.played + 1);
+    assert.equal(after.quick.won, before.quick.won + 1);
+    assert.ok(await page.isHidden('#result-best'));
+    await page.click('#b-next');
+    g = await game();
+    assert.equal(g.number, 1);
+    assert.equal(g.board.id, 'sixes', 'Play again went back to Classic');
+    assert.equal(await page.textContent('#g-table'), 'Quick game: Triple Sixes');
+  });
+
   await step('How to play is in the game’s menu, and closing it goes back to the game', async ({ page }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');

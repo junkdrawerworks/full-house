@@ -31,7 +31,13 @@ const pad = new Pad($('pad'), { onPick: pick });
 const who = g => TABLES[g.opp].who;
 // What's said of the opponent from table i: the Dealer's line changes once you've beaten him.
 const lineOf = i => (progress.beaten[i] && TABLES[i].who.beaten) || TABLES[i].who.line;
-const where = g => (g.table === null ? 'Quick game' : `Table ${g.table + 1}: ${g.board.name}`); // "Table 3: Triple Sixes"
+// "Table 3: Triple Sixes"; a quick game, "Quick game", or at a table other than Classic, "Quick game: Wild Ones".
+const where = g => (g.table !== null ? `Table ${g.table + 1}: ${g.board.name}` : g.board.id === CLASSIC.id ? 'Quick game' : `Quick game: ${g.board.name}`);
+// The table whose rules a game is played by: its own on the tour, the one chosen for a quick game (Classic unless another).
+const rulesOf = g => Math.max(0, TABLES.findIndex(t => t.board.id === g.board.id));
+// The table chosen for quick games: one you've beaten, once you've beaten two, and otherwise Classic.
+const quickAt = () => (quickTables().includes(settings.quickAt) ? settings.quickAt : 0);
+const quickTables = () => (progress.beaten.filter(Boolean).length >= 2 ? TABLES.map((t, i) => i).filter(i => progress.beaten[i]) : []);
 // A name inside a sentence: "against the Dealer". At the start of one, and on the pad and the tour, it keeps its capital.
 const mid = name => name.replace(/^The /, 'the ');
 const die = () => 1 + Math.floor(Math.random() * 6);
@@ -230,9 +236,11 @@ function yourTurn(g) {
 
 // ---- starting and finishing ----
 
-function start(table, opp = table) {
+// A game at table `table` of the tour, or a quick game (table null) against the opponent from table `opp`, by the rules of
+// table `at` (Classic unless it says otherwise). A quick game never counts on the tour, whatever its rules.
+function start(table, opp = table, at = table ?? 0) {
   const seed = (Math.random() * 2 ** 31) | 0;
-  const board = table === null ? CLASSIC : boardFor(table, seed);
+  const board = boardFor(at, seed);
   if (game && !game.over) concede(true);
   token++;
   game = {
@@ -307,7 +315,7 @@ function finish(lead = '') {
   $('result-best').hidden = !best;
   const next = $('b-next');
   if (onward) { next.textContent = `On to table ${g.table + 2}`; next.onclick = () => { intro(g.table + 1); under = 'sheet-result'; }; }
-  else { next.textContent = 'Play again'; next.onclick = () => start(g.table, g.opp); }
+  else { next.textContent = 'Play again'; next.onclick = () => start(g.table, g.opp, rulesOf(g)); }
   $('b-again').hidden = !onward;
   const t = token;
   setTimeout(() => { if (t === token && game === g && !resultSeen) showResult(); }, 900); // unless a new game has started, or it's been opened already
@@ -466,6 +474,11 @@ function renderHome() {
   const q = progress.quick;
   $('quick-record').textContent = q.played > 0 && q.won <= q.played ? `Won ${q.won} of ${q.played}` : '';
   $('quick-record').hidden = !$('quick-record').textContent;
+  // Once two tables are beaten, quick games can be played by the rules of any table you've beaten, Classic to begin with.
+  const tables = quickTables(), at = quickAt();
+  $('quick-blurb').textContent = tables.length ? 'The rules of any table you’ve beaten, against anyone you’ve met on the tour. They don’t count on the tour.' : 'Classic rules against anyone you’ve met on the tour.';
+  $('quick-tables').hidden = !tables.length;
+  $('quick-at').innerHTML = tables.map(i => `<label><input type="radio" name="quick-at" value="${i}"${i === at ? ' checked' : ''}><span>${TABLES[i].board.name}</span></label>`).join('');
   const met = TABLES.map((t, i) => ({ t, i })).filter(({ i }) => i === 0 || progress.beaten[i - 1]);
   $('people').innerHTML = met.map(({ t, i }) => `<button type="button" data-quick="${i}"><i class="dot" style="--c:${t.who.colour}"></i>${t.who.name}</button>`).join('');
   const c = $('b-continue'), going = game && !game.over;
@@ -508,10 +521,10 @@ function open(screen, { focus = true } = {}) {
 
 // ---- sheets and messages ----
 
-// A table on the tour, or a quick game (table null) against the opponent from table `opp`.
+// A table on the tour, or a quick game (table null) against the opponent from table `opp`, by the rules chosen for it.
 // A table not yet open shows its card too, its twist and its opponent, with what it takes to sit there in place of Sit down.
 function intro(table, opp = table) {
-  const t = TABLES[opp], board = table === null ? CLASSIC : t.board;
+  const at = table ?? quickAt(), t = TABLES[opp], board = TABLES[at].board;
   const locked = table !== null && table > 0 && !progress.beaten[table - 1];
   $('intro-n').textContent = table === null ? 'Quick game' : `Table ${table + 1} of ${TABLES.length}`;
   $('intro-title').textContent = board.name;
@@ -520,7 +533,7 @@ function intro(table, opp = table) {
   $('intro-locked').textContent = locked ? `Beat ${mid(TABLES[table - 1].who.name)} to sit here` : '';
   $('intro-locked').hidden = !locked;
   $('b-sit').hidden = locked;
-  $('b-sit').onclick = locked ? null : () => start(table, opp);
+  $('b-sit').onclick = locked ? null : () => start(table, opp, at);
   openSheet('sheet-intro');
 }
 
@@ -621,7 +634,7 @@ function read() {
 // A save from before the three paces has a Quick opponents switch (fast) in place of the pace: on is Quick.
 function settingsFrom(s) {
   const { fast, ...rest } = s && typeof s === 'object' ? s : {};
-  return { hints: true, keys: true, ...rest, pace: ['normal', 'quick', 'score'].includes(rest.pace) ? rest.pace : fast ? 'quick' : 'normal' };
+  return { hints: true, keys: true, quickAt: 0, ...rest, pace: ['normal', 'quick', 'score'].includes(rest.pace) ? rest.pace : fast ? 'quick' : 'normal' };
 }
 function progressFrom(p) {
   const out = { beaten: [], best: [], played: [], won: [], quick: { played: 0, won: 0 }, ...p };
@@ -660,10 +673,11 @@ $('people').addEventListener('click', e => {
   const b = e.target.closest('[data-quick]');
   if (!b) return;
   if (game && !game.over) intro(null, +b.dataset.quick);
-  else start(null, +b.dataset.quick);
+  else start(null, +b.dataset.quick, quickAt());
 });
+$('quick-at').addEventListener('change', e => { settings.quickAt = +e.target.value; save(); });
 $('b-tour').addEventListener('click', () => { closeSheets(); game = null; save(); open('home'); });
-$('b-again').addEventListener('click', () => start(game.table, game.opp));
+$('b-again').addEventListener('click', () => start(game.table, game.opp, rulesOf(game)));
 // The result put aside, to look over the finished pad under it: See the result, where the focus goes back to, opens it again.
 $('b-look').addEventListener('click', closeSheets);
 $('b-rules').addEventListener('click', () => { showRules(CLASSIC, false); openSheet('sheet-rules'); });
