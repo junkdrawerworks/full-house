@@ -2247,6 +2247,80 @@ try {
     assert.equal((await game()).rolls, 1, 'R did not roll with the shortcuts back on');
   }, { desktop: true });
 
+  // Sound itself can't be judged here, only that it's made when it should be: each sound the page starts is noted, with how
+  // much of it there is (the sum of its samples squared), and each buzz.
+  await step('Sound starts off; switched on, a throw rattles, more for more dice, a score scratches, holding a die buzzes, and a game behind the tour is quiet', async ({ page, myTurn, settled }) => {
+    await page.addInitScript(() => {
+      window.heard = [];
+      window.buzzed = [];
+      const start = AudioBufferSourceNode.prototype.start;
+      AudioBufferSourceNode.prototype.start = function (...args) {
+        let energy = 0;
+        for (const x of this.buffer.getChannelData(0)) energy += x * x;
+        window.heard.push(energy);
+        return start.apply(this, args);
+      };
+      Object.defineProperty(Navigator.prototype, 'vibrate', { configurable: true, value: ms => { window.buzzed.push(ms); return true; } });
+    });
+    await page.reload();
+    const heard = () => page.evaluate(() => window.heard.length), buzzed = () => page.evaluate(() => window.buzzed.length);
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
+    // Off at first: a roll and a hold make no sound and no buzz.
+    await page.click('#b-roll');
+    await settled();
+    await page.click('.die >> nth=0');
+    assert.equal(await heard(), 0, 'a sound with Sound off');
+    assert.equal(await buzzed(), 0, 'a buzz with Sound off');
+    await page.click('.die >> nth=0');
+    await page.click('#b-menu');
+    const sw = page.getByRole('switch', { name: 'Sound', exact: true });
+    assert.equal(await sw.isChecked(), false, 'Sound starts on');
+    await sw.click();
+    assert.equal(JSON.parse(await page.evaluate(() => localStorage.getItem('full-house.v1'))).settings.sound, true, 'the switch was not saved');
+    assert.equal(await heard(), 1, 'switching Sound on makes no sound to show it works');
+    await page.keyboard.press('Escape');
+    // Four dice held, one buzz each; the one left rattles as it's thrown.
+    for (const i of [0, 1, 2, 3]) await page.click(`.die >> nth=${i}`);
+    assert.equal(await buzzed(), 4, 'holding a die does not buzz');
+    await page.click('#b-roll');
+    await settled();
+    assert.equal(await heard(), 2, 'a throw makes no sound');
+    const row = page.locator('tr.can').first();
+    await row.click();
+    assert.equal(await heard(), 2, 'picking a box makes a sound, before anything is written');
+    await row.click();
+    assert.equal(await heard(), 3, 'a score written in makes no sound');
+    // The opponent's first throw is all five dice: more of a rattle than your one die.
+    await myTurn();
+    // (Heard so far: the switch, your one die, your score, then the opponent's five dice.)
+    const [one, five] = await page.evaluate(() => [window.heard[1], window.heard[3]]);
+    assert.ok(five > 2 * one, `five dice thrown (${five.toFixed(1)}) are not much more of a rattle than one (${one.toFixed(1)})`);
+    assert.ok(await heard() > 4, 'the opponent’s turn makes no sound');
+    // Your score goes in, then back to the tour before the opponent rolls: their turn, played out behind it, is quiet.
+    await page.click('#b-roll');
+    await settled();
+    const before = await heard();
+    await row.click();
+    await row.click();
+    await page.click('#b-home');
+    await page.waitForFunction(() => window.fullHouse.game?.turn === 'you', null, { timeout: 30000 });
+    assert.equal(await heard(), before + 1, 'the opponent’s turn behind the tour made a sound');
+    // Still on after a reload, and once off, quiet again.
+    await page.reload();
+    if (await page.isVisible('#b-continue')) await page.click('#b-continue'); // the reload may open on the game itself
+    await page.click('#b-menu');
+    assert.equal(await sw.isChecked(), true, 'Sound is off again after a reload');
+    await sw.click();
+    await page.keyboard.press('Escape');
+    await page.click('#b-roll');
+    await settled();
+    await page.click('.die >> nth=0');
+    assert.equal(await heard(), 0, 'a sound with Sound switched off again');
+    assert.equal(await buzzed(), 0, 'a buzz with Sound switched off again');
+  });
+
   await step('on a phone the menu has no Keyboard shortcuts switch', async ({ page }) => {
     await page.evaluate(() => window.fullHouse.start(0));
     await page.click('#b-menu');

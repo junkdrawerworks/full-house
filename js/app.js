@@ -8,6 +8,7 @@ import { Pad, ring } from './pad.js';
 import { mulberry32, rollFor } from './rng.js';
 import { whyLine } from './why.js';
 import { readLink, linkFor, today, dayName } from './links.js';
+import * as sound from './sound.js';
 
 const KEY = 'full-house.v1';
 const $ = id => document.getElementById(id);
@@ -67,6 +68,7 @@ const allHeld = g => g.rolls > 0 && g.held.every(Boolean); // nothing left to ro
 function roll() {
   const g = game;
   if (!g || g.over || busy || !hands(g) || g.rolls >= g.board.rolls || allHeld(g)) return;
+  if (settings.sound) sound.wake(); // from the tap, which a phone needs before it lets the page make a sound
   picked = null;
   // From the game's seed: anyone playing from it gets the same number in each place on this roll of this turn.
   // (At Two players, Red's from a stream of their own.)
@@ -95,6 +97,7 @@ function toggle(i) {
   const g = game;
   if (!g || busy || !hands(g) || g.rolls === 0 || g.rolls >= g.board.rolls) return;
   g.held[i] = !g.held[i];
+  if (settings.sound) buzz();
   picked = null;
   showDice();
   render();
@@ -112,6 +115,7 @@ function pick(id) {
   const option = options(g.board, g[side], g.dice).find(o => o.box.id === id);
   if (!option) return;
   const made = makesBonus(g.board, g[side], option);
+  if (settings.sound) sound.wake();
   g[side] = mark(g[side], option);
   fresh = { [side]: id, bonus: made ? side : null };
   picked = null;
@@ -496,12 +500,20 @@ function concede(quietly) {
 
 // ---- drawing ----
 
+// With Sound on, a game you're looking at is heard: not one whose opponent plays on behind the tour, or in a tab out of sight.
+const heard = () => settings.sound && document.body.dataset.screen === 'game' && document.visibilityState === 'visible';
+// A short buzz as a die is held or let go, on a phone that can (not an iPhone, whose browsers have no way to).
+function buzz() {
+  try { navigator.vibrate?.(12); } catch { /* not allowed here */ }
+}
+
 function showDice(rolled = []) {
   const g = game;
   if (!g) return;
   const mine = hands(g);
   // Your holds show only while there's a roll left for them to stay out of. The opponent's show to the end of their turn.
   const held = !mine || g.rolls < g.board.rolls ? g.held : [false, false, false, false, false];
+  if (rolled.length && heard()) sound.rattle(rolled.length, quick() ? 0.38 : 0.7); // as long as the dice take to land (--tumble)
   tray.show(g.dice, held, {
     rolled,
     theirs: two(g) ? g.turn === 'them' : !mine && theirDice, // at Two players, Red's dice are red from the start of their turn
@@ -529,6 +541,7 @@ function render() {
   const you = totals(b, g.you).total, them = totals(b, g.them).total;
   const winner = g.over ? (you > them ? 'you' : them > you ? 'them' : 'both') : null;
   pad.render({ board: b, you: g.you, them: g.them, name: opp.name, me: me(g), side, offers, picked, fresh, hints: settings.hints, theirPick, winner });
+  if ((fresh.you || fresh.them) && heard()) sound.scratch(); // as the score is pencilled in
   fresh = {};
 
   const left = b.rolls - g.rolls;
@@ -830,7 +843,7 @@ function read() {
 function settingsFrom(s) {
   const { fast, ...rest } = s && typeof s === 'object' ? s : {};
   const names = Array.isArray(rest.names) && rest.names.length === 2 ? rest.names.map(n => (typeof n === 'string' ? n.slice(0, 10) : '')) : ['', ''];
-  return { hints: true, keys: true, quickAt: 0, ...rest, names, pace: ['normal', 'quick', 'score'].includes(rest.pace) ? rest.pace : fast ? 'quick' : 'normal' };
+  return { hints: true, keys: true, sound: false, quickAt: 0, ...rest, names, pace: ['normal', 'quick', 'score'].includes(rest.pace) ? rest.pace : fast ? 'quick' : 'normal' };
 }
 function progressFrom(p) {
   const out = { beaten: [], best: [], played: [], won: [], quick: { played: 0, won: 0 }, today: null, days: { played: 0, won: 0 }, ...p };
@@ -910,11 +923,13 @@ $('b-menu').addEventListener('click', showMenu);
 $('b-where').addEventListener('click', showMenu);
 $('b-concede').addEventListener('click', giveUp);
 document.querySelectorAll('[data-close]').forEach(el => el.addEventListener('click', dismiss));
-const TOGGLES = [['hints', 'o-hints'], ['keys', 'o-keys']];
+const TOGGLES = [['hints', 'o-hints'], ['sound', 'o-sound'], ['keys', 'o-keys']];
 for (const [k, id] of TOGGLES) {
   $(id).checked = settings[k];
   $(id).addEventListener('change', e => { settings[k] = e.target.checked; save(); showDice(); render(); });
 }
+// Switched on, it makes its pencil scratch, so you know it works and how loud it is.
+$('o-sound').addEventListener('change', e => { if (e.target.checked) sound.scratch(); });
 const paces = [...document.querySelectorAll('input[name="pace"]')];
 const showPace = () => paces.forEach(r => { r.checked = r.value === settings.pace; });
 showPace();
