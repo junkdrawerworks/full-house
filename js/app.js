@@ -32,6 +32,8 @@ const tray = new Tray($('tray'), { onToggle: toggle, onTap: () => { if (busy && 
 const pad = new Pad($('pad'), { onPick: pick });
 // At Two players (kind 'two'), the second player, Red, sits where the opponent would: their column, their red dice.
 const two = g => g?.kind === 'two';
+// Whose turn starts each round: yours, or at Two players whoever started this game ('them' when Red did, from Play again).
+const starter = g => (two(g) && g.first === 'them' ? 'them' : 'you');
 const RED = '#b0392d';
 const who = g => (two(g) ? { name: g.names[1], colour: RED } : TABLES[g.opp].who);
 // Whose column is "you": yours, or at Two players the first player's, Black.
@@ -136,15 +138,15 @@ function pick(id) {
   setTimeout(theirTurn, quick() ? 300 : 650);
 }
 
-// At Two players, the phone goes to the other player: Black's turn to Red's, and Red's to Black's next turn, till the
-// pad is full. What was just scored is pencilled in as the turn changes, and heard.
+// At Two players, the phone goes to the other player: from whoever started the round to the other, and back for the next
+// round, till the pad is full. What was just scored is pencilled in as the turn changes, and heard.
 function passOn(g, option, made) {
   const name = turnName(g), b = g.board;
   const line = `${name} scores ${option.score} in ${boxLabel(option.box)}${option.extra ? `, plus ${b.extra} extra` : ''}${made ? `, and the ${b.bonus.worth}\u00a0bonus` : ''}.`;
   g.last = { id: option.box.id, score: option.score, extra: option.extra ? b.extra : 0, bonus: made };
   g.held = [false, false, false, false, false];
   if (filled(b, g.you) && filled(b, g.them)) { finish(line); return; }
-  if (g.turn === 'them') g.number++;
+  if (g.turn !== starter(g)) g.number++; // a round is over once whoever went second has had their turn
   g.turn = g.turn === 'you' ? 'them' : 'you';
   g.rolls = 0;
   save();
@@ -283,7 +285,8 @@ function yourTurn(g) {
 // `spec` is for a game that isn't one of those: { kind: 'friend', seed, score } plays the dice from a friend's link
 // (see js/links.js), against the score they had with them, if the link has it. It counts nowhere. { kind: 'day', seed, day }
 // is the table of the day `day` ("2026-11-19"): the first game finished or given up there counts for that day, and only there.
-// { kind: 'two', names: ['Black', 'Red'] } is Two players: Classic, two people at one phone, counting nowhere.
+// { kind: 'two', names: ['Black', 'Red'] } is Two players: Classic, two people at one phone, counting nowhere, Black first
+// unless it says first: 'them' (Play again lets the other player start).
 function start(table, opp = table, at = table ?? 0, spec = {}) {
   const seed = spec.seed ?? ((Math.random() * 2 ** 31) | 0);
   const board = boardFor(at, seed);
@@ -293,9 +296,9 @@ function start(table, opp = table, at = table ?? 0, spec = {}) {
     table, opp, seed, board,
     ...(spec.kind === 'friend' && { kind: 'friend', score: spec.score ?? null }),
     ...(spec.kind === 'day' && { kind: 'day', day: spec.day }),
-    ...(spec.kind === 'two' && { kind: 'two', names: spec.names }),
+    ...(spec.kind === 'two' && { kind: 'two', names: spec.names, first: spec.first === 'them' ? 'them' : 'you' }),
     you: blankCard(board), them: blankCard(board),
-    turn: 'you', number: 1, rolls: 0, last: null,
+    turn: spec.kind === 'two' && spec.first === 'them' ? 'them' : 'you', number: 1, rolls: 0, last: null,
     dice: [die(), die(), die(), die(), die()], held: [false, false, false, false, false],
   };
   busy = hurry = false;
@@ -475,7 +478,8 @@ async function copy(text) {
 
 // The same again: another game at a table of the tour or a quick game, or the same dice again at a friend's table.
 // At Two players, another game between the same two, with new dice.
-const again = g => start(g.table, g.opp, rulesOf(g), two(g) ? { kind: 'two', names: g.names } : g.kind ? { kind: g.kind, seed: g.seed, score: g.score, day: g.day } : {});
+// At Two players the other player starts it: Red after a game Black started, Black after one Red did.
+const again = g => start(g.table, g.opp, rulesOf(g), two(g) ? { kind: 'two', names: g.names, first: starter(g) === 'you' ? 'them' : 'you' } : g.kind ? { kind: g.kind, seed: g.seed, score: g.score, day: g.day } : {});
 
 // The result of the game that's just finished, as finish() wrote it. It can be closed, to look over the pad, and opened again.
 function showResult() {
@@ -881,7 +885,8 @@ function whole(g) {
       && Number.isInteger(g.opp) && !!TABLES[g.opp] && (g.table === null || (Number.isInteger(g.table) && !!TABLES[g.table]))
       && five(g.dice) && g.dice.every(d => Number.isInteger(d) && d >= 1 && d <= 6) && five(g.held)
       && b.rolls > 0 && b.bonus.at > 0 && b.boxes.length > 0 && b.boxes.every(x => boxLabel(x) && x.id in g.you && x.id in g.them)
-      && (g.kind !== 'two' || (Array.isArray(g.names) && g.names.length === 2 && g.names.every(n => typeof n === 'string' && n)));
+      && (g.kind !== 'two' || (Array.isArray(g.names) && g.names.length === 2 && g.names.every(n => typeof n === 'string' && n)
+        && [undefined, 'you', 'them'].includes(g.first)));
   } catch { return false; } // a part missing altogether
 }
 function save() {
@@ -995,8 +1000,8 @@ addEventListener('storage', e => {
 });
 
 // How far into a game a save is: the turn, then the rolls used, with the opponent's go after all of yours.
-// (At Two players, Red's rolls count after Black's.)
-const reached = g => g.number * 10 + (g.turn === 'them' ? (two(g) ? 5 + g.rolls : 9) : g.rolls);
+// (At Two players, the second player's rolls count after those of whoever started.)
+const reached = g => g.number * 10 + (two(g) ? (g.turn === starter(g) ? 0 : 5) + g.rolls : g.turn === 'them' ? 9 : g.rolls);
 // Part way through your turn here, with the other copy behind it in the same game, or on another game, or none.
 function keepOurs(ours, theirs) {
   if (!ours || !hands(ours) || ours.rolls === 0) return false;

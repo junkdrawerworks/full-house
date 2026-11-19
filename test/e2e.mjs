@@ -1791,6 +1791,46 @@ try {
     g = await game();
     assert.deepEqual([g.kind, g.names, g.number, g.over], ['two', ['Mum', 'Red'], 1, undefined]);
 
+    // Play again lets the other player start: Red rolls first, in red, and the round ends after Mum's turn.
+    assert.deepEqual([g.turn, g.first], ['them', 'them']);
+    assert.equal(await page.textContent('#status'), 'Red’s turn. Roll the dice.');
+    assert.ok(await page.evaluate(() => document.getElementById('tray').classList.contains('theirs')), 'Red’s dice aren’t red as Red starts');
+    assert.deepEqual(await page.locator('#pad thead th').allTextContents(), ['Box', 'Mum', 'Red'], 'the columns swapped');
+    for (const [turn, number, next] of [['you', 1, 'Mum’s turn. Roll the dice.'], ['them', 2, 'Red’s turn. Roll the dice.']]) {
+      await page.click('#b-roll');
+      await settled();
+      await page.locator('tr.can').first().click();
+      await page.locator('tr.can').first().click();
+      g = await game();
+      assert.deepEqual([g.turn, g.number], [turn, number]);
+      assert.equal(await page.textContent('#status'), next);
+    }
+    // A reload part way through Red's turn keeps it: a save further on in the round is the same game, not an older one.
+    await page.reload();
+    g = await game();
+    assert.deepEqual([g.turn, g.number, g.first], ['them', 2, 'them']);
+    // Red has the last turn of all now: Mum's card fills last, and the game after this one is Mum's to start again.
+    await page.evaluate(() => {
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) { g.you[b.id] = b.id === 'chance' ? null : 20; g.them[b.id] = b.id === 'chance' ? null : 5; }
+      Object.assign(g, { number: 13, rolls: 0, turn: 'them' });
+      window.fullHouse.set(g);
+    });
+    assert.equal(await page.textContent('#status'), 'Red’s last turn. Roll the dice.');
+    for (const who of ['Mum', null]) {
+      await page.click('#b-roll');
+      await settled();
+      await page.locator('tr.can').first().click();
+      await page.locator('tr.can').first().click();
+      if (who) assert.equal(await page.textContent('#status'), `${who}’s last turn. Roll the dice.`);
+    }
+    await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
+    assert.equal(await page.textContent('#result-title'), 'Mum wins');
+    await page.click('#b-next');
+    g = await game();
+    assert.deepEqual([g.turn, g.first, g.number], ['you', 'you', 1]);
+    assert.equal(await page.textContent('#status'), 'Mum’s turn. Roll the dice.');
+
     // Ending one part way is two taps, and no loss for anyone.
     await page.click('#b-menu');
     assert.equal(await page.textContent('#b-concede'), 'End this game');
