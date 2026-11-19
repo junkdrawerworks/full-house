@@ -840,7 +840,8 @@ try {
     // A box the dice score nothing in is written in, not scored.
     await page.evaluate(() => {
       const g = structuredClone(window.fullHouse.game);
-      for (const b of g.board.boxes) { g.you[b.id] = b.id === 'large' || b.id === 'chance' ? null : 1; g.them[b.id] = b.id === 'chance' ? null : 20; }
+      // Sol's Five of a kind holds a 0, so a five of a kind on Sol's last turn earns no extra 100 to change what decided it.
+      for (const b of g.board.boxes) { g.you[b.id] = b.id === 'large' || b.id === 'chance' ? null : 1; g.them[b.id] = b.id === 'chance' ? null : b.id === 'five' ? 0 : 20; }
       Object.assign(g, { number: 12, rolls: 1, turn: 'you', dice: [2, 2, 2, 3, 3] });
       window.fullHouse.settings.pace = 'quick';
       window.fullHouse.set(g);
@@ -1133,13 +1134,14 @@ try {
     const { page } = t;
     // A game at a table (null for a quick game) with every box but Chance worth `each` to you, played to its result.
     // The opponent's Five of a kind holds a 0, so a five of a kind on their last turn (about one game in twenty for
-    // Pip) earns them no extra 100 to win a game the test means you to win.
+    // Pip) earns them no extra 100 to win a game the test means you to win. Yours holds a 0 too, as a box that can only
+    // score 50 or nothing would: a 10 there reads as a five of a kind, and the line on what decided the game says so.
     const play = async (table, each) => {
       await page.evaluate(([table, each]) => {
         window.fullHouse.settings.pace = 'quick';
         window.fullHouse.start(table, table ?? 0);
         const g = structuredClone(window.fullHouse.game);
-        for (const b of g.board.boxes) { g.you[b.id] = b.id === 'chance' ? null : each; g.them[b.id] = b.id === 'chance' ? null : b.id === 'five' ? 0 : 5; }
+        for (const b of g.board.boxes) { g.you[b.id] = b.id === 'chance' ? null : b.id === 'five' ? 0 : each; g.them[b.id] = b.id === 'chance' ? null : b.id === 'five' ? 0 : 5; }
         Object.assign(g, { number: 13, rolls: 1, turn: 'you' });
         window.fullHouse.set(g);
       }, [table, each]);
