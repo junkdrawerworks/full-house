@@ -5,7 +5,7 @@
 **A five-dice game against a ladder of eight opponents, each sharper than the last, on tables that change the rules.** Roll in the felt tray, hold what you like, and pencil your score into the pad beside your opponent's. Beat an opponent to move up a table: Evens in place of Ones, Sixes that score three times over, two-roll turns, wild ones, and on up to the Dealer.
 
 <p align="center">
-  <img src="docs/phone-tour.png" alt="The tour: eight tables listed on a paper card, Classic and Evens beaten with best scores of 231 and 247, Triple Sixes against Bea next up, and the rest locked" width="250">
+  <img src="docs/phone-tour.png" alt="The tour: eight tables listed on a paper card, Classic and Evens beaten, won 1 of 2 and 1 of 3, with best scores of 231 and 247, Triple Sixes against Bea next up, and the rest locked" width="250">
   &nbsp;
   <img src="docs/phone-play.png" alt="Turn 8 at Triple Sixes: three sixes held in the felt tray after two rolls, the Sixes box marked times three and picked on the pad, and the line Tap Sixes again to score 54" width="250">
 </p>
@@ -31,7 +31,7 @@
 - **Opponents who plan.** Five dice can only land 252 different ways, so an opponent works out, for every possible roll, which dice to keep for the best result over the rest of its turn. It values each box by what it scores now, what it might be worth later, and the top-section bonus. The early opponents leave parts of that out and make mistakes on purpose, though only close calls a person might get wrong. Past Pip, the further up the tour, the more patient an opponent is and the fewer slips it makes. On classic rules Pip averages about 151, and the Dealer about 244 (`node dev/strength.mjs 600 classic`); the best possible play averages 254.59 (Tom Verhoeff, *Optimal Solitaire Yahtzee Player*, Eindhoven University of Technology, 1999).
 - **Watch them play.** Their red dice tumble in your tray and their scores go into the pad in red pencil. Tap the dice to hurry a turn along, or choose Quick in the game's menu, or Just their score to see only where their dice end up and what they score.
 - **Quick game.** Classic rules against anyone you've met on the tour, once you've beaten Pip at table 1.
-- **Your progress.** The tables you've beaten and your best score at each. Giving up part way counts as a loss.
+- **Your progress.** Each table's line on the tour says whether you've beaten it, the games you've won and played there (or lost, until you beat it), and your best score there; Quick game says how many of those you've won. Giving up part way counts as a loss.
 - **On a keyboard,** Space or R rolls and 1 to 5 hold the dice. Tab reaches the boxes, the arrows go between them, and Enter picks one, then scores it. Space or Enter hurries the opponent along. How to play says so on a computer, and Keyboard shortcuts in the game's menu turns the single keys off.
 - No ads, no account and no server. Your progress and any game in progress stay in your browser. It works offline and installs to a phone's home screen.
 

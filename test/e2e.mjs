@@ -331,6 +331,35 @@ try {
     assert.equal(await page.evaluate(() => scrollY), 0, 'the tour scrolled away from Carry on');
   });
 
+  await step('each table on the tour shows the games won and played there, and your best, at every width', async ({ page }) => {
+    const line = n => page.textContent(`#tables li:nth-child(${n}) small`);
+    // A fresh tour: nothing played, and no count under Quick game, which isn't offered yet.
+    assert.equal(await line(1), 'Next up');
+    assert.equal(await line(2), 'Locked');
+    await page.evaluate(() => localStorage.setItem('full-house.v1', JSON.stringify({ progress: { beaten: [true, true], best: [231, 247, 142], played: [5, 13, 2], won: [2, 1, 0], quick: { played: 8, won: 3 } } })));
+    await page.reload();
+    assert.equal(await line(1), 'Beaten · won 2 of 5 · your best 231');
+    assert.equal(await line(2), 'Beaten · won 1 of 13 · your best 247');
+    assert.equal(await line(3), 'Next up · lost 2 · your best 142');
+    assert.equal(await line(4), 'Locked');
+    assert.equal(await page.textContent('#quick-record'), 'Won 3 of 8');
+    // Giving up there is one more game played and not won.
+    await page.click('[data-table="2"]');
+    await page.click('#b-sit');
+    await page.click('#b-menu');
+    await page.click('#b-concede');
+    await page.click('#b-concede');
+    assert.equal(await line(3), 'Next up · lost 3 · your best 142');
+    // On the narrowest phone each line still fits its row, wrapping rather than running off the card.
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 700 });
+      const over = await page.evaluate(() => [...document.querySelectorAll('#tables li, #tables small, #quick-record')]
+        .filter(el => el.scrollWidth > el.clientWidth + 1 || el.getBoundingClientRect().right > innerWidth).map(el => el.textContent.trim().slice(0, 40)));
+      assert.deepEqual(over, [], `at ${width} wide, a line runs past its row`);
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `at ${width} wide the tour scrolls sideways`);
+    }
+  });
+
   await step('a finished game is not offered to carry on', async t => {
     const { page } = t;
     const screen = () => page.evaluate(() => document.body.dataset.screen);

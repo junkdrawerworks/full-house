@@ -441,7 +441,7 @@ function renderHome() {
   const list = $('tables');
   list.innerHTML = TABLES.map((t, i) => {
     const beaten = !!progress.beaten[i], unlocked = i === 0 || !!progress.beaten[i - 1];
-    const state = beaten ? `Beaten${progress.best[i] ? ` · your best ${progress.best[i]}` : ''}` : unlocked ? 'Next up' : 'Locked';
+    const state = unlocked ? [beaten ? 'Beaten' : 'Next up', record(i), progress.best[i] && `your best ${progress.best[i]}`].filter(Boolean).join(' · ') : 'Locked';
     return `<li class="${beaten ? 'beaten' : unlocked ? 'next' : 'locked'}">
       <button type="button" data-table="${i}" ${unlocked ? '' : 'disabled'}>
         <span class="n">${i + 1}</span>
@@ -450,11 +450,22 @@ function renderHome() {
   }).join('');
   // Quick games open once you've beaten Pip, so the first game you win is always one that counts on the tour.
   $('quick').hidden = !progress.beaten[0];
+  const q = progress.quick;
+  $('quick-record').textContent = q.played > 0 && q.won <= q.played ? `Won ${q.won} of ${q.played}` : '';
+  $('quick-record').hidden = !$('quick-record').textContent;
   const met = TABLES.map((t, i) => ({ t, i })).filter(({ i }) => i === 0 || progress.beaten[i - 1]);
   $('people').innerHTML = met.map(({ t, i }) => `<button type="button" data-quick="${i}"><i class="dot" style="--c:${t.who.colour}"></i>${t.who.name}</button>`).join('');
   const c = $('b-continue'), going = game && !game.over;
   c.hidden = !going;
   if (going) c.innerHTML = `<b>Carry on</b><span>${where(game)}, against ${mid(who(game).name)}. Turn ${Math.min(game.number, game.board.boxes.length)} of ${game.board.boxes.length}.</span>`;
+}
+
+// The games played at a table, on its line on the tour: "won 2 of 5" once it's beaten, "lost 2" until then. A game
+// given up, or tied, is one played and not won. Nothing before the first game, nor for a count that doesn't add up.
+function record(i) {
+  const played = progress.played[i] || 0, won = progress.won[i] || 0;
+  if (!played || won > played) return '';
+  return progress.beaten[i] ? `won ${won} of ${played}` : `lost ${played - won}`;
 }
 
 // The focus goes to the thing to do next there (Roll; on the tour, Carry on or the table that's next), unless the page is

@@ -171,6 +171,8 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 .dot.big { display: grid; place-items: center; width: 44px; height: 44px; margin: 0; flex: none; color: #fff; font: 700 22px var(--cond); font-style: normal; }
 
 .quick p { margin: -4px 0 10px; color: var(--muted); font-size: 14.5px; }
+.quick .record { margin: -6px 0 10px; font: 600 13px var(--text); color: var(--muted); }
+.quick .record[hidden] { display: none; }
 .people { display: flex; flex-wrap: wrap; gap: 8px; }
 .people button {
   padding: 10px 14px;
