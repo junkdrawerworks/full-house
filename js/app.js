@@ -137,7 +137,9 @@ $('extra-how').textContent = `Hold it down for ${HOLD_MS === 1000 ? 'a second' :
 
 const canSpend = g => !!g && !busy && hands(g) && extraOn(g) && !allHeld(g);
 function holdStart(by) {
-  if (hold || !canSpend(game)) return false;
+  // A hold that has spent one waits only for its own let-go; if that never comes (a Mac sends no keyup for E let go with
+  // Cmd down), a new press in a later game takes its place rather than finding the button dead.
+  if ((hold && !hold.done) || !canSpend(game)) return false;
   hint = false;
   clearTimeout(hintTimer);
   hold = { by, done: false, timer: setTimeout(holdDone, HOLD_MS) };
@@ -1094,7 +1096,7 @@ document.addEventListener('pointerup', e => holdRelease(e.pointerId), true);
 document.addEventListener('pointercancel', e => { if (hold?.by === e.pointerId) holdDrop(); }, true);
 // The click a finger or the mouse makes is the hold's to deal with (detail counts its clicks); one with no pointer behind
 // it is a screen reader's or a switch's.
-extraButton.addEventListener('click', e => { if (e.detail === 0 && !hold) pressTwice(); });
+extraButton.addEventListener('click', e => { if (e.detail === 0 && !(hold && !hold.done)) pressTwice(); });
 // After a hold that spent one, the finger's lift lands on whatever is under it now: it mustn't press that too.
 document.addEventListener('click', e => {
   if (performance.now() >= eatClick) return;

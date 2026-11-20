@@ -2659,6 +2659,25 @@ try {
     assert.deepEqual(await spent(page), [4, 1, 2], 'a hold after those didn’t spend one');
   }, { desktop: true });
 
+  await step('extra rolls: a hold whose let-go never comes, as a Mac’s E let go with Cmd down, leaves the next game’s Extra roll working', async ({ page, settled }) => {
+    await withPocket(page, 3);
+    const ms = await holdMs(page);
+    await toLastRoll(page, settled);
+    await page.keyboard.down('e');
+    await page.waitForTimeout(ms + 250);
+    await settled();
+    assert.deepEqual(await spent(page), [4, 1, 2]);
+    // No keyup for it. The next game: held with the mouse, it spends one; and the game after, a screen reader's two presses do.
+    await toLastRoll(page, settled);
+    await holdExtra(page);
+    await settled();
+    assert.deepEqual(await spent(page), [4, 1, 1], 'Extra roll couldn’t be held after a hold whose let-go never came');
+    await toLastRoll(page, settled);
+    await page.evaluate(() => { const b = document.getElementById('b-extra'); b.click(); b.click(); });
+    assert.deepEqual(await spent(page), [4, 1, 0], 'a screen reader couldn’t press Extra roll after a hold whose let-go never came');
+    await page.keyboard.up('e');
+  }, { desktop: true });
+
   await step('with all five dice held there is nothing to roll', async ({ page, game, settled }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
