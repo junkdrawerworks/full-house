@@ -38,7 +38,7 @@ async function open(viewport, deviceScaleFactor, { clock = false } = {}) {
   await page.addInitScript(() => {
     let a = 9; // mulberry32
     Math.random = () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
-    localStorage.setItem('full-house.v1', JSON.stringify({ progress: { beaten: [true, true], best: [231, 247], played: [2, 3], won: [1, 1] } }));
+    localStorage.setItem('full-house.v1', JSON.stringify({ progress: { beaten: [true, true], best: [231, 247], played: [2, 3], won: [1, 1], pocket: 2 } })); // an extra roll for each win
   });
   await page.goto(base);
   await page.evaluate(() => document.fonts.ready);
