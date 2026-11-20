@@ -2157,7 +2157,7 @@ try {
     for (let r = 1; r <= 3; r++) {
       assert.ok(await page.isHidden('#b-extra'), `an extra roll is offered with ${4 - r} rolls left`);
       await page.click('#b-roll');
-      if (r < 3) assert.ok(await page.isHidden('#b-extra'), 'an extra roll is offered with dice in the air');
+      assert.ok(await page.isHidden('#b-extra'), 'an extra roll is offered with dice in the air'); // the last roll's too, so a quick tap on Roll can't land on it
       await settled();
     }
     // After the last: beside "No rolls left", with how many are in the pocket, named for a screen reader.
