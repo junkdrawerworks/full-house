@@ -2055,6 +2055,35 @@ try {
   };
   const pocket = page => page.evaluate(() => window.fullHouse.progress.pocket);
   const savedPocket = page => page.evaluate(() => JSON.parse(localStorage.getItem('full-house.v1')).progress.pocket);
+  // Extra roll is spent by holding it down for HOLD_MS (js/app.js). Held with the mouse for `ms`, all of that and a
+  // little more unless it says, then let go; or with a finger (touch events, as a phone sends them); or a key.
+  const holdMs = page => page.evaluate(() => window.fullHouse.holdMs);
+  const extraAt = async page => { const b = await page.locator('#b-extra').boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
+  const holdExtra = async (page, ms) => {
+    ms ??= await holdMs(page) + 250;
+    const { x, y } = await extraAt(page);
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.waitForTimeout(ms);
+    await page.mouse.up();
+  };
+  const cdps = new WeakMap();
+  const touch = async (page, type, at) => {
+    if (!cdps.has(page)) cdps.set(page, await page.context().newCDPSession(page));
+    await cdps.get(page).send('Input.dispatchTouchEvent', { type, touchPoints: at ? [at] : [] });
+  };
+  const touchExtra = async (page, ms) => {
+    ms ??= await holdMs(page) + 250;
+    await touch(page, 'touchStart', await extraAt(page));
+    await page.waitForTimeout(ms);
+    await touch(page, 'touchEnd');
+  };
+  const holdKey = async (page, key, ms) => {
+    ms ??= await holdMs(page) + 250;
+    await page.keyboard.down(key);
+    await page.waitForTimeout(ms);
+    await page.keyboard.up(key);
+  };
   const withPocket = async (page, n, progress = {}) => {
     await page.evaluate(([n, progress]) => localStorage.setItem('full-house.v1', JSON.stringify({ progress: { ...progress, pocket: n } })), [n, progress]);
     await page.reload();
@@ -2182,9 +2211,12 @@ try {
     assert.equal(await pocket(page), 2);
     assert.ok(await page.isVisible('#b-extra'), 'the extra roll went in a reload before it was spent');
     assert.deepEqual([(await game()).dice, (await game()).held], [before, [true, false, true, false, false]]);
-    // Spent: the dice not held are rolled once more, the dice roll 4 of turn 1 has for anyone with this seed, and it costs one.
+    // Spent (held down): the dice not held are rolled once more, the dice roll 4 of turn 1 has for anyone with this seed, and it costs one.
     await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
-    await page.click('#b-extra');
+    const at = await extraAt(page);
+    await page.mouse.move(at.x, at.y);
+    await page.mouse.down();
+    await page.waitForFunction(() => window.fullHouse.game.extraRoll === 1);
     assert.ok(await page.isHidden('#b-extra'), 'Extra roll is still there as the dice are thrown');
     const thrown = await page.evaluate(async seed => (await import('./js/rng.js')).rollFor(seed, 1, 4), seed);
     let g = await game();
@@ -2194,6 +2226,7 @@ try {
     const saved = JSON.parse(await page.evaluate(() => localStorage.getItem('full-house.v1')));
     assert.deepEqual([saved.progress.pocket, saved.game.extraRoll, saved.game.rolls, saved.game.dice], [1, 1, 4, g.dice], 'the extra roll was not saved as it was thrown');
     await page.reload();
+    await page.mouse.up();
     await settled();
     g = await game();
     assert.deepEqual([g.dice, g.rolls, g.extraRoll, await pocket(page)], [saved.game.dice, 4, 1, 1], 'a reload changed the extra roll or refunded it');
@@ -2202,7 +2235,7 @@ try {
     await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
     await page.click('#b-roll', { force: true }); // it says No rolls left, and is aria-disabled
     await page.keyboard.press('r');
-    await page.keyboard.press('e');
+    await holdKey(page, 'e');
     await page.waitForTimeout(150);
     assert.deepEqual([(await game()).dice, (await game()).rolls, await pocket(page)], [g.dice, 4, 1], 'the dice were rolled again after the extra roll');
     // Holds are over once it's spent, and the pad offers what the new dice score.
@@ -2219,7 +2252,7 @@ try {
     assert.equal(await pocket(page), 1);
     assert.equal((await game()).number, 2);
     assert.ok(await page.isHidden('#b-extra'), 'a second extra roll was offered in the same game');
-    await page.keyboard.press('e');
+    await holdKey(page, 'e');
     await page.waitForTimeout(150);
     assert.deepEqual([(await game()).rolls, await pocket(page)], [3, 1], 'E spent a second extra roll in one game');
     // The next game offers it again, and an empty pocket offers none.
@@ -2227,7 +2260,7 @@ try {
     for (let r = 1; r <= 3; r++) { await page.click('#b-roll'); await settled(); }
     assert.ok(await page.isVisible('#b-extra'), 'a new game offers no extra roll');
     assert.equal(await page.getByRole('button', { name: 'Extra roll, 1 left', exact: true }).count(), 1, 'Extra roll doesn’t say how many are left');
-    await page.click('#b-extra');
+    await touchExtra(page);
     await settled();
     assert.equal(await pocket(page), 0);
     await page.evaluate(() => { window.fullHouse.start(0); window.fullHouse.settings.pace = 'quick'; });
@@ -2255,13 +2288,13 @@ try {
     for (let i = 0; i < 5; i++) await page.click(`.die >> nth=${i}`);
     assert.equal(await page.getAttribute('#b-extra', 'aria-disabled'), 'true', 'Extra roll can be pressed with all five held');
     assert.equal(await page.textContent('#status'), 'All five held. Let one go to use an extra roll, or pick a box to score in.');
-    await page.click('#b-extra', { force: true });
+    await holdExtra(page);
     await page.waitForTimeout(150);
     assert.deepEqual([(await game()).rolls, await pocket(page)], [4, 3], 'an extra roll was spent with nothing to roll');
     // Spent, it goes, and the pad stays put.
     const top = await padAt();
     await page.click('.die >> nth=0');
-    await page.click('#b-extra');
+    await touchExtra(page);
     await settled();
     assert.deepEqual([(await game()).rolls, await pocket(page), await padAt()], [5, 2, top], 'the pad moved as Extra roll went');
   }, { viewport: { width: 320, height: 568 } });
@@ -2272,7 +2305,7 @@ try {
     await page.evaluate(() => { window.fullHouse.start(null, 0, 0, { kind: 'friend', seed: 77, score: null }); window.fullHouse.settings.pace = 'quick'; });
     for (let r = 1; r <= 3; r++) { await page.click('#b-roll'); await settled(); }
     assert.ok(await page.isHidden('#b-extra'), 'an extra roll is offered at a friend’s table');
-    await page.keyboard.press('e');
+    await holdKey(page, 'e');
     await page.waitForTimeout(150);
     assert.deepEqual([(await game()).rolls, await pocket(page)], [3, 5]);
     await page.click('#b-menu');
@@ -2283,7 +2316,7 @@ try {
     for (const who of ['Black', 'Red']) {
       for (let r = 1; r <= 3; r++) { await page.click('#b-roll'); await settled(); }
       assert.ok(await page.isHidden('#b-extra'), `an extra roll is offered to ${who} at Two players`);
-      await page.keyboard.press('e');
+      await holdKey(page, 'e');
       await page.waitForTimeout(150);
       assert.deepEqual([(await game()).rolls, await pocket(page)], [3, 5]);
       await page.locator('tr.can').first().click();
@@ -2305,7 +2338,7 @@ try {
     // more, and the pocket isn't touched.
     await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
     for (let r = 1; r <= 3; r++) { await page.click('#b-roll'); await settled(); }
-    await page.click('#b-extra');
+    await holdExtra(page);
     await settled();
     await page.locator('tr.can').first().click();
     const expected = await page.evaluate(async () => {
@@ -2343,47 +2376,251 @@ try {
     assert.equal(await pocket(page), 5);
   });
 
-  await step('keyboard: E takes an extra roll, How to play and the menu say so, and with the shortcuts off it does nothing', async ({ page, game, settled }) => {
+  await step('keyboard: E held takes an extra roll, How to play and the menu say so, and with the shortcuts off it does nothing', async ({ page, game, settled }) => {
     await withPocket(page, 2);
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
     await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
-    await page.keyboard.press('e');
+    await holdKey(page, 'e');
     assert.equal((await game()).rolls, 0, 'E rolled before the first roll');
     for (let r = 1; r <= 2; r++) {
       await page.keyboard.press('r');
       await settled();
-      await page.keyboard.press('e');
+      await holdKey(page, 'e');
       await page.waitForTimeout(100);
       assert.deepEqual([(await game()).rolls, await pocket(page)], [r, 2], `E rolled with a roll left (roll ${r})`);
     }
     await page.keyboard.press('r');
     await settled();
     assert.equal(await page.getAttribute('#b-extra', 'aria-keyshortcuts'), 'E');
-    await page.keyboard.press('Shift+E');
+    await page.keyboard.down('Shift');
+    await holdKey(page, 'E');
+    await page.keyboard.up('Shift');
     await settled();
     assert.deepEqual([(await game()).rolls, await pocket(page)], [4, 1], 'E took no extra roll');
-    // Pressed from the keyboard, the focus stays on the game: on Roll, as Extra roll goes.
+    // Held from the keyboard, the focus stays on the game: on Roll, as Extra roll goes.
     await page.evaluate(() => { window.fullHouse.start(0); window.fullHouse.settings.pace = 'quick'; });
     for (let r = 1; r <= 3; r++) { await page.keyboard.press('r'); await settled(); }
     await page.focus('#b-extra');
-    await page.keyboard.press('Enter');
+    await holdKey(page, 'Enter');
     await settled();
     assert.deepEqual([(await game()).rolls, await pocket(page)], [4, 0]);
     assert.equal(await page.evaluate(() => document.activeElement.id), 'b-roll', 'the focus was lost with Extra roll');
     await page.click('#b-menu');
-    assert.match(await page.textContent('#o-keys-more'), /E takes an extra roll/);
+    assert.match(await page.textContent('#o-keys-more'), /holding E takes an extra roll/);
     await page.click('#b-menu-rules');
-    assert.match(await page.textContent('#rules-list .keys'), /E takes an extra roll/);
+    assert.match(await page.textContent('#rules-list .keys'), /holding E takes an extra roll/);
+    assert.match(await page.textContent('#rules-list'), /once more: hold Extra roll down for a second\./);
     await page.keyboard.press('Escape');
     // Off: E does nothing.
     await page.evaluate(() => { window.fullHouse.progress.pocket = 1; window.fullHouse.settings.keys = false; window.fullHouse.start(0); window.fullHouse.settings.pace = 'quick'; });
     for (let r = 1; r <= 3; r++) { await page.click('#b-roll'); await settled(); }
     assert.equal(await page.getAttribute('#b-extra', 'aria-keyshortcuts'), null, 'Extra roll says E takes it with the shortcuts off');
     await page.evaluate(() => document.activeElement.blur());
-    await page.keyboard.press('e');
+    await holdKey(page, 'e');
     await page.waitForTimeout(150);
     assert.deepEqual([(await game()).rolls, await pocket(page)], [3, 1], 'E took an extra roll with the shortcuts off');
+  }, { desktop: true });
+
+  // To the last roll of a new game at table 1, with nothing spent: where Extra roll is on offer.
+  const toLastRoll = async (page, settled) => {
+    await page.evaluate(() => { window.fullHouse.start(0); window.fullHouse.settings.pace = 'quick'; });
+    for (let r = 1; r <= 3; r++) { await page.click('#b-roll'); await settled(); }
+    assert.ok(await page.isVisible('#b-extra'), 'no extra roll on offer');
+  };
+  const spent = async page => page.evaluate(() => [window.fullHouse.game.rolls, window.fullHouse.game.extraRoll, window.fullHouse.progress.pocket]);
+  const fill = page => page.evaluate(() => getComputedStyle(document.getElementById('b-extra'), '::before').clipPath);
+  const EMPTY = 'inset(0px 100% 0px 0px)';
+
+  await step('extra rolls: Extra roll says it takes a hold, a screen reader hears how, and a long press on it brings up no menu', async ({ page, settled }) => {
+    await withPocket(page, 3);
+    assert.equal(await holdMs(page), 1000);
+    await toLastRoll(page, settled);
+    assert.equal(await page.textContent('#b-extra'), 'Extra rollHold · 3 left');
+    assert.equal(await page.getByRole('button', { name: 'Extra roll, 3 left', exact: true }).count(), 1);
+    assert.equal(await page.evaluate(() => document.getElementById(document.getElementById('b-extra').getAttribute('aria-describedby'))?.textContent),
+      'Hold it down for a second to use one. With a screen reader, press it twice.');
+    // A long press brings up no menu or selection, and a finger on it doesn't scroll.
+    const style = await page.evaluate(() => { const s = getComputedStyle(document.getElementById('b-extra')); return [s.touchAction, s.userSelect]; });
+    assert.deepEqual(style, ['none', 'none']);
+    assert.ok(await page.evaluate(() => !document.getElementById('b-extra').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))), 'a long press can open a menu on Extra roll');
+  });
+
+  await step('extra rolls: a quick tap, a finger’s or the mouse’s, spends nothing and says to hold it down', async ({ page, settled }) => {
+    await withPocket(page, 3);
+    await toLastRoll(page, settled);
+    await page.tap('#b-extra');
+    await page.waitForTimeout(200);
+    assert.deepEqual(await spent(page), [3, null, 3], 'a tap spent an extra roll');
+    assert.equal(await page.textContent('#b-extra small'), 'Hold it down');
+    await page.click('#b-extra');
+    await page.waitForTimeout(200);
+    assert.deepEqual(await spent(page), [3, null, 3], 'a click spent an extra roll');
+    await page.waitForFunction(() => document.querySelector('#b-extra small').textContent === 'Hold · 3 left', null, { timeout: 3000 });
+  });
+
+  await step('extra rolls: held for half the time and let go, it spends nothing, and the strokes rub out', async ({ page, settled }) => {
+    await withPocket(page, 3);
+    const ms = await holdMs(page);
+    await toLastRoll(page, settled);
+    const at = await extraAt(page);
+    await page.mouse.move(at.x, at.y);
+    await page.mouse.down();
+    await page.waitForTimeout(ms / 2);
+    assert.equal(await page.textContent('#b-extra small'), 'Keep holding');
+    const half = await fill(page), right = +(half.match(/^inset\(0px ([\d.]+)%/)?.[1] ?? 100);
+    assert.ok(right > 15 && right < 85, `the strokes aren't partway across halfway through the hold: ${half}`);
+    await page.mouse.up();
+    await page.waitForTimeout(400);
+    assert.deepEqual(await spent(page), [3, null, 3], 'a half hold spent an extra roll');
+    assert.equal(await fill(page), EMPTY, 'the strokes stayed after letting go');
+    // Held again for a bit over half: the first hold's time doesn't carry over to it.
+    await holdExtra(page, ms * 0.6);
+    await page.waitForTimeout(ms / 2);
+    assert.deepEqual(await spent(page), [3, null, 3], 'a second short hold spent an extra roll');
+    await touchExtra(page, ms / 2);
+    await page.waitForTimeout(ms / 2);
+    assert.deepEqual(await spent(page), [3, null, 3], 'a short hold of a finger spent an extra roll');
+  });
+
+  await step('extra rolls: sliding off it, a scroll taking the touch, or the page going out of sight call a hold off, even if it comes back', async ({ page, settled }) => {
+    await withPocket(page, 3);
+    const ms = await holdMs(page);
+    await toLastRoll(page, settled);
+    const at = await extraAt(page);
+    // Off and back on again, let go on it after the whole time.
+    await page.mouse.move(at.x, at.y);
+    await page.mouse.down();
+    await page.waitForTimeout(ms * 0.3);
+    await page.mouse.move(at.x, at.y + 80, { steps: 4 });
+    await page.waitForTimeout(ms * 0.3);
+    assert.equal(await fill(page), EMPTY, 'the strokes stayed after sliding off');
+    await page.mouse.move(at.x, at.y, { steps: 4 });
+    await page.waitForTimeout(ms * 0.7);
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+    assert.deepEqual(await spent(page), [3, null, 3], 'a hold that slid off and back spent an extra roll');
+    await touch(page, 'touchStart', at);
+    await page.waitForTimeout(ms * 0.3);
+    await touch(page, 'touchMove', { x: at.x - 150, y: at.y });
+    await touch(page, 'touchMove', at);
+    await page.waitForTimeout(ms);
+    await touch(page, 'touchEnd');
+    assert.deepEqual(await spent(page), [3, null, 3], 'a finger that slid off and back spent an extra roll');
+    await touch(page, 'touchStart', at);
+    await page.waitForTimeout(ms * 0.3);
+    await touch(page, 'touchCancel');
+    await page.waitForTimeout(ms);
+    assert.deepEqual(await spent(page), [3, null, 3], 'a cancelled touch spent an extra roll');
+    await touch(page, 'touchStart', at);
+    await page.waitForTimeout(ms * 0.3);
+    await page.evaluate(() => { Object.defineProperty(document, 'hidden', { value: true, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+    await page.waitForTimeout(ms);
+    await page.evaluate(() => { delete document.hidden; });
+    assert.deepEqual(await spent(page), [3, null, 3], 'a hold the page went out of sight in spent an extra roll');
+    await touch(page, 'touchEnd');
+  });
+
+  await step('extra rolls: held the whole second it spends exactly one, as the time is up, and the lift after presses nothing under it', async ({ page, settled }) => {
+    await withPocket(page, 3);
+    const ms = await holdMs(page);
+    await toLastRoll(page, settled);
+    const at = await extraAt(page);
+    // A finger: nothing until the time's up, then one, with the finger still down. Its lift, over Roll now, presses nothing.
+    await page.evaluate(() => { window.rollClicks = 0; document.getElementById('b-roll').addEventListener('click', () => window.rollClicks++); });
+    await touch(page, 'touchStart', at);
+    await page.waitForTimeout(ms - 250);
+    assert.deepEqual(await spent(page), [3, null, 3], 'an extra roll was spent before the hold was up');
+    assert.equal(await page.textContent('#b-extra small'), 'Keep holding');
+    await page.waitForTimeout(500);
+    assert.deepEqual(await spent(page), [4, 1, 2], 'a whole hold didn’t spend one extra roll');
+    assert.ok(await page.isHidden('#b-extra'));
+    await page.waitForTimeout(300);
+    await touch(page, 'touchEnd');
+    await page.waitForTimeout(300);
+    assert.equal(await page.evaluate(() => window.rollClicks), 0, 'the finger lifted after the hold pressed Roll');
+    await settled();
+    assert.deepEqual(await spent(page), [4, 1, 2]);
+    // The mouse, at the next game.
+    await toLastRoll(page, settled);
+    await holdExtra(page);
+    await settled();
+    assert.deepEqual(await spent(page), [4, 1, 1], 'holding with the mouse didn’t spend one extra roll');
+  });
+
+  await step('extra rolls: a fast run of taps on Roll at a small phone, through the last roll and on, spends none', async ({ page, game, settled }) => {
+    await withPocket(page, 3);
+    await page.evaluate(() => { window.fullHouse.start(0); window.fullHouse.settings.pace = 'quick'; });
+    // Where a thumb taps Roll's right-hand end, which Extra roll takes once the last roll lands.
+    const roll = await page.locator('#b-roll').boundingBox();
+    const at = { x: roll.x + roll.width - 40, y: roll.y + roll.height / 2 };
+    await page.evaluate(() => { window.extraPresses = 0; document.getElementById('b-extra').addEventListener('pointerdown', () => window.extraPresses++); });
+    const end = Date.now() + 4000;
+    while (Date.now() < end) {
+      await page.touchscreen.tap(at.x, at.y);
+      await page.waitForTimeout(60);
+    }
+    const g = await game();
+    assert.deepEqual([g.extraRoll, await pocket(page)], [null, 3], 'a tap meant for Roll spent an extra roll');
+    assert.equal(g.rolls, 3, 'the taps didn’t roll three times');
+    assert.ok(await page.evaluate(() => window.extraPresses) > 3, 'the taps never reached Extra roll');
+    assert.ok(await page.isVisible('#b-extra'));
+  }, { viewport: { width: 320, height: 568 } });
+
+  await step('extra rolls: a screen reader or switch presses it twice, the second within 4 seconds of the first', async ({ page, settled }) => {
+    await withPocket(page, 3);
+    await toLastRoll(page, settled);
+    // A click with no press before it (detail 0), as a screen reader sends: the first only asks.
+    await page.evaluate(() => document.getElementById('b-extra').click());
+    assert.deepEqual(await spent(page), [3, null, 3], 'a screen reader’s first press spent an extra roll');
+    assert.equal(await page.getByRole('button', { name: 'Tap again to use an extra roll', exact: true }).count(), 1);
+    assert.equal(await page.textContent('#b-extra'), 'Tap againto use one');
+    assert.equal(await page.textContent('#said'), 'Tap again to use an extra roll.');
+    await page.waitForTimeout(1500);
+    await page.evaluate(() => document.getElementById('b-extra').click());
+    assert.deepEqual(await spent(page), [4, 1, 2], 'a screen reader’s second press didn’t spend one');
+    await settled();
+    // Too late: after 4 seconds the first is forgotten, and the next press only asks again.
+    await toLastRoll(page, settled);
+    await page.evaluate(() => document.getElementById('b-extra').click());
+    await page.waitForTimeout(4300);
+    assert.equal(await page.textContent('#b-extra'), 'Extra rollHold · 2 left', 'Extra roll still asks for a second press after 4 seconds');
+    await page.evaluate(() => document.getElementById('b-extra').click());
+    await page.waitForTimeout(200);
+    assert.deepEqual(await spent(page), [3, null, 2], 'a press more than 4 seconds after the first spent an extra roll');
+    assert.equal(await page.textContent('#b-extra'), 'Tap againto use one');
+  });
+
+  await step('keyboard: E or Enter or Space on Extra roll take a hold, a quick press or letting go early spend nothing, and E’s repeats don’t hurry it', async ({ page, settled }) => {
+    await withPocket(page, 3);
+    const ms = await holdMs(page);
+    await toLastRoll(page, settled);
+    // Quick presses, and holds let go halfway.
+    await page.keyboard.press('e');
+    await holdKey(page, 'e', ms / 2);
+    await page.focus('#b-extra');
+    for (const key of ['Enter', ' ']) {
+      await page.keyboard.press(key);
+      await holdKey(page, key, ms / 2);
+    }
+    await page.waitForTimeout(ms * 0.7);
+    assert.deepEqual(await spent(page), [3, null, 3], 'a quick press or a short hold of a key spent an extra roll');
+    // E held, with the key repeating as a held key does: nothing for most of the time, then one, and no more.
+    await page.evaluate(() => document.activeElement.blur());
+    const t0 = Date.now();
+    await page.keyboard.down('e');
+    while (Date.now() - t0 < ms - 250) { await page.waitForTimeout(30); await page.keyboard.down('e'); }
+    assert.deepEqual(await spent(page), [3, null, 3], 'E’s repeats spent an extra roll before the hold was up');
+    while (Date.now() - t0 < ms + 1000) { await page.waitForTimeout(30); await page.keyboard.down('e'); }
+    await page.keyboard.up('e');
+    await settled();
+    assert.deepEqual(await spent(page), [4, 1, 2], 'holding E didn’t spend exactly one extra roll');
+    // Space held on it, at the next game.
+    await toLastRoll(page, settled);
+    await page.focus('#b-extra');
+    await holdKey(page, ' ');
+    await settled();
+    assert.deepEqual(await spent(page), [4, 1, 1], 'holding Space on Extra roll didn’t spend one');
   }, { desktop: true });
 
   await step('with all five dice held there is nothing to roll', async ({ page, game, settled }) => {

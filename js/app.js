@@ -119,6 +119,78 @@ function extraRoll() {
   roll();
 }
 
+// Extra roll is spent by holding it down, so a quick thumb still tapping Roll as the last roll lands (it comes up right
+// there, beside Roll) can't spend one by mistake: HOLD_MS of a finger, the mouse, E, or Enter or Space on the button, with
+// pencil strokes filling it as it goes (css/app.css, .extra.holding). Let go early, slide off it, start a scroll or put
+// the page out of sight, and nothing is spent. A screen reader or a switch, which presses it with a click and no press
+// before it, gets it with a second press within ASK_MS of the first.
+const HOLD_MS = 1000;
+const ASK_MS = 4000;
+const HINT_MS = 1600; // how long a tap leaves "Hold it down" on it
+// The press going on: by a pointer's id, or a key ('e', 'Enter' or ' '). Once it has spent one, it's `done` but kept
+// until it's let go, so the key's repeats and the finger's lift do nothing more.
+let hold = null;
+let asking = false, askTimer = 0, hint = false, hintTimer = 0;
+let eatClick = 0; // till when the next click anywhere is swallowed: the one a finger lifted after a hold that spent one makes
+$('b-extra').style.setProperty('--hold-ms', `${HOLD_MS}ms`);
+$('extra-how').textContent = `Hold it down for ${HOLD_MS === 1000 ? 'a second' : `${HOLD_MS / 1000} seconds`} to use one. With a screen reader, press it twice.`;
+
+const canSpend = g => !!g && !busy && hands(g) && extraOn(g) && !allHeld(g);
+function holdStart(by) {
+  if (hold || !canSpend(game)) return false;
+  hint = false;
+  clearTimeout(hintTimer);
+  hold = { by, done: false, timer: setTimeout(holdDone, HOLD_MS) };
+  $('b-extra').classList.add('holding');
+  render();
+  return true;
+}
+function holdDone() {
+  hold.done = true;
+  $('b-extra').classList.remove('holding');
+  if (typeof hold.by === 'number') eatClick = performance.now() + 10000; // till the finger lifts, and a moment after
+  asking = false;
+  extraRoll();
+}
+// Let go: before the time's up, a short hint that it takes a hold; after, only the press is over.
+function holdRelease(by) {
+  if (hold?.by !== by) return false;
+  if (hold.done) {
+    if (typeof by === 'number') eatClick = performance.now() + 250;
+    hold = null;
+    return true;
+  }
+  holdCancel();
+  hint = true;
+  clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => { hint = false; render(); }, HINT_MS);
+  render();
+  return true;
+}
+// Called off before the time's up (slid off, a scroll, out of sight, or the offer gone): the strokes rub out, nothing spent.
+function holdCancel() {
+  if (!hold || hold.done) return;
+  clearTimeout(hold.timer);
+  hold = null;
+  $('b-extra').classList.remove('holding');
+  render();
+}
+// The press is over, however it went, with no hint: called off if it hadn't spent one yet.
+function holdDrop() {
+  holdCancel();
+  if (hold) holdRelease(hold.by);
+}
+// A press with no pointer behind it: the first asks to be pressed again, and a second within ASK_MS spends one.
+function pressTwice() {
+  if (!canSpend(game)) return;
+  clearTimeout(askTimer);
+  if (asking) { asking = false; extraRoll(); return; }
+  asking = true;
+  askTimer = setTimeout(() => { asking = false; render(); }, ASK_MS);
+  render();
+  say('Tap again to use an extra roll.');
+}
+
 function toggle(i) {
   const g = game;
   if (!g || busy || !hands(g) || !holding(g)) return;
@@ -623,10 +695,13 @@ function render() {
   const extra = $('b-extra'), on = mine && !busy && extraOn(g);
   extra.hidden = !on;
   button.classList.toggle('beside', on);
+  if (!on) { holdCancel(); asking = false; hint = false; } // a hold, a screen reader's first press and a hint all end with it
   if (on) {
-    const html = `Extra roll<small>${progress.pocket} left</small>`;
+    // Its small line says it takes a hold, and while it's held, to keep holding; a tap leaves a hint to hold it down.
+    const small = hold && !hold.done ? 'Keep holding' : hint ? 'Hold it down' : `Hold · ${progress.pocket} left`;
+    const html = asking ? 'Tap again<small>to use one</small>' : `Extra roll<small>${small}</small>`;
     if (extra.innerHTML !== html) extra.innerHTML = html;
-    extra.setAttribute('aria-label', `Extra roll, ${progress.pocket} left`); // its two lines, read as one
+    extra.setAttribute('aria-label', asking ? 'Tap again to use an extra roll' : `Extra roll, ${progress.pocket} left`); // its two lines, read as one
     extra.setAttribute('aria-disabled', String(allHeld(g)));
     // E takes it, unless the single-key shortcuts are off in the menu: then it isn't said to.
     if (settings.keys) extra.setAttribute('aria-keyshortcuts', 'E'); else extra.removeAttribute('aria-keyshortcuts');
@@ -893,17 +968,17 @@ function showRules(board, here, g = null) {
     `Once the Five of a kind box is filled, another five of a kind has to go in its own number’s box if that’s open. If not, it goes in any open box in the bottom section, where ${of('pairs') ? 'a full house, a straight or two pairs' : 'a full house or a straight'} counts in full. If the bottom is full too, it scores 0 in a top box${added}. It also earns ${board.extra} extra, unless the Five of a kind box holds a 0.`,
     'You and your opponent take turns until every box is filled. The higher total wins.',
     // Extra rolls (js/pocket.js), except at a friend's table or Two players, where they play no part.
-    (!g || pocketHere(g)) && `<b>Extra rolls:</b> every game you win on the tour, in a quick game, in the back room or at today’s table (the day’s first game) puts an extra roll in your pocket, and they keep from game to game. Once a game, after your last roll, you can spend one to roll the dice you aren’t holding once more.${progress.pocket ? ` You have ${progress.pocket}.` : ''}`,
+    (!g || pocketHere(g)) && `<b>Extra rolls:</b> every game you win on the tour, in a quick game, in the back room or at today’s table (the day’s first game) puts an extra roll in your pocket, and they keep from game to game. Once a game, after your last roll, you can spend one to roll the dice you aren’t holding once more: hold Extra roll down for a second.${progress.pocket ? ` You have ${progress.pocket}.` : ''}`,
     KEYS,
     !here && 'Some tables change these; each says how when you sit down.',
   ];
   // E only where there are extra rolls to take.
-  const keys = settings.keys ? (!g || pocketHere(g) ? KEYS : KEYS.replace(', E takes an extra roll,', '')) : NO_KEYS;
+  const keys = settings.keys ? (!g || pocketHere(g) ? KEYS : KEYS.replace(', holding E takes an extra roll,', '')) : NO_KEYS;
   $('rules-list').innerHTML = items.filter(Boolean).map(t => (t === KEYS ? `<li class="keys">${keys}</li>` : `<li>${t}</li>`)).join('');
 }
 
 // Shown where there's a mouse, and so most likely a keyboard: see css/app.css. With the shortcuts off in the menu, the second.
-const KEYS = 'On a keyboard: Space or R rolls, E takes an extra roll, and 1 to 5 hold the dice. Tab to a box and press Enter to pick it, then Enter again to score it. Space or Enter hurries the opponent along.';
+const KEYS = 'On a keyboard: Space or R rolls, holding E takes an extra roll, and 1 to 5 hold the dice. Tab to a box and press Enter to pick it, then Enter again to score it. Space or Enter hurries the opponent along.';
 const NO_KEYS = 'On a keyboard: Tab to Roll or a die and press Space or Enter. Tab to a box and press Enter to pick it, then Enter again to score it. Enter on Roll hurries the opponent along. The single-key shortcuts are off in the game’s menu.';
 
 let opener = null;
@@ -998,7 +1073,43 @@ function save() {
 // ---- buttons ----
 
 $('b-roll').addEventListener('click', () => (game?.over ? showResult() : roll()));
-$('b-extra').addEventListener('click', extraRoll);
+// Extra roll takes a hold (holdStart() above). With the pointer captured, the button keeps the press wherever it goes,
+// so sliding off is found by where it is; its lift is listened for everywhere, as the button goes once one is spent.
+const extraButton = $('b-extra');
+extraButton.addEventListener('pointerdown', e => {
+  if (e.button !== 0 || !e.isPrimary || !holdStart(e.pointerId)) return;
+  try { extraButton.setPointerCapture(e.pointerId); } catch { /* the pointer is already gone */ }
+});
+document.addEventListener('pointermove', e => {
+  if (hold?.by !== e.pointerId || hold.done) return;
+  const r = extraButton.getBoundingClientRect();
+  if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) holdCancel();
+}, true);
+document.addEventListener('pointerup', e => holdRelease(e.pointerId), true);
+document.addEventListener('pointercancel', e => { if (hold?.by === e.pointerId) holdDrop(); }, true);
+// The click a finger or the mouse makes is the hold's to deal with (detail counts its clicks); one with no pointer behind
+// it is a screen reader's or a switch's.
+extraButton.addEventListener('click', e => { if (e.detail === 0 && !hold) pressTwice(); });
+// After a hold that spent one, the finger's lift lands on whatever is under it now: it mustn't press that too.
+document.addEventListener('click', e => {
+  if (performance.now() >= eatClick) return;
+  eatClick = 0;
+  e.preventDefault();
+  e.stopPropagation();
+}, true);
+extraButton.addEventListener('contextmenu', e => e.preventDefault()); // a long press is the point here, not a menu
+// Enter or Space on it hold it too, rather than pressing it at once (Enter) or on letting go (Space).
+extraButton.addEventListener('keydown', e => {
+  if ((e.key !== 'Enter' && e.key !== ' ') || e.ctrlKey || e.metaKey || e.altKey) return;
+  e.preventDefault();
+  if (!e.repeat) holdStart(e.key);
+});
+document.addEventListener('keyup', e => {
+  if (holdRelease(e.key.length === 1 ? e.key.toLowerCase() : e.key)) e.preventDefault();
+});
+// A hold the page can't see the end of: out of sight, or the window gone to the back (its key let go elsewhere).
+document.addEventListener('visibilitychange', () => { if (document.hidden) holdDrop(); });
+addEventListener('blur', holdDrop);
 $('b-home').addEventListener('click', () => open('home'));
 function carryOn() {
   open('game');
@@ -1080,7 +1191,8 @@ document.addEventListener('keydown', e => {
   // R rolls wherever the focus is; Space only when nothing has it, since Space presses the button in focus. Once the
   // game is over, they open its result, as the button does.
   if (e.key.toLowerCase() === 'r' || (e.key === ' ' && e.target === document.body)) { e.preventDefault(); if (game?.over) showResult(); else roll(); }
-  if (e.key.toLowerCase() === 'e') { e.preventDefault(); extraRoll(); } // only when Extra roll is there to press
+  // E held down takes an extra roll, as holding the button does; its repeats while held do nothing.
+  if (e.key.toLowerCase() === 'e') { e.preventDefault(); if (!e.repeat) holdStart('e'); }
   if (/^[1-5]$/.test(e.key)) toggle(+e.key - 1);
 });
 
@@ -1216,5 +1328,6 @@ window.fullHouse = {
   progress,
   settings,
   start,
+  holdMs: HOLD_MS, // how long Extra roll takes to hold down
   set(g) { token++; game = g; busy = false; picked = null; theirPick = null; theirDice = false; open('game', { focus: false }); showDice(); render(); if (g.turn === 'them' && !two(g)) theirTurn(); }, // as a saved game comes back
 };

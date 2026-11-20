@@ -29,6 +29,7 @@
   --accent: #b8432f;
   --accent-ink: #fff;
   --accent-text: #a33b2a; /* a shade darker than --accent, so it reads on the grey of a card too */
+  --hatch: rgba(163, 59, 42, 0.34); /* the pencil strokes that fill Extra roll as it's held */
   --ivory: #fbf7ee;
   --pip: #1d1b19;
   --red-die: #b8392f;
@@ -60,6 +61,7 @@
     --red-score: #f0907f;
     --accent: #b54d35;
     --accent-text: #ef8e73;
+    --hatch: rgba(239, 142, 115, 0.45);
     --panel: #26211c;
     color-scheme: dark;
   }
@@ -432,9 +434,29 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
   letter-spacing: 0.05em;
   text-transform: uppercase;
   cursor: pointer;
+  /* It's spent by holding it down (js/app.js, HOLD_MS), so a long press brings up no menu, callout or selection, and a
+     finger on it doesn't scroll the page. */
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .extra small { font: 600 12.5px/1.1 var(--text); letter-spacing: 0; text-transform: none; }
 .extra[hidden] { display: none; }
+/* Held, pencil strokes fill it from the left over the time it takes; let go early and they're rubbed out. */
+.extra::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: repeating-linear-gradient(-60deg, var(--hatch) 0 2px, transparent 2px 6px);
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 0.15s ease-out;
+}
+.extra.holding::before { clip-path: inset(0 0 0 0); transition: clip-path var(--hold-ms, 1s) linear; }
 .extra:active:not([aria-disabled='true']) { transform: translateY(2px); }
 .extra[aria-disabled='true'] { border-color: var(--line); color: var(--muted); cursor: default; }
 .extra:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
@@ -800,6 +822,9 @@ body[data-screen='home'] .toast { top: auto; bottom: calc(16px + env(safe-area-i
 @media (prefers-reduced-motion: reduce) {
   .cube, .die { transition-duration: 0.01s; }
   .die .hop.go, .pad td.fresh span, .toast, .scrim, .panel, .ring path { animation: none; }
+  /* Extra roll still takes the whole hold, its strokes going in four steps, and rubbed out at once. */
+  .extra::before { transition: none; }
+  .extra.holding::before { transition: clip-path var(--hold-ms, 1s) steps(4, end); }
 }
 
 /* A contrast theme (Windows' High Contrast, say) replaces the colours with the theme's few, and drops backgrounds and
@@ -810,6 +835,7 @@ body[data-screen='home'] .toast { top: auto; bottom: calc(16px + env(safe-area-i
   .roll, .primary, .continue, .people button { border: 2px solid ButtonText; }
   .extra { border-color: ButtonText; }
   .extra[aria-disabled='true'] { border-color: GrayText; color: GrayText; }
+  .extra::before { forced-color-adjust: none; background: Highlight; opacity: 0.6; }
   .roll[aria-disabled='true'] { border-color: GrayText; color: GrayText; }
   .rolls i { border-color: CanvasText; }
   .rolls i.used { forced-color-adjust: none; background: CanvasText; }
