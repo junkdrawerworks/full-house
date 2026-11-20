@@ -2623,6 +2623,42 @@ try {
     assert.deepEqual(await spent(page), [4, 1, 1], 'holding Space on Extra roll didn’t spend one');
   }, { desktop: true });
 
+  await step('extra rolls: a hold ends with the offer: a sheet opened, the game left, or all five dice held while it’s held spend nothing, and the next hold works', async ({ page, settled }) => {
+    await withPocket(page, 3);
+    const ms = await holdMs(page);
+    await toLastRoll(page, settled);
+    // E held, and the menu opened with the mouse: the strokes rub out at once, and nothing is spent behind the sheet.
+    await page.keyboard.down('e');
+    await page.waitForTimeout(ms * 0.3);
+    await page.click('#b-menu');
+    assert.ok(!(await page.locator('#b-extra.holding').count()), 'Extra roll still fills behind the menu');
+    await page.waitForTimeout(ms);
+    assert.deepEqual(await spent(page), [3, null, 3], 'a hold spent an extra roll behind the menu');
+    await page.keyboard.up('e');
+    await page.keyboard.press('Escape');
+    // E held, and back to the tour: nothing spent there either.
+    await page.keyboard.down('e');
+    await page.waitForTimeout(ms * 0.3);
+    await page.click('#b-home');
+    await page.waitForTimeout(ms);
+    assert.deepEqual(await spent(page), [3, null, 3], 'a hold spent an extra roll from the tour');
+    await page.keyboard.up('e');
+    await page.click('#b-continue');
+    // E held while 1 to 5 hold every die: there's nothing to roll, so it ends there, and doesn't keep saying to hold on.
+    await page.keyboard.down('e');
+    await page.waitForTimeout(ms * 0.2);
+    for (const k of '12345') await page.keyboard.press(k);
+    assert.equal(await page.textContent('#b-extra small'), 'Hold · 3 left', 'Extra roll says to keep holding with every die held');
+    await page.waitForTimeout(ms);
+    await page.keyboard.up('e');
+    assert.deepEqual(await spent(page), [3, null, 3]);
+    // Let one go, and a whole hold spends one.
+    await page.keyboard.press('1');
+    await holdKey(page, 'e');
+    await settled();
+    assert.deepEqual(await spent(page), [4, 1, 2], 'a hold after those didn’t spend one');
+  }, { desktop: true });
+
   await step('with all five dice held there is nothing to roll', async ({ page, game, settled }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');

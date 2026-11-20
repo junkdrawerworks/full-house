@@ -146,6 +146,8 @@ function holdStart(by) {
   return true;
 }
 function holdDone() {
+  // Only where it could be pressed: not behind a sheet, from the tour, or with all five dice held since it began.
+  if (!canSpend(game) || document.body.dataset.screen !== 'game' || document.querySelector('.sheet:not([hidden])')) { holdCancel(); return; }
   hold.done = true;
   $('b-extra').classList.remove('holding');
   if (typeof hold.by === 'number') eatClick = performance.now() + 10000; // till the finger lifts, and a moment after
@@ -695,7 +697,8 @@ function render() {
   const extra = $('b-extra'), on = mine && !busy && extraOn(g);
   extra.hidden = !on;
   button.classList.toggle('beside', on);
-  if (!on) { holdCancel(); asking = false; hint = false; } // a hold, a screen reader's first press and a hint all end with it
+  if (!on || allHeld(g)) holdCancel(); // a hold ends with the offer, or once there's nothing left to roll
+  if (!on) { asking = false; hint = false; } // as do a screen reader's first press and a hint
   if (on) {
     // Its small line says it takes a hold, and while it's held, to keep holding; a tap leaves a hint to hold it down.
     const small = hold && !hold.done ? 'Keep holding' : hint ? 'Hold it down' : `Hold · ${progress.pocket} left`;
@@ -891,6 +894,7 @@ function record(i) {
 // The focus goes to the thing to do next there (Roll; on the tour, Carry on or the table that's next), unless the page is
 // just opening, when a screen reader starts from the top.
 function open(screen, { focus = true } = {}) {
+  holdCancel(); // a hold on Extra roll doesn't go on behind the tour
   document.body.dataset.screen = screen;
   document.title = screen === 'game' && game ? `${where(game)} · Full House` : 'Full House';
   if (screen === 'home') { renderHome(); hideToast(); } // a message about the game stays with it (giving up raises its own after)
@@ -986,6 +990,7 @@ let under = null; // the sheet this one was opened from, to go back to if it's t
 const behind = () => [$('home'), $('game')]; // the screens under a sheet, out of reach while it's open
 // `back` is where the focus goes when the sheet closes, if not to whatever had it before.
 function openSheet(id, back) {
+  holdCancel(); // nor behind a sheet
   closeSheets();
   opener = back || document.activeElement;
   behind().forEach(el => { el.inert = true; });
