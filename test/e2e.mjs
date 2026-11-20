@@ -2147,6 +2147,244 @@ try {
     assert.ok(Math.abs(h.bottom - p.bottom) < 4 && p.right <= 320 - 15, `the count is off the heading’s line or the page: ${JSON.stringify([h, p])}`);
   });
 
+  await step('extra rolls: offered after the last roll only, beside Roll, a thumb high; holds work before it; it rolls from the seed as the next roll, costs one, once a game, and a reload neither refunds it, nor loses it, nor throws it again', async ({ page, game, myTurn, settled }) => {
+    await withPocket(page, 2);
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
+    const seed = (await game()).seed;
+    // Not before the first roll, nor with a roll left.
+    for (let r = 1; r <= 3; r++) {
+      assert.ok(await page.isHidden('#b-extra'), `an extra roll is offered with ${4 - r} rolls left`);
+      await page.click('#b-roll');
+      if (r < 3) assert.ok(await page.isHidden('#b-extra'), 'an extra roll is offered with dice in the air');
+      await settled();
+    }
+    // After the last: beside "No rolls left", with how many are in the pocket, named for a screen reader.
+    assert.equal(await page.textContent('#b-roll'), 'No rolls left');
+    assert.ok(await page.isVisible('#b-extra'), 'no extra roll after the last roll');
+    assert.equal(await page.getAttribute('#b-extra', 'aria-disabled'), 'false');
+    assert.equal(await page.getByRole('button', { name: 'Extra roll, 2 left', exact: true }).count(), 1, 'Extra roll has no proper name');
+    assert.equal(await page.textContent('#status'), 'Pick a box to score, or hold dice and use an extra roll.');
+    assert.match(await page.textContent('#said'), /No rolls left\. You can use an extra roll \(2 left\)\.$/);
+    const [roll, extra] = await page.evaluate(() => ['b-roll', 'b-extra'].map(id => document.getElementById(id).getBoundingClientRect().toJSON()));
+    assert.ok(extra.height >= 44, `Extra roll is ${extra.height}px high`);
+    assert.ok(Math.abs((extra.top + extra.bottom) / 2 - (roll.top + roll.bottom) / 2) < 2 && extra.left > roll.right, 'Extra roll is not beside Roll');
+    // The dice can be held for it, as for any roll, and the holds show.
+    await page.click('.die >> nth=0');
+    await page.click('.die >> nth=2');
+    assert.deepEqual((await game()).held, [true, false, true, false, false]);
+    assert.equal(await page.locator('.die.held').count(), 2, 'held dice don’t say so with an extra roll to hold them for');
+    const before = (await game()).dice;
+    // A reload before it's spent loses nothing: the pocket, the offer and the holds are all still there.
+    await page.reload();
+    await settled();
+    assert.equal(await pocket(page), 2);
+    assert.ok(await page.isVisible('#b-extra'), 'the extra roll went in a reload before it was spent');
+    assert.deepEqual([(await game()).dice, (await game()).held], [before, [true, false, true, false, false]]);
+    // Spent: the dice not held are rolled once more, the dice roll 4 of turn 1 has for anyone with this seed, and it costs one.
+    await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
+    await page.click('#b-extra');
+    assert.ok(await page.isHidden('#b-extra'), 'Extra roll is still there as the dice are thrown');
+    const thrown = await page.evaluate(async seed => (await import('./js/rng.js')).rollFor(seed, 1, 4), seed);
+    let g = await game();
+    assert.deepEqual(g.dice, before.map((d, i) => ([0, 2].includes(i) ? d : thrown[i])), 'the extra roll’s dice are not from the seed as roll 4');
+    assert.deepEqual([g.rolls, g.extraRoll, await pocket(page)], [4, 1, 1]);
+    // A reload with the dice still in the air: the same dice, no refund, and nothing to throw again.
+    const saved = JSON.parse(await page.evaluate(() => localStorage.getItem('full-house.v1')));
+    assert.deepEqual([saved.progress.pocket, saved.game.extraRoll, saved.game.rolls, saved.game.dice], [1, 1, 4, g.dice], 'the extra roll was not saved as it was thrown');
+    await page.reload();
+    await settled();
+    g = await game();
+    assert.deepEqual([g.dice, g.rolls, g.extraRoll, await pocket(page)], [saved.game.dice, 4, 1, 1], 'a reload changed the extra roll or refunded it');
+    assert.ok(await page.isHidden('#b-extra'), 'a second extra roll is offered after a reload');
+    assert.equal(await page.textContent('#b-roll'), 'No rolls left');
+    await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
+    await page.click('#b-roll', { force: true }); // it says No rolls left, and is aria-disabled
+    await page.keyboard.press('r');
+    await page.keyboard.press('e');
+    await page.waitForTimeout(150);
+    assert.deepEqual([(await game()).dice, (await game()).rolls, await pocket(page)], [g.dice, 4, 1], 'the dice were rolled again after the extra roll');
+    // Holds are over once it's spent, and the pad offers what the new dice score.
+    assert.equal(await page.locator('.die.held').count(), 0);
+    assert.ok(await page.isDisabled('.die >> nth=1'), 'a die can be held with nothing left to roll');
+    assert.ok(await page.locator('tr.can').count() > 0, 'nothing to score after the extra roll');
+    assert.equal(await page.textContent('#status'), 'Pick a box to score.');
+    // Once a game: with one still in the pocket, the next turn's last roll offers none.
+    await page.locator('tr.can').first().click();
+    await page.locator('tr.can').first().click();
+    await page.click('#tray');
+    await myTurn();
+    for (let r = 1; r <= 3; r++) { await page.click('#b-roll'); await settled(); }
+    assert.equal(await pocket(page), 1);
+    assert.equal((await game()).number, 2);
+    assert.ok(await page.isHidden('#b-extra'), 'a second extra roll was offered in the same game');
+    await page.keyboard.press('e');
+    await page.waitForTimeout(150);
+    assert.deepEqual([(await game()).rolls, await pocket(page)], [3, 1], 'E spent a second extra roll in one game');
+    // The next game offers it again, and an empty pocket offers none.
+    await page.evaluate(() => { window.fullHouse.start(0); window.fullHouse.settings.pace = 'quick'; });
+    for (let r = 1; r <= 3; r++) { await page.click('#b-roll'); await settled(); }
+    assert.ok(await page.isVisible('#b-extra'), 'a new game offers no extra roll');
+    assert.equal(await page.getByRole('button', { name: 'Extra roll, 1 left', exact: true }).count(), 1, 'Extra roll doesn’t say how many are left');
+    await page.click('#b-extra');
+    await settled();
+    assert.equal(await pocket(page), 0);
+    await page.evaluate(() => { window.fullHouse.start(0); window.fullHouse.settings.pace = 'quick'; });
+    for (let r = 1; r <= 3; r++) { await page.click('#b-roll'); await settled(); }
+    assert.ok(await page.isHidden('#b-extra'), 'an empty pocket offers an extra roll');
+    assert.equal(await page.locator('.die.held').count(), 0);
+  });
+
+  await step('extra rolls: at Two Rolls and High Stakes it comes after the table’s own last roll, and on a small phone the pad doesn’t move for it; with all five held it can’t be pressed', async ({ page, game, settled }) => {
+    await withPocket(page, 3);
+    const padAt = () => page.evaluate(() => document.getElementById('pad').getBoundingClientRect().top);
+    for (const [table, rolls] of [[3, 2], [7, 4]]) {
+      await page.evaluate(t => { window.fullHouse.start(t); window.fullHouse.settings.pace = 'quick'; }, table);
+      const top = await padAt();
+      for (let r = 1; r <= rolls; r++) {
+        assert.ok(await page.isHidden('#b-extra'), `an extra roll is offered before roll ${r} of ${rolls}`);
+        await page.click('#b-roll');
+        await settled();
+      }
+      assert.ok(await page.isVisible('#b-extra'), `no extra roll after the last of ${rolls}`);
+      assert.equal(await padAt(), top, 'the pad moved as Extra roll came');
+      const [roll, extra] = await page.evaluate(() => ['b-roll', 'b-extra'].map(id => document.getElementById(id).getBoundingClientRect().toJSON()));
+      assert.ok(extra.right <= 320 - 12 && extra.height >= 44 && roll.height <= 46.5, `Roll and Extra roll don’t fit the row: ${JSON.stringify([roll, extra])}`);
+    }
+    for (let i = 0; i < 5; i++) await page.click(`.die >> nth=${i}`);
+    assert.equal(await page.getAttribute('#b-extra', 'aria-disabled'), 'true', 'Extra roll can be pressed with all five held');
+    assert.equal(await page.textContent('#status'), 'All five held. Let one go to use an extra roll, or pick a box to score in.');
+    await page.click('#b-extra', { force: true });
+    await page.waitForTimeout(150);
+    assert.deepEqual([(await game()).rolls, await pocket(page)], [4, 3], 'an extra roll was spent with nothing to roll');
+    // Spent, it goes, and the pad stays put.
+    const top = await padAt();
+    await page.click('.die >> nth=0');
+    await page.click('#b-extra');
+    await settled();
+    assert.deepEqual([(await game()).rolls, await pocket(page), await padAt()], [5, 2, top], 'the pad moved as Extra roll went');
+  }, { viewport: { width: 320, height: 568 } });
+
+  await step('extra rolls: none at a friend’s table or at Two players, where How to play leaves them out too, and the opponent never gets one', async ({ page, game, myTurn, settled }) => {
+    await withPocket(page, 5);
+    // A friend's table, and both players at Two players: no extra roll after the last roll, nor from E.
+    await page.evaluate(() => { window.fullHouse.start(null, 0, 0, { kind: 'friend', seed: 77, score: null }); window.fullHouse.settings.pace = 'quick'; });
+    for (let r = 1; r <= 3; r++) { await page.click('#b-roll'); await settled(); }
+    assert.ok(await page.isHidden('#b-extra'), 'an extra roll is offered at a friend’s table');
+    await page.keyboard.press('e');
+    await page.waitForTimeout(150);
+    assert.deepEqual([(await game()).rolls, await pocket(page)], [3, 5]);
+    await page.click('#b-menu');
+    await page.click('#b-menu-rules');
+    assert.doesNotMatch(await page.textContent('#rules-list'), /Extra roll/i, 'How to play offers extra rolls at a friend’s table');
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => { window.fullHouse.start(null, 0, 0, { kind: 'two', names: ['Black', 'Red'] }); window.fullHouse.settings.pace = 'quick'; });
+    for (const who of ['Black', 'Red']) {
+      for (let r = 1; r <= 3; r++) { await page.click('#b-roll'); await settled(); }
+      assert.ok(await page.isHidden('#b-extra'), `an extra roll is offered to ${who} at Two players`);
+      await page.keyboard.press('e');
+      await page.waitForTimeout(150);
+      assert.deepEqual([(await game()).rolls, await pocket(page)], [3, 5]);
+      await page.locator('tr.can').first().click();
+      await page.locator('tr.can').first().click();
+    }
+    await page.click('#b-menu');
+    await page.click('#b-menu-rules');
+    assert.doesNotMatch(await page.textContent('#rules-list'), /Extra roll/i, 'How to play offers extra rolls at Two players');
+    await page.keyboard.press('Escape');
+
+    // On the tour, How to play says what they are, and how many you have.
+    await page.evaluate(() => window.fullHouse.start(0));
+    await page.click('#b-menu');
+    await page.click('#b-menu-rules');
+    assert.match(await page.textContent('#rules-list'), /Extra rolls: every game you win .* puts an extra roll in your pocket.* You have 5\./);
+    await page.keyboard.press('Escape');
+
+    // The opponent: after you spend one on your turn, theirs plays exactly as it would have, with the table's rolls and no
+    // more, and the pocket isn't touched.
+    await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
+    for (let r = 1; r <= 3; r++) { await page.click('#b-roll'); await settled(); }
+    await page.click('#b-extra');
+    await settled();
+    await page.locator('tr.can').first().click();
+    const expected = await page.evaluate(async () => {
+      const [{ Opponent, playTurn }, { TABLES }, { mulberry32 }] = await Promise.all(['./js/ai.js', './js/tour.js', './js/rng.js'].map(u => import(u)));
+      const g = window.fullHouse.game;
+      // The most rolls they make, counted from their first (until then the game still has your 4).
+      window.most = 0;
+      window.watch = setInterval(() => {
+        const g = window.fullHouse.game;
+        if (g?.turn === 'them' && (window.most || g.rolls === 1)) window.most = Math.max(window.most, g.rolls);
+      }, 2);
+      return playTurn(new Opponent(TABLES[g.opp].play), g.board, g.them, mulberry32((g.seed ^ Math.imul(g.number, 0x9E3779B1)) >>> 0)).option;
+    });
+    await page.locator('tr.can').first().click();
+    assert.equal((await game()).turn, 'them');
+    assert.ok(await page.isHidden('#b-extra'), 'Extra roll shows on the opponent’s turn');
+    await myTurn();
+    const g = await game(), most = await page.evaluate(() => { clearInterval(window.watch); return window.most; });
+    assert.equal(g.them[expected.box.id], expected.score, 'the opponent’s turn played differently');
+    assert.ok(most >= 1 && most <= g.board.rolls, `the opponent rolled ${most} times`);
+    assert.deepEqual([await pocket(page), g.extraRoll], [4, 1], 'the opponent spent an extra roll');
+    // And on a turn where you have one to spend and don't, the same.
+    await page.evaluate(() => { window.fullHouse.progress.pocket = 5; window.fullHouse.start(4); window.fullHouse.settings.pace = 'quick'; });
+    for (let r = 1; r <= 3; r++) { await page.click('#b-roll'); await settled(); }
+    assert.ok(await page.isVisible('#b-extra'));
+    await page.locator('tr.can').first().click();
+    const theirs = await page.evaluate(async () => {
+      const [{ Opponent, playTurn }, { TABLES }, { mulberry32 }] = await Promise.all(['./js/ai.js', './js/tour.js', './js/rng.js'].map(u => import(u)));
+      const g = window.fullHouse.game;
+      return playTurn(new Opponent(TABLES[g.opp].play), g.board, g.them, mulberry32((g.seed ^ Math.imul(g.number, 0x9E3779B1)) >>> 0)).option;
+    });
+    await page.locator('tr.can').first().click();
+    await myTurn();
+    assert.equal((await game()).them[theirs.box.id], theirs.score, 'the opponent’s turn played differently with an extra roll in your pocket');
+    assert.equal(await pocket(page), 5);
+  });
+
+  await step('keyboard: E takes an extra roll, How to play and the menu say so, and with the shortcuts off it does nothing', async ({ page, game, settled }) => {
+    await withPocket(page, 2);
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
+    await page.keyboard.press('e');
+    assert.equal((await game()).rolls, 0, 'E rolled before the first roll');
+    for (let r = 1; r <= 2; r++) {
+      await page.keyboard.press('r');
+      await settled();
+      await page.keyboard.press('e');
+      await page.waitForTimeout(100);
+      assert.deepEqual([(await game()).rolls, await pocket(page)], [r, 2], `E rolled with a roll left (roll ${r})`);
+    }
+    await page.keyboard.press('r');
+    await settled();
+    assert.equal(await page.getAttribute('#b-extra', 'aria-keyshortcuts'), 'E');
+    await page.keyboard.press('Shift+E');
+    await settled();
+    assert.deepEqual([(await game()).rolls, await pocket(page)], [4, 1], 'E took no extra roll');
+    // Pressed from the keyboard, the focus stays on the game: on Roll, as Extra roll goes.
+    await page.evaluate(() => { window.fullHouse.start(0); window.fullHouse.settings.pace = 'quick'; });
+    for (let r = 1; r <= 3; r++) { await page.keyboard.press('r'); await settled(); }
+    await page.focus('#b-extra');
+    await page.keyboard.press('Enter');
+    await settled();
+    assert.deepEqual([(await game()).rolls, await pocket(page)], [4, 0]);
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'b-roll', 'the focus was lost with Extra roll');
+    await page.click('#b-menu');
+    assert.match(await page.textContent('#o-keys-more'), /E takes an extra roll/);
+    await page.click('#b-menu-rules');
+    assert.match(await page.textContent('#rules-list .keys'), /E takes an extra roll/);
+    await page.keyboard.press('Escape');
+    // Off: E does nothing.
+    await page.evaluate(() => { window.fullHouse.progress.pocket = 1; window.fullHouse.settings.keys = false; window.fullHouse.start(0); window.fullHouse.settings.pace = 'quick'; });
+    for (let r = 1; r <= 3; r++) { await page.click('#b-roll'); await settled(); }
+    await page.evaluate(() => document.activeElement.blur());
+    await page.keyboard.press('e');
+    await page.waitForTimeout(150);
+    assert.deepEqual([(await game()).rolls, await pocket(page)], [3, 1], 'E took an extra roll with the shortcuts off');
+  }, { desktop: true });
+
   await step('with all five dice held there is nothing to roll', async ({ page, game, settled }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
@@ -3700,7 +3938,7 @@ try {
       }));
       assert.deepEqual(s, { cells: [], totals: ['', ''], marks: 0, held: 0, toast: true, status: 'Your turn. Roll the dice.', pips: 0, table: label, sheets: 0 }, `${label} did not open clean`);
       const g = await game();
-      assert.deepEqual([g.number, g.rolls, g.turn, g.held, g.last], [1, 0, 'you', [false, false, false, false, false], null]);
+      assert.deepEqual([g.number, g.rolls, g.turn, g.held, g.last, g.extraRoll], [1, 0, 'you', [false, false, false, false, false], null, null]);
       // Their first turn: the line says they roll, and nothing of theirs is held yet.
       const first = page.waitForFunction(name => {
         const said = document.getElementById('status').textContent;

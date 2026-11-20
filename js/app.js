@@ -8,7 +8,7 @@ import { Pad, ring } from './pad.js';
 import { mulberry32, rollFor } from './rng.js';
 import { whyLine } from './why.js';
 import { readLink, linkFor, today, dayName } from './links.js';
-import { earns, pocketFrom } from './pocket.js';
+import { pocketHere, earns, rollsNow, offered, pocketFrom } from './pocket.js';
 import * as sound from './sound.js';
 
 const KEY = 'full-house.v1';
@@ -73,10 +73,14 @@ const quick = () => settings.pace !== 'normal';
 // ---- your turn ----
 
 const allHeld = g => g.rolls > 0 && g.held.every(Boolean); // nothing left to roll
+// An extra roll on offer now (js/pocket.js): after your last roll, with one in the pocket and none spent this game.
+const extraOn = g => offered(g, progress.pocket);
+// Dice can be held while there's a roll left for them to stay out of: one of the table's, or an extra roll on offer.
+const holding = g => g.rolls > 0 && (g.rolls < rollsNow(g) || extraOn(g));
 
 function roll() {
   const g = game;
-  if (!g || g.over || busy || !hands(g) || g.rolls >= g.board.rolls || allHeld(g)) return;
+  if (!g || g.over || busy || !hands(g) || g.rolls >= rollsNow(g) || allHeld(g)) return;
   if (settings.sound) sound.wake(); // from the tap, which a phone needs before it lets the page make a sound
   picked = null;
   // From the game's seed: anyone playing from it gets the same number in each place on this roll of this turn.
@@ -96,15 +100,28 @@ function roll() {
     render();
     if (game !== g) return;
     pad.revealOpen(); // the only time your own turn moves the pad: when nothing you can score is in view
-    const left = g.board.rolls - g.rolls;
+    const left = rollsNow(g) - g.rolls, extra = g.extraRoll === g.number && !left;
     const five = /^Five of a kind/.test($('status').textContent) ? ` ${$('status').textContent}` : ''; // the first or another
-    say(`${turnName(g)} rolled ${g.dice.join(', ')}. ${left ? `${left} roll${left === 1 ? '' : 's'} left.` : 'No rolls left.'}${five}`);
+    const more = extraOn(g) ? ` You can use an extra roll (${progress.pocket}\u00a0left).` : '';
+    say(`${extra ? 'Extra roll. ' : ''}${turnName(g)} rolled ${g.dice.join(', ')}. ${left ? `${left} roll${left === 1 ? '' : 's'} left.` : `No rolls left.${more}`}${five}`);
   }, quick() ? 450 : 750);
+}
+
+// An extra roll, from the pocket: the dice you aren't holding, rolled once more as a roll of the table's own would be,
+// from the game's seed as roll number rolls + 1. The pocket and the game save together as it's thrown, so a reload can
+// neither give it back nor throw it again.
+function extraRoll() {
+  const g = game;
+  if (!g || busy || !hands(g) || !extraOn(g) || allHeld(g)) return;
+  g.extraRoll = g.number;
+  progress.pocket--;
+  if (document.activeElement === $('b-extra')) $('b-roll').focus({ preventScroll: true }); // it goes as the dice are thrown
+  roll();
 }
 
 function toggle(i) {
   const g = game;
-  if (!g || busy || !hands(g) || g.rolls === 0 || g.rolls >= g.board.rolls) return;
+  if (!g || busy || !hands(g) || !holding(g)) return;
   g.held[i] = !g.held[i];
   if (settings.sound) buzz();
   picked = null;
@@ -309,7 +326,7 @@ function start(table, opp = table, at = table ?? 0, spec = {}) {
     ...(spec.kind === 'back' && { kind: 'back' }),
     ...(spec.kind === 'two' && { kind: 'two', names: spec.names, first: spec.first === 'them' ? 'them' : 'you' }),
     you: blankCard(board), them: blankCard(board),
-    turn: spec.kind === 'two' && spec.first === 'them' ? 'them' : 'you', number: 1, rolls: 0, last: null,
+    turn: spec.kind === 'two' && spec.first === 'them' ? 'them' : 'you', number: 1, rolls: 0, last: null, extraRoll: null,
     dice: [die(), die(), die(), die(), die()], held: [false, false, false, false, false],
   };
   busy = hurry = false;
@@ -558,15 +575,16 @@ function showDice(rolled = []) {
   const g = game;
   if (!g) return;
   const mine = hands(g);
-  // Your holds show only while there's a roll left for them to stay out of. The opponent's show to the end of their turn.
-  const held = !mine || g.rolls < g.board.rolls ? g.held : [false, false, false, false, false];
+  // Your holds show only while there's a roll left for them to stay out of (an extra roll on offer too). The opponent's
+  // show to the end of their turn.
+  const held = !mine || holding(g) ? g.held : [false, false, false, false, false];
   // As long as the dice take to land (--tumble), or, where motion is cut down and they land at once, a quick clatter.
   if (rolled.length && heard()) sound.rattle(rolled.length, matchMedia('(prefers-reduced-motion: reduce)').matches ? 0.15 : quick() ? 0.38 : 0.7);
   tray.show(g.dice, held, {
     rolled,
     theirs: two(g) ? g.turn === 'them' : !mine && theirDice, // at Two players, Red's dice are red from the start of their turn
     idle: mine && g.rolls === 0,
-    canHold: mine && !busy && g.rolls > 0 && g.rolls < g.board.rolls,
+    canHold: mine && !busy && holding(g),
     quick: quick(), // the dice land before roll() and PACE move on
     name: who(g).name,
     wild: !!g.board.wild,
@@ -593,7 +611,7 @@ function render() {
   if ((fresh.you || fresh.them) && heard()) sound.scratch(); // as the score is pencilled in
   fresh = {};
 
-  const left = b.rolls - g.rolls;
+  const left = rollsNow(g) - g.rolls;
   // On the opponent's turn the pips are theirs, empty until they roll: the save still holds your rolls till then.
   $('rolls').innerHTML = Array.from({ length: b.rolls }, (_, i) => `<i class="${i < g.rolls && (mine || theirDice) ? 'used' : ''}"></i>`).join('');
   // Not `disabled`, which would throw the keyboard's focus off the button while the dice are in the air: it stays put,
@@ -601,6 +619,16 @@ function render() {
   const button = $('b-roll');
   button.setAttribute('aria-disabled', String(!g.over && (!mine || busy || left <= 0 || allHeld(g))));
   button.textContent = g.over ? 'See the result' : !mine ? `${opp.name}’s turn` : g.rolls === 0 ? 'Roll' : left > 0 && allHeld(g) ? 'All five held' : left > 0 ? `Roll again (${left}\u00a0left)` : 'No rolls left';
+  // Beside it, once your rolls are used up and there's one in the pocket: an extra roll, with how many you have.
+  const extra = $('b-extra'), on = mine && !busy && extraOn(g);
+  extra.hidden = !on;
+  button.classList.toggle('beside', on);
+  if (on) {
+    const html = `Extra roll<small>${progress.pocket} left</small>`;
+    if (extra.innerHTML !== html) extra.innerHTML = html;
+    extra.setAttribute('aria-label', `Extra roll, ${progress.pocket} left`); // its two lines, read as one
+    extra.setAttribute('aria-disabled', String(allHeld(g)));
+  }
 
   if (mine && !busy) {
     const joker = g.rolls > 0 && jokerState(b, card, g.dice), five = offers && b.boxes.find(x => x.kind === 'five');
@@ -610,8 +638,10 @@ function render() {
     } else if (g.rolls === 0) status(firstLine(g));
     else if (joker) status(jokerLine(b, joker, opts));
     else if (left > 0 && allHeld(g)) status('All five held. Let one go to roll again, or pick a box to score in.');
+    else if (on && allHeld(g)) status('All five held. Let one go to use an extra roll, or pick a box to score in.');
     else if (five && offers[five.id]) status(`Five of a kind. ${offers[five.id]} in its box, if you want it.`); // a first one: the second has the joker's line
     else if (left > 0) status('Hold dice and roll again, or pick a box to score.');
+    else if (on) status('Pick a box to score, or hold dice and use an extra roll.');
     else status('Pick a box to score.');
   }
 }
@@ -831,7 +861,7 @@ function intro(table, opp = table, spec = {}) {
 // How to play, as a table plays it. Opened from a game: the table's own twist first, and its numbers throughout (the
 // bonus, the rolls, what each box pays). Opened from the tour: the game as it comes in the box, and a word that some
 // tables change it.
-function showRules(board, here) {
+function showRules(board, here, g = null) {
   const COUNT = ['', 'one', 'two', 'three', 'four', 'five'], OVER = { 2: ', doubled', 3: ', three times over' };
   const lower = board.boxes.filter(b => !isUpper(b)), top = board.boxes.filter(b => b.kind === 'face');
   const of = kind => lower.find(b => b.kind === kind);
@@ -860,14 +890,18 @@ function showRules(board, here) {
     lower.map(b => box[b.kind](b)).filter(Boolean).join(' '),
     `Once the Five of a kind box is filled, another five of a kind has to go in its own number’s box if that’s open. If not, it goes in any open box in the bottom section, where ${of('pairs') ? 'a full house, a straight or two pairs' : 'a full house or a straight'} counts in full. If the bottom is full too, it scores 0 in a top box${added}. It also earns ${board.extra} extra, unless the Five of a kind box holds a 0.`,
     'You and your opponent take turns until every box is filled. The higher total wins.',
+    // Extra rolls (js/pocket.js), except at a friend's table or Two players, where they play no part.
+    (!g || pocketHere(g)) && `<b>Extra rolls:</b> every game you win on the tour, in a quick game, in the back room or at today’s table (the day’s first game) puts an extra roll in your pocket, and they keep from game to game. Once a game, after your last roll, you can spend one to roll the dice you aren’t holding once more.${progress.pocket ? ` You have ${progress.pocket}.` : ''}`,
     KEYS,
     !here && 'Some tables change these; each says how when you sit down.',
   ];
-  $('rules-list').innerHTML = items.filter(Boolean).map(t => (t === KEYS ? `<li class="keys">${settings.keys ? KEYS : NO_KEYS}</li>` : `<li>${t}</li>`)).join('');
+  // E only where there are extra rolls to take.
+  const keys = settings.keys ? (!g || pocketHere(g) ? KEYS : KEYS.replace(', E takes an extra roll,', '')) : NO_KEYS;
+  $('rules-list').innerHTML = items.filter(Boolean).map(t => (t === KEYS ? `<li class="keys">${keys}</li>` : `<li>${t}</li>`)).join('');
 }
 
 // Shown where there's a mouse, and so most likely a keyboard: see css/app.css. With the shortcuts off in the menu, the second.
-const KEYS = 'On a keyboard: Space or R rolls and 1 to 5 hold the dice. Tab to a box and press Enter to pick it, then Enter again to score it. Space or Enter hurries the opponent along.';
+const KEYS = 'On a keyboard: Space or R rolls, E takes an extra roll, and 1 to 5 hold the dice. Tab to a box and press Enter to pick it, then Enter again to score it. Space or Enter hurries the opponent along.';
 const NO_KEYS = 'On a keyboard: Tab to Roll or a die and press Space or Enter. Tab to a box and press Enter to pick it, then Enter again to score it. Enter on Roll hurries the opponent along. The single-key shortcuts are off in the game’s menu.';
 
 let opener = null;
@@ -949,6 +983,7 @@ function whole(g) {
     return !g.over && (g.turn === 'you' || g.turn === 'them') && Number.isInteger(g.number) && Number.isInteger(g.rolls)
       && Number.isInteger(g.opp) && !!TABLES[g.opp] && (g.table === null || (Number.isInteger(g.table) && !!TABLES[g.table]))
       && five(g.dice) && g.dice.every(d => Number.isInteger(d) && d >= 1 && d <= 6) && five(g.held)
+      && (g.extraRoll === undefined || g.extraRoll === null || Number.isInteger(g.extraRoll))
       && b.rolls > 0 && b.bonus.at > 0 && b.boxes.length > 0 && b.boxes.every(x => boxLabel(x) && x.id in g.you && x.id in g.them)
       && (g.kind !== 'two' || (Array.isArray(g.names) && g.names.length === 2 && g.names.every(n => typeof n === 'string' && n)
         && [undefined, 'you', 'them'].includes(g.first)));
@@ -961,6 +996,7 @@ function save() {
 // ---- buttons ----
 
 $('b-roll').addEventListener('click', () => (game?.over ? showResult() : roll()));
+$('b-extra').addEventListener('click', extraRoll);
 $('b-home').addEventListener('click', () => open('home'));
 function carryOn() {
   open('game');
@@ -987,7 +1023,7 @@ $('b-look').addEventListener('click', closeSheets);
 $('b-share').addEventListener('click', share);
 $('b-rules').addEventListener('click', () => { showRules(CLASSIC, false); openSheet('sheet-rules'); });
 // From the menu, which closes as How to play opens: afterwards the focus goes back to the menu button.
-$('b-menu-rules').addEventListener('click', () => { showRules(game?.board || CLASSIC, !!game); openSheet('sheet-rules', $('b-menu')); });
+$('b-menu-rules').addEventListener('click', () => { showRules(game?.board || CLASSIC, !!game, game); openSheet('sheet-rules', $('b-menu')); });
 const showMenu = () => {
   if (!game) return;
   $('menu-title').textContent = where(game);
@@ -1042,6 +1078,7 @@ document.addEventListener('keydown', e => {
   // R rolls wherever the focus is; Space only when nothing has it, since Space presses the button in focus. Once the
   // game is over, they open its result, as the button does.
   if (e.key.toLowerCase() === 'r' || (e.key === ' ' && e.target === document.body)) { e.preventDefault(); if (game?.over) showResult(); else roll(); }
+  if (e.key.toLowerCase() === 'e') { e.preventDefault(); extraRoll(); } // only when Extra roll is there to press
   if (/^[1-5]$/.test(e.key)) toggle(+e.key - 1);
 });
 

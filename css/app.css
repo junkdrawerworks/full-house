@@ -416,6 +416,28 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
 .roll:active:not([aria-disabled='true']) { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.18); }
 .roll[aria-disabled='true'] { background: var(--line); color: var(--muted); box-shadow: none; cursor: default; }
 .roll:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.roll.beside { line-height: 1.1; } /* beside Extra roll on a small phone, "No rolls left" takes two lines, inside Roll's height */
+/* An extra roll, beside Roll once your rolls are used up: drawn in outline, so it doesn't pass for Roll itself. */
+.extra {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-height: 44px;
+  padding: 2px 12px;
+  border: 2px solid var(--accent);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--accent-text);
+  font: 700 17px/1.05 var(--cond);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.extra small { font: 600 12.5px/1.1 var(--text); letter-spacing: 0; text-transform: none; }
+.extra[hidden] { display: none; }
+.extra:active:not([aria-disabled='true']) { transform: translateY(2px); }
+.extra[aria-disabled='true'] { border-color: var(--line); color: var(--muted); cursor: default; }
+.extra:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
 /* ---- the score pad ---- */
 
@@ -786,6 +808,8 @@ body[data-screen='home'] .toast { top: auto; bottom: calc(16px + env(safe-area-i
 @media (forced-colors: active) {
   .tray { forced-color-adjust: none; outline: 2px solid CanvasText; outline-offset: 2px; clip-path: none; }
   .roll, .primary, .continue, .people button { border: 2px solid ButtonText; }
+  .extra { border-color: ButtonText; }
+  .extra[aria-disabled='true'] { border-color: GrayText; color: GrayText; }
   .roll[aria-disabled='true'] { border-color: GrayText; color: GrayText; }
   .rolls i { border-color: CanvasText; }
   .rolls i.used { forced-color-adjust: none; background: CanvasText; }

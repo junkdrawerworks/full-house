@@ -8,7 +8,7 @@ import { mulberry32, rollFor } from '../js/rng.js';
 import { whyLine } from '../js/why.js';
 import { bonusPace } from '../js/pad.js';
 import { linkFor, readLink, today, dayName } from '../js/links.js';
-import { pocketHere, earns, pocketFrom } from '../js/pocket.js';
+import { pocketHere, earns, rollsNow, offered, pocketFrom } from '../js/pocket.js';
 import { best, planned } from './exact.mjs';
 
 const box = (board, id) => board.boxes.find(b => b.id === id);
@@ -737,4 +737,27 @@ test('extra rolls: a win earns one wherever they play a part, today’s only on 
   }
   // The pocket from a save: any whole number, with no cap, and empty in a save from before extra rolls.
   for (const [saved, n] of [[undefined, 0], [null, 0], [0, 0], [7, 7], [250, 250], [-1, 0], [2.5, 0], ['3', 0]]) assert.equal(pocketFrom(saved), n, String(saved));
+});
+
+test('extra rolls: one is on offer once a game, on your turn after your last roll, with one in the pocket, and rolls from the seed as the next roll', () => {
+  for (const kind of ['friend', 'two']) assert.equal(offered(at({ kind }), 9), false, kind);
+  // On offer only on your own turn, with the table's rolls used up, one in the pocket, none spent this game, and the game going.
+  assert.equal(offered(at(), 1), true);
+  assert.equal(offered(at({ extraRoll: undefined }), 1), true, 'a game saved before extra rolls offers none');
+  for (const rolls of [0, 1, 2]) assert.equal(offered(at({ rolls }), 1), false, `offered with ${3 - rolls} rolls left`);
+  assert.equal(offered(at({ rolls: 2, board: TABLES[3].board }), 1), true, 'not after the last roll at Two Rolls');
+  assert.equal(offered(at({ rolls: 3, board: TABLES[7].board }), 1), false, 'offered with a roll left at High Stakes');
+  assert.equal(offered(at(), 0), false, 'offered from an empty pocket');
+  assert.equal(offered(at({ turn: 'them' }), 5), false, 'offered on the opponent’s turn');
+  assert.equal(offered(at({ over: true }), 5), false);
+  assert.equal(offered(at({ extraRoll: 5 }), 5), false, 'offered again on the turn it was spent');
+  assert.equal(offered(at({ extraRoll: 2 }), 5), false, 'offered again in a later turn of the same game');
+  // The turn it's spent has one roll more, for you only; any other turn, and the opponent's, the table's own.
+  assert.equal(rollsNow(at()), 3);
+  assert.equal(rollsNow(at({ extraRoll: 5, rolls: 4 })), 4);
+  assert.equal(rollsNow(at({ extraRoll: 5, turn: 'them' })), 3, 'the opponent gets the extra roll');
+  assert.equal(rollsNow(at({ extraRoll: 4 })), 3);
+  // Its dice come from the seed as the roll after the table's last, as any roll of yours does: the same for anyone.
+  assert.deepEqual(rollFor(4242, 5, 4), rollFor(4242, 5, 4));
+  assert.notDeepEqual(rollFor(4242, 5, 4), rollFor(4242, 5, 3));
 });

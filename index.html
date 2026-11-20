@@ -87,6 +87,8 @@
       <div class="actions">
         <span class="rolls" id="rolls" aria-hidden="true"></span>
         <button type="button" class="roll" id="b-roll">Roll</button>
+        <!-- After the last roll, with one in the pocket and none spent this game: js/app.js, extraRoll(). -->
+        <button type="button" class="extra" id="b-extra" aria-keyshortcuts="E" hidden></button>
       </div>
       <!-- On a computer's wide screen, under Roll: who you're playing, and the table's twist (js/app.js, oppCard()). -->
       <aside class="opp-card" id="opp-card" aria-label="Your opponent" hidden>
@@ -175,7 +177,7 @@
       </fieldset>
       <label class="toggle"><input type="checkbox" role="switch" id="o-hints" aria-labelledby="o-hints-name" aria-describedby="o-hints-more"><span><b id="o-hints-name">Show what each box would score</b> <span id="o-hints-more">After each roll, the open boxes show what the dice would score there.</span></span></label>
       <label class="toggle"><input type="checkbox" role="switch" id="o-sound" aria-labelledby="o-sound-name" aria-describedby="o-sound-more"><span><b id="o-sound-name">Sound</b> <span id="o-sound-more">A rattle as the dice are thrown and a pencil scratch as a score goes in. On a phone that can, a short buzz as you hold a die.</span></span></label>
-      <label class="toggle keys-only"><input type="checkbox" role="switch" id="o-keys" aria-labelledby="o-keys-name" aria-describedby="o-keys-more"><span><b id="o-keys-name">Keyboard shortcuts</b> <span id="o-keys-more">Space or R rolls, and 1 to 5 hold the dice. Off, those keys do nothing, and Space presses only what has the focus.</span></span></label>
+      <label class="toggle keys-only"><input type="checkbox" role="switch" id="o-keys" aria-labelledby="o-keys-name" aria-describedby="o-keys-more"><span><b id="o-keys-name">Keyboard shortcuts</b> <span id="o-keys-more">Space or R rolls, E takes an extra roll, and 1 to 5 hold the dice. Off, those keys do nothing, and Space presses only what has the focus.</span></span></label>
       <button type="button" class="plain" id="b-menu-rules">How to play</button>
       <button type="button" class="plain warn" id="b-concede">Give up this game</button>
       <footer class="jd-foot">
