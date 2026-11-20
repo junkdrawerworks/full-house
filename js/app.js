@@ -628,6 +628,8 @@ function render() {
     if (extra.innerHTML !== html) extra.innerHTML = html;
     extra.setAttribute('aria-label', `Extra roll, ${progress.pocket} left`); // its two lines, read as one
     extra.setAttribute('aria-disabled', String(allHeld(g)));
+    // E takes it, unless the single-key shortcuts are off in the menu: then it isn't said to.
+    if (settings.keys) extra.setAttribute('aria-keyshortcuts', 'E'); else extra.removeAttribute('aria-keyshortcuts');
   }
 
   if (mine && !busy) {

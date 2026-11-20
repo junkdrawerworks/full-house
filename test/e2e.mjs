@@ -2379,6 +2379,7 @@ try {
     // Off: E does nothing.
     await page.evaluate(() => { window.fullHouse.progress.pocket = 1; window.fullHouse.settings.keys = false; window.fullHouse.start(0); window.fullHouse.settings.pace = 'quick'; });
     for (let r = 1; r <= 3; r++) { await page.click('#b-roll'); await settled(); }
+    assert.equal(await page.getAttribute('#b-extra', 'aria-keyshortcuts'), null, 'Extra roll says E takes it with the shortcuts off');
     await page.evaluate(() => document.activeElement.blur());
     await page.keyboard.press('e');
     await page.waitForTimeout(150);
