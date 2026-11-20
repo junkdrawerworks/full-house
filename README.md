@@ -56,6 +56,7 @@ npm run build                  # bundles everything into dist/full-house.html, o
 node dev/strength.mjs 300 all  # how each opponent scores at its own table, against the best settings, each mean with its 95% margin; classic in place of all plays every opponent on classic rules
 npm run sim                    # how often a rule-of-thumb player and the best planner beat each table's opponent
 node dev/backroom.mjs 2000 3   # how often the rule-of-thumb player beats the Dealer at every pair of twists the back room can draw
+node dev/extra.mjs 2000 3      # how much one extra roll a game helps the rule-of-thumb player and the best planner, at each table and some of the back room's pairs
 ```
 
 ### Links
@@ -87,4 +88,4 @@ To put it online with GitHub Pages: **Settings → Pages → Build and deploymen
 - `test/`: the rules and the opponents in Node, and a game played through the real page.
 - `tools/`: redraws the README screenshots, the link preview and the icons.
 - `scripts/build.mjs`: bundles the game into one file, `dist/full-house.html`, and writes `dist/artifact.html`, the same page without its `<html>`, `<head>` and `<body>`, for a host that supplies its own.
-- `dev/`: tools used while building it: opponent strength runs, the ladder (how hard each table is to beat), the back room's pairs, the rule-of-thumb player both play against, and quick screenshots.
+- `dev/`: tools used while building it: opponent strength runs, the ladder (how hard each table is to beat), the back room's pairs, what an extra roll is worth, the rule-of-thumb player both play against, and quick screenshots.
