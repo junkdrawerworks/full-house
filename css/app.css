@@ -123,6 +123,10 @@ body[data-screen='home'] .game, body[data-screen='game'] .home { display: none; 
   text-transform: uppercase;
   color: var(--muted);
 }
+.tour-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+/* Extra rolls in the pocket: quiet, beside the tour's heading. */
+.pocket { margin: 0; font: 600 13px var(--text); color: var(--muted); white-space: nowrap; }
+.pocket[hidden] { display: none; }
 .tour .card, .today .card {
   border-radius: 8px;
   background: var(--paper);
@@ -714,6 +718,9 @@ body[data-screen='home'] .toast { top: auto; bottom: calc(16px + env(safe-area-i
 .scores span { font: 700 13px var(--cond); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .scores b { font: 700 46px/1 var(--hand); }
 .panel .best { margin: 8px 0 0; text-align: center; font: 700 24px/1.1 var(--hand); }
+/* A win's extra roll, in pencil under the rest. */
+.panel .earned { margin: 6px 0 0; text-align: center; font: 700 22px/1.1 var(--hand); }
+.panel .earned[hidden] { display: none; }
 /* The opponent's word on the game, in their red pencil. */
 .panel .says { margin: 8px 0 0; text-align: center; font: 700 24px/1.1 var(--hand); color: var(--red-score); }
 .panel .says[hidden] { display: none; }

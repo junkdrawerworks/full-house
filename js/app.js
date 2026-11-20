@@ -8,6 +8,7 @@ import { Pad, ring } from './pad.js';
 import { mulberry32, rollFor } from './rng.js';
 import { whyLine } from './why.js';
 import { readLink, linkFor, today, dayName } from './links.js';
+import { earns, pocketFrom } from './pocket.js';
 import * as sound from './sound.js';
 
 const KEY = 'full-house.v1';
@@ -353,12 +354,15 @@ function finish(lead = '') {
     progress.quick.played++;
     if (won) progress.quick.won++;
   }
+  // A win puts an extra roll in the pocket (js/pocket.js): not at a friend's table, nor another go at today's.
+  const earned = earns(g, won, counted);
+  if (earned) progress.pocket++;
   save();
   render();
   showDice();
   if (document.body.dataset.screen === 'home') renderHome(); // it ended behind the tour: Carry on goes, and a table may open
   status(won ? 'You win.' : tie ? 'A tie.' : `${name} wins.`);
-  say(`${lead ? `${lead} ` : ''}${won ? `You win, ${you} to ${them}.` : tie ? `A tie, ${you} all.` : `${name} wins, ${them} to ${you}.`}`);
+  say(`${lead ? `${lead} ` : ''}${won ? `You win, ${you} to ${them}.` : tie ? `A tie, ${you} all.` : `${name} wins, ${them} to ${you}.`}${earned ? ' That earns an extra roll.' : ''}`);
 
   $('result-title').textContent = won ? `You beat ${mid(name)}` : tie ? 'A tie' : `${name} wins`;
   const last = g.table === TABLES.length - 1;
@@ -398,6 +402,8 @@ function finish(lead = '') {
   if (run) best = won ? (run.best && run.now > run.best ? `Your best run: ${run.now} (was ${run.best}).` : '') : !tie && run.was ? `That ends a run of ${run.was}.` : '';
   $('result-best').textContent = best;
   $('result-best').hidden = !best;
+  $('result-extra').textContent = earned ? `+1 extra roll. You have ${progress.pocket}.` : ''; // emptied too, as aria-describedby reads it hidden
+  $('result-extra').hidden = !earned;
   const next = $('b-next');
   // The back room's Play again opens the card for the next sitting, with the two twists it draws, as On to table 3 does.
   if (run) { next.textContent = 'Play again'; next.onclick = () => { backCard(); under = 'sheet-result'; }; }
@@ -431,6 +437,8 @@ function finishTwo(g, lead, a, r) {
   $('result-scores').innerHTML = `<div><span>${escape(black)}</span>${tile(a, a >= r)}</div><div class="them"><span>${escape(red)}</span>${tile(r, r >= a)}</div>`;
   $('result-says').hidden = true; // nobody at the table but the two of you
   $('result-best').hidden = true;
+  $('result-extra').textContent = '';
+  $('result-extra').hidden = true;
   $('b-next').textContent = 'Play again';
   $('b-next').onclick = () => again(g);
   $('b-again').hidden = true;
@@ -701,6 +709,9 @@ function renderHome() {
       <span class="n">${Number(day.day.slice(8))}</span>
       <span class="txt"><b>${sat.board.name}</b><span class="vs"><i class="dot" style="--c:${sat.who.colour}"></i>${sat.who.name}</span><small>${said}</small></span>
     </button></div>`;
+  // Extra rolls in the pocket, quietly beside the tour's heading, once there are any.
+  $('pocket').textContent = progress.pocket ? `Extra rolls: ${progress.pocket}` : '';
+  $('pocket').hidden = !progress.pocket;
   // Quick games open once you've beaten Pip, so the first game you win is always one that counts on the tour.
   $('quick').hidden = !progress.beaten[0];
   const q = progress.quick;
@@ -928,6 +939,7 @@ function progressFrom(p) {
   const back = out.back && typeof out.back === 'object' ? out.back : {};
   out.back = { run: 0, best: 0, played: 0, won: 0, ...back, next: Number.isInteger(back.next) ? back.next : null };
   if (!(out.today && typeof out.today === 'object' && typeof out.today.day === 'string')) out.today = null;
+  out.pocket = pocketFrom(out.pocket); // extra rolls: none in a save from before them
   return out;
 }
 // A saved game still being played, with every part the page reads there to pick it up again.

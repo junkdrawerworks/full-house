@@ -2035,6 +2035,118 @@ try {
     }
   });
 
+  // ---- extra rolls (js/pocket.js) ----
+
+  // A game started by window.fullHouse.start(...args), on its last turn, the opponent's, which comes from the game's seed:
+  // you end `by` points ahead of what they'll have (behind, if negative; level at 0). Then its result.
+  const endGame = async (page, args, by) => {
+    await page.evaluate(async ([args, by]) => {
+      const [{ Opponent, playTurn }, { TABLES }, R, { mulberry32 }] = await Promise.all(['./js/ai.js', './js/tour.js', './js/rules.js', './js/rng.js'].map(u => import(u)));
+      window.fullHouse.settings.pace = 'score';
+      window.fullHouse.start(...args);
+      const g = structuredClone(window.fullHouse.game), last = g.board.boxes.find(b => b.kind === 'chance' || b.kind === 'low').id;
+      for (const b of g.board.boxes) { g.them[b.id] = b.id === last ? null : b.kind === 'five' ? 0 : 5; g.you[b.id] = 0; }
+      Object.assign(g, { number: 13, rolls: 0, turn: 'them' });
+      const { option } = playTurn(new Opponent(TABLES[g.opp].play), g.board, g.them, mulberry32((g.seed ^ Math.imul(13, 0x9E3779B1)) >>> 0));
+      g.you[last] = R.totals(g.board, R.mark(g.them, option)).total + by;
+      window.fullHouse.set(g);
+    }, [args, by]);
+    await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
+  };
+  const pocket = page => page.evaluate(() => window.fullHouse.progress.pocket);
+  const savedPocket = page => page.evaluate(() => JSON.parse(localStorage.getItem('full-house.v1')).progress.pocket);
+  const withPocket = async (page, n, progress = {}) => {
+    await page.evaluate(([n, progress]) => localStorage.setItem('full-house.v1', JSON.stringify({ progress: { ...progress, pocket: n } })), [n, progress]);
+    await page.reload();
+  };
+
+  await step('extra rolls: a win puts one in the pocket on the tour, in a quick game, in the back room and in today’s counted game, with no cap; a loss, a tie, giving up, a friend’s table, Two players and another go at today’s don’t', async ({ page, settled }) => {
+    // An old save, from before extra rolls: an empty pocket, and nothing about them on the tour.
+    await page.evaluate(() => localStorage.setItem('full-house.v1', JSON.stringify({ progress: { beaten: [true] } })));
+    await page.reload();
+    assert.equal(await pocket(page), 0, 'a save without extra rolls opened with some');
+    assert.ok(await page.isHidden('#pocket'), 'an empty pocket shows on the tour');
+
+    // A win at a table of the tour: one, and the result says so.
+    await endGame(page, [0], 20);
+    assert.match(await page.textContent('#result-title'), /^You beat Pip/);
+    assert.equal(await pocket(page), 1);
+    assert.equal(await savedPocket(page), 1, 'the extra roll was not saved');
+    assert.ok(await page.isVisible('#result-extra'), 'the result does not say a win earned an extra roll');
+    assert.equal(await page.textContent('#result-extra'), '+1 extra roll. You have 1.');
+    assert.match(await page.textContent('#said'), /That earns an extra roll\.$/);
+    // Lost, or tied: none, and the result says nothing of one, even to a screen reader.
+    for (const by of [-20, 0]) {
+      await page.keyboard.press('Escape');
+      await endGame(page, [0], by);
+      assert.equal(await page.textContent('#result-title'), by ? 'Pip wins' : 'A tie');
+      assert.equal(await pocket(page), 1, `a ${by ? 'loss' : 'tie'} earned an extra roll`);
+      assert.ok(await page.isHidden('#result-extra'));
+      assert.equal(await page.textContent('#result-extra'), '', 'the hidden line is still read out with the result');
+    }
+    // A quick game, the back room and today's table, its first game: one each.
+    await endGame(page, [null, 0, 0], 20);
+    assert.equal(await page.textContent('#g-table'), 'Quick game');
+    assert.equal(await pocket(page), 2, 'a quick game’s win earned none');
+    await endGame(page, [null, 7, 8, { kind: 'back', seed: 4242 }], 20);
+    assert.match(await page.textContent('#g-table'), /^The back room: /);
+    assert.equal(await pocket(page), 3, 'a win in the back room earned none');
+    const d = await page.evaluate(async () => (await import('./js/links.js')).today());
+    await endGame(page, [null, d.table, d.table, { kind: 'day', seed: d.seed, day: d.day }], 20);
+    assert.equal(await page.textContent('#result-line'), 'That one counts for today. There’s a new table tomorrow.');
+    assert.equal(await pocket(page), 4, 'today’s counted win earned none');
+    assert.equal(await page.textContent('#result-extra'), '+1 extra roll. You have 4.');
+    // Another go at today's (the same dice again, just practice), a friend's table and Two players: none.
+    await endGame(page, [null, d.table, d.table, { kind: 'day', seed: d.seed, day: d.day }], 20);
+    assert.equal(await page.textContent('#result-line'), 'Just practice: your first game today is the one that counts.');
+    assert.equal(await pocket(page), 4, 'another go at today’s table earned one');
+    assert.ok(await page.isHidden('#result-extra'));
+    await endGame(page, [null, 2, 2, { kind: 'friend', seed: 99, score: 150 }], 20);
+    assert.match(await page.textContent('#result-title'), /^You beat Bea/);
+    assert.equal(await pocket(page), 4, 'a friend’s table earned one');
+    assert.ok(await page.isHidden('#result-extra'));
+    await page.evaluate(() => {
+      window.fullHouse.start(null, 0, 0, { kind: 'two', names: ['Black', 'Red'] });
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) { g.you[b.id] = 20; g.them[b.id] = b.id === 'chance' ? null : 0; }
+      Object.assign(g, { number: 13, rolls: 0, turn: 'them' });
+      window.fullHouse.settings.pace = 'quick';
+      window.fullHouse.set(g);
+    });
+    await page.click('#b-roll');
+    await settled();
+    await page.locator('tr.can').first().click();
+    await page.locator('tr.can').first().click();
+    await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
+    assert.equal(await page.textContent('#result-title'), 'Black wins');
+    assert.equal(await pocket(page), 4, 'Two players earned one');
+    assert.ok(await page.isHidden('#result-extra'));
+    // Giving up: none.
+    await page.evaluate(() => window.fullHouse.start(0));
+    await page.click('#b-menu');
+    await page.click('#b-concede');
+    await page.click('#b-concede');
+    assert.equal(await pocket(page), 4, 'giving up earned one');
+    // The tour shows them, quietly, beside its heading.
+    assert.equal(await page.textContent('#pocket'), 'Extra rolls: 4');
+    assert.ok(await page.isVisible('#pocket'));
+
+    // No cap: a save with 7 holds 7, and a win makes 8.
+    await withPocket(page, 7, { beaten: [true] });
+    assert.equal(await page.textContent('#pocket'), 'Extra rolls: 7');
+    await endGame(page, [0], 20);
+    assert.equal(await pocket(page), 8);
+    assert.equal(await page.textContent('#result-extra'), '+1 extra roll. You have 8.');
+    await page.click('#b-tour');
+    assert.equal(await page.textContent('#pocket'), 'Extra rolls: 8');
+    await page.reload();
+    assert.equal(await page.textContent('#pocket'), 'Extra rolls: 8', 'the eighth was lost in a reload');
+    // On a small phone it sits on the heading's line, inside the page.
+    await page.setViewportSize({ width: 320, height: 568 });
+    const [h, p] = await page.evaluate(() => ['tour-h', 'pocket'].map(id => document.getElementById(id).getBoundingClientRect().toJSON()));
+    assert.ok(Math.abs(h.bottom - p.bottom) < 4 && p.right <= 320 - 15, `the count is off the heading’s line or the page: ${JSON.stringify([h, p])}`);
+  });
+
   await step('with all five dice held there is nothing to roll', async ({ page, game, settled }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
@@ -2183,10 +2295,10 @@ try {
     const [id, score] = Object.entries(g.them).find(([k, v]) => k !== 'extras' && v !== null);
     const you = Object.entries(g.you).filter(([k, v]) => k !== 'extras' && v !== null)[0][1];
     assert.equal(await said(), `Pip scored ${score} in ${await page.textContent(`tr[data-box="${id}"] th b`)}. You ${you}, Pip ${score}. Your turn.`);
-    // The last turn: what they scored, then who won and by how much.
+    // The last turn: what they scored, then who won and by how much, and the extra roll a win earns.
     await win(t);
     const [mine, theirs] = await page.$$eval('#pad tfoot td', tds => tds.map(td => +td.textContent));
-    assert.match(await said(), new RegExp(`^Pip scored \\d+ in Chance\\. You win, ${mine} to ${theirs}\\.$`));
+    assert.match(await said(), new RegExp(`^Pip scored \\d+ in Chance\\. You win, ${mine} to ${theirs}\\. That earns an extra roll\\.$`));
     // A message is heard too.
     await page.keyboard.press('Escape');
     await page.evaluate(() => window.fullHouse.start(0));
@@ -2256,7 +2368,7 @@ try {
     assert.equal(await pace.getByRole('radio', { name: 'Unhurried', exact: true }).isChecked(), true, 'a new player’s pace is not Unhurried');
     assert.equal(await page.getByRole('switch', { name: 'Show what each box would score', exact: true }).count(), 1);
     await page.keyboard.press('Escape');
-    assert.equal(await page.getAttribute('#sheet-result [role="dialog"]', 'aria-describedby'), 'result-line result-why result-scores result-says');
+    assert.equal(await page.getAttribute('#sheet-result [role="dialog"]', 'aria-describedby'), 'result-line result-why result-scores result-says result-extra');
     await page.click('#b-home');
     assert.equal(await page.title(), 'Full House');
   });
@@ -3609,7 +3721,7 @@ try {
       assert.equal(r.result[0] > r.result[1], won, won ? 'meant to win this one' : 'meant to lose this one');
       const want = structuredClone(before);
       want.played[table] = (want.played[table] || 0) + 1;
-      if (won) { want.won[table] = (want.won[table] || 0) + 1; want.beaten[table] = true; }
+      if (won) { want.won[table] = (want.won[table] || 0) + 1; want.beaten[table] = true; want.pocket++; } // and an extra roll
       want.best[table] = Math.max(want.best[table] || 0, r.result[0]);
       assert.deepEqual(await progress(), want, 'the progress moved by more than this game');
     };

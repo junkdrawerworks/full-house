@@ -8,6 +8,7 @@ import { mulberry32, rollFor } from '../js/rng.js';
 import { whyLine } from '../js/why.js';
 import { bonusPace } from '../js/pad.js';
 import { linkFor, readLink, today, dayName } from '../js/links.js';
+import { pocketHere, earns, pocketFrom } from '../js/pocket.js';
 import { best, planned } from './exact.mjs';
 
 const box = (board, id) => board.boxes.find(b => b.id === id);
@@ -716,4 +717,24 @@ test('the back room: two of the tour’s twists at once, drawn from the seed, wi
     while (!filled(board, card)) { card = mark(card, playTurn(dealer, board, card, rand).option); turns++; }
     assert.equal(turns, 13, key);
   }
+});
+
+// A game of yours on the tour, at turn 5 with its three rolls used, changed by `extra`.
+const at = (extra = {}) => ({ table: 0, opp: 0, board: CLASSIC, turn: 'you', number: 5, rolls: 3, extraRoll: null, ...extra });
+
+test('extra rolls: a win earns one wherever they play a part, today’s only on its counted game, and the pocket holds any number', () => {
+  // Earned by a win on the tour, in a quick game, in the back room and in today's counted game; never by a loss or a tie
+  // (won is false for both), at a friend's table, at Two players, or by another go at today's.
+  for (const g of [at(), at({ table: null }), at({ table: null, kind: 'back' })]) {
+    assert.equal(earns(g, true), true, JSON.stringify(g));
+    assert.equal(earns(g, false), false);
+  }
+  assert.equal(earns(at({ table: null, kind: 'day' }), true, true), true);
+  assert.equal(earns(at({ table: null, kind: 'day' }), true, false), false, 'another go at today’s table earned one');
+  for (const kind of ['friend', 'two']) {
+    assert.equal(pocketHere(at({ kind })), false);
+    assert.equal(earns(at({ kind }), true, true), false, kind);
+  }
+  // The pocket from a save: any whole number, with no cap, and empty in a save from before extra rolls.
+  for (const [saved, n] of [[undefined, 0], [null, 0], [0, 0], [7, 7], [250, 250], [-1, 0], [2.5, 0], ['3', 0]]) assert.equal(pocketFrom(saved), n, String(saved));
 });
