@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { score, options, jokerState, blankCard, mark, totals, filled, fiveOf, boxHint } from '../js/rules.js';
-import { TABLES, CLASSIC, boardFor, BACK, PAIRS, TWISTS, backBoard, backRoom } from '../js/tour.js';
+import { TABLES, CLASSIC, boardFor, BACK, PAIRS, TWISTS, backBoard, backRoom, backBonus, weekBoard, changes } from '../js/tour.js';
 import { Opponent, playTurn, SLIP } from '../js/ai.js';
 import { mulberry32, rollFor } from '../js/rng.js';
 import { whyLine } from '../js/why.js';
@@ -311,6 +311,8 @@ test('a box’s hint on the pad says what it pays at that table', () => {
   }
   // And every board the back room can draw, with Odds, wild Two pairs and doubled Low roads among them.
   for (const key of PAIRS) for (let n = 0; n < (key.includes('hot') ? 6 : 1); n++) boards.push(backBoard(key, mulberry32(n)));
+  // And every table with each week's twist on it.
+  for (let t = 0; t < TABLES.length; t++) for (const key of Object.keys(TWISTS)) for (let n = 0; n < 4; n++) boards.push(weekBoard(t, n, key));
   for (const board of boards) {
     for (const b of board.boxes) {
       const hint = boxHint(b, board), m = b.mult || 1, where = `${board.name}, ${b.id} ×${m}: “${hint}”`;
@@ -638,6 +640,62 @@ test('a friend’s link carries the table, the opponent when not the table’s o
     assert.equal(readLink(bad), null, bad);
   }
   assert.equal(readLink('#table=2&dice=1&score=lots').score, null, 'a score that isn’t one is left out');
+});
+
+test('the week’s twist on the tour: on top of each table’s own, as the back room puts two together, or no change where it’s the table’s own or clashes', () => {
+  const same = { 1: ['evens'], 2: ['sixes', 'hot'], 3: ['two-rolls', 'high'], 4: ['wild'], 5: ['hot', 'sixes', 'high'], 6: ['pairs'], 7: ['high', 'two-rolls', 'hot'] };
+  assert.deepEqual(TABLES.map(t => t.twist), [null, 'evens', 'sixes', 'two-rolls', 'wild', 'hot', 'pairs', 'high']);
+  for (let t = 0; t < TABLES.length; t++) {
+    for (const key of Object.keys(TWISTS)) {
+      const unchanged = (same[t] || []).includes(key);
+      assert.equal(changes(t, key), !unchanged, `table ${t + 1}, ${key}`);
+      for (const seed of [1, 2, 3, 77]) {
+        const board = weekBoard(t, seed, key);
+        assert.deepEqual(board, weekBoard(t, seed, key), 'the same board from the same seed');
+        if (unchanged) { assert.deepEqual(board, boardFor(t, seed), `table ${t + 1}, ${key}: plays as it always does`); continue; }
+        const own = TABLES[t].twist, keys = own ? [own, key] : [key];
+        assert.equal(board.name, `${TABLES[t].board.name} with ${TWISTS[key].name}`);
+        assert.deepEqual([board.of, board.week, board.twists], [t, key, undefined], 'not taken for the back room');
+        assert.equal(board.blurb, `${keys.map(k => TWISTS[k].says).join(' ')} The top-section bonus needs ${board.bonus.at}.`);
+        assert.equal(board.bonus.at, backBonus(board), 'the bonus as the back room works it out');
+        assert.equal(board.boxes.length, 13);
+        // The same rules as the back room's board for the two (Hot Boxes' boxes apart, drawn from the seed).
+        if (own && !keys.includes('hot')) {
+          const back = backBoard(PAIRS.find(k => k.split('+').sort().join() === [...keys].sort().join()), mulberry32(1));
+          assert.deepEqual([board.boxes, board.rolls, board.wild, board.bonus, board.extra], [back.boxes, back.rolls, back.wild, back.bonus, back.extra], `table ${t + 1}, ${key}`);
+        }
+        // Classic with a twist is that twist alone: the tour's own table for it, where there is one.
+        const alone = TABLES.findIndex(x => x.twist === key);
+        if (!own && alone > 0 && key !== 'hot') {
+          const plain = x => JSON.parse(JSON.stringify([x.boxes, x.rolls, !!x.wild, x.bonus])); // the tour's Evens box has a face of undefined
+          assert.deepEqual(plain(board), plain(boardFor(alone, seed)), key);
+        }
+        if (keys.includes('hot')) {
+          const hot = board.boxes.filter(x => x.mult === 3);
+          assert.equal(hot.length, 2, `table ${t + 1}, ${key}`);
+          assert.ok(board.hot && hot.every(x => x.kind !== 'five' && x.id !== 'f1'));
+        }
+      }
+    }
+  }
+  // Examples: Evens with Wild Ones; Two Rolls with Odds, the bonus cut as Two Rolls cuts it; Classic with Odds.
+  const ev = weekBoard(1, 5, 'wild');
+  assert.deepEqual([ev.name, ev.wild, ev.bonus.at, ev.rolls], ['Evens with Wild Ones', true, 72, 3]);
+  const tr = weekBoard(3, 5, 'odds');
+  assert.deepEqual([tr.name, tr.rolls, tr.bonus.at, !!tr.boxes.find(x => x.kind === 'odds')], ['Two Rolls with Odds', 2, Math.round((66 * 52) / 63), true]);
+  assert.deepEqual([weekBoard(0, 5, 'odds').name, weekBoard(0, 5, 'odds').bonus.at], ['Classic with Odds', 66]);
+  // Hot Boxes' boxes come from the seed, different from seed to seed.
+  assert.ok(new Set(Array.from({ length: 20 }, (_, n) => weekBoard(5, n, 'evens').boxes.filter(x => x.mult === 3).map(x => x.id).join())).size > 5);
+  // No twist: the table as it is.
+  assert.deepEqual(weekBoard(2, 9, null), boardFor(2, 9));
+  // Every combined board plays through to a full card with the table's own opponent.
+  const rand = mulberry32(4);
+  for (let t = 0; t < TABLES.length; t++) for (const key of Object.keys(TWISTS)) {
+    const board = weekBoard(t, 3, key), opp = new Opponent(TABLES[t].play);
+    let card = blankCard(board), turns = 0;
+    while (!filled(board, card)) { card = mark(card, playTurn(opp, board, card, rand).option); turns++; }
+    assert.equal(turns, 13, `table ${t + 1}, ${key}`);
+  }
 });
 
 test('today’s table comes from the date: the same all day for everyone, a different table and dice from day to day', () => {
