@@ -4881,6 +4881,9 @@ try {
     });
   </script>`;
   const oldSave = JSON.stringify({ settings: { fast: true }, progress: { beaten: [true, true, true], best: [231, 247, 260], played: [2, 1, 3], won: [1, 1, 1] }, game: null });
+  // What a save holds of the progress and settings it came with: the game saves it again as soon as it has read it, with
+  // this week's lap in it (js/week.js), and the old Quick opponents switch as the pace.
+  const held = save => { const { settings, progress } = JSON.parse(save); return [progress.beaten, progress.best, progress.played, progress.won, settings.pace, progress.week?.beaten]; };
   async function carrying(name, fn, { home = true, init } = {}) {
     if (only && !name.includes(only)) return;
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, serviceWorkers: 'block' });
@@ -4928,7 +4931,7 @@ try {
     const first = await visit();
     assert.equal(first.loads(), 2, 'the page loaded more than once again to carry the save');
     const kept = await storage(first.page);
-    assert.equal(kept['full-house.v1'], oldSave, 'the save did not come over');
+    assert.deepEqual(held(kept['full-house.v1']), [[true, true, true], [231, 247, 260], [2, 1, 3], [1, 1, 1], 'quick', [true, true, true]], 'the save did not come over');
     assert.match(kept['junkdrawer.carried'], /^\d{4}-/, 'carrying was not noted as done');
     assert.equal(await first.page.locator('#tables li.beaten').count(), 3, 'the tour does not show the tables beaten at the old address');
     assert.match(await first.page.textContent('#tables li:nth-child(2)'), /your best 247/);
@@ -4971,7 +4974,7 @@ try {
     const first = await visit();
     assert.equal(first.loads(), 2);
     const kept = await storage(first.page);
-    assert.equal(kept['full-house.v1'], mine, 'the old save wrote over the one already here');
+    assert.deepEqual(held(kept['full-house.v1']), [[true], [199], [1], [1], 'normal', [true]], 'the old save wrote over the one already here');
     assert.ok(kept['junkdrawer.carried'], 'carrying was not noted as done');
     assert.equal(await first.page.locator('#tables li.beaten').count(), 1);
   });
