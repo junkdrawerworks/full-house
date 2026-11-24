@@ -38,9 +38,13 @@
         <!-- Extra rolls in the pocket, once there are any: js/app.js, renderHome(), and js/pocket.js. -->
         <p class="pocket" id="pocket" hidden></p>
       </div>
+      <!-- The week's climb, the twist of the week, and the laps done: js/app.js, renderHome(), and js/week.js. -->
+      <p class="week" id="tour-week"></p>
       <div class="card">
         <ol class="tables" id="tables"></ol>
         <p class="sum" id="tour-sum" hidden></p>
+        <!-- Once the week's climb is finished: js/app.js, roundAgain(). -->
+        <div class="again" id="tour-again" hidden><button type="button" id="b-round"><b>Go round again</b><small>This week’s climb again from table 1, with the same twist</small></button></div>
         <!-- After the tour, once the Dealer is beaten: js/app.js, renderHome(). -->
         <div class="tables back-room" id="back-row" hidden></div>
       </div>

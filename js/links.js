@@ -6,9 +6,12 @@
 // table: the table whose rules it's played by, 1 to 8, or 9 for the back room after the tour (its two twists come from the
 // dice, as Hot Boxes' boxes do), where the opponent is the Dealer from table 8. dice: the game's seed, in base 36. score: what the person who
 // sent it scored with those dice (left out, it's a table to try without a score to beat). vs: the opponent, by the
-// number of their table, when it isn't that table's own (a quick game's). The README promises these keep opening.
+// number of their table, when it isn't that table's own (a quick game's). twist: the week's twist a game of the tour had
+// on it, by its name in js/tour.js's TWISTS ("wild"), where it changed the table; only with tables 1 to 8. The README
+// promises these keep opening.
 
 import { mix } from './rng.js';
+import { TWISTS } from './tour.js';
 
 export const HOME = 'https://full-house.junkdrawer.works/';
 
@@ -16,15 +19,17 @@ export const HOME = 'https://full-house.junkdrawer.works/';
 // from 0) the last table's.
 const own = (table, tables) => Math.min(table, tables - 1);
 
-export function linkFor({ table, opp = null, seed, score = null }, tables = 8) {
+export function linkFor({ table, opp = null, seed, score = null, twist = null }, tables = 8) {
   const p = new URLSearchParams({ table: String(table + 1), dice: (seed >>> 0).toString(36) });
   if (opp !== null && opp !== own(table, tables)) p.set('vs', String(opp + 1));
+  if (twist && TWISTS[twist] && table < tables) p.set('twist', twist);
   if (Number.isInteger(score) && score >= 0) p.set('score', String(score));
   return `${HOME}#${p}`;
 }
 
-// What a link's # part asks for: { table, opp, seed, score }, counted from 0 as the game counts tables (the back room is
-// `tables`), with score null when there isn't one. Anything else in it is ignored; a link that doesn't make sense gives null.
+// What a link's # part asks for: { table, opp, seed, score, twist }, counted from 0 as the game counts tables (the back
+// room is `tables`), with score and twist null when there isn't one. Anything else in it is ignored; a link that doesn't
+// make sense gives null, as does one with a twist the game doesn't know or on the back room, which has twists of its own.
 export function readLink(hash, tables = 8) {
   const p = new URLSearchParams(String(hash || '').replace(/^#/, ''));
   const n = key => (/^\d{1,5}$/.test(p.get(key) || '') ? Number(p.get(key)) : NaN);
@@ -32,8 +37,9 @@ export function readLink(hash, tables = 8) {
   if (!/^[0-9a-z]{1,7}$/.test(dice)) return null;
   const seed = parseInt(dice, 36);
   if (!(table >= 0 && table <= tables) || !(opp >= 0 && opp < tables) || seed > 0xffffffff) return null;
-  const score = p.has('score') ? n('score') : NaN;
-  return { table, opp, seed, score: Number.isInteger(score) ? score : null };
+  const score = p.has('score') ? n('score') : NaN, twist = p.get('twist');
+  if (p.has('twist') && !(Object.hasOwn(TWISTS, twist) && table < tables)) return null;
+  return { table, opp, seed, score: Number.isInteger(score) ? score : null, twist: twist || null };
 }
 
 // Today's table, from the date where you are: which table, and the seed its dice come from. Everyone playing it on the

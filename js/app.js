@@ -1,7 +1,7 @@
 // Full House: the tour, a game in progress, and the opponent's turns played out on the table.
 
 import { blankCard, options, jokerState, mark, totals, filled, turnsLeft, boxLabel, isUpper } from './rules.js';
-import { TABLES, boardFor, CLASSIC, BACK } from './tour.js';
+import { TABLES, TWISTS, boardFor, weekBoard, changes, CLASSIC, BACK } from './tour.js';
 import { Opponent } from './ai.js';
 import { Tray } from './dice.js';
 import { Pad, ring } from './pad.js';
@@ -9,6 +9,7 @@ import { mulberry32, rollFor } from './rng.js';
 import { whyLine } from './why.js';
 import { readLink, linkFor, today, dayName } from './links.js';
 import { pocketHere, earns, rollsNow, offered, pocketFrom } from './pocket.js';
+import { weekFrom, turnOver, goAgain, credit, isTour, beatenNow } from './week.js';
 import * as sound from './sound.js';
 
 const KEY = 'full-house.v1';
@@ -58,9 +59,14 @@ const lineOf = i => (progress.beaten[i] && TABLES[i].who.beaten) || TABLES[i].wh
 const where = g => (two(g) ? 'Two players' : g.kind === 'friend' ? `A friend’s table: ${g.board.name}` : g.kind === 'day' ? `Today’s table: ${g.board.name}`
   : g.kind === 'back' ? `The back room: ${g.board.name}`
   : g.table !== null ? `Table ${g.table + 1}: ${g.board.name}` : g.board.id === CLASSIC.id ? 'Quick game' : `Quick game: ${g.board.name}`);
-// The table whose rules a game is played by: its own on the tour, the one chosen for a quick game (Classic unless another),
-// or the back room, whose boards come from the seed.
-const rulesOf = g => (g.board.twists ? BACK : Math.max(0, TABLES.findIndex(t => t.board.id === g.board.id)));
+// The table whose rules a game is played by: its own on the tour (with the week's twist on it, the board says so), the one
+// chosen for a quick game (Classic unless another), or the back room, whose boards come from the seed.
+const rulesOf = g => (g.board.twists ? BACK : Number.isInteger(g.board.of) ? g.board.of : Math.max(0, TABLES.findIndex(t => t.board.id === g.board.id)));
+// A board for the rules of table `at` from a game's seed, with the week's twist `twist` on it if there is one (js/tour.js).
+const boardOf = (at, seed, twist) => (twist ? weekBoard(at, seed, twist) : boardFor(at, seed));
+// What a game of the tour says when the week's twist leaves its table as it is: " The week’s twist, Hot Boxes, doesn’t
+// change this table."
+const weekNote = g => (g && isTour(g) && TWISTS[g.twist] && !g.board.week ? ` The week’s twist, ${TWISTS[g.twist].name}, doesn’t change this table.` : '');
 // The table chosen for quick games: one you've beaten, once you've beaten two, and otherwise Classic.
 const quickAt = () => (quickTables().includes(settings.quickAt) ? settings.quickAt : 0);
 const quickTables = () => (progress.beaten.filter(Boolean).length >= 2 ? TABLES.map((t, i) => i).filter(i => progress.beaten[i]) : []);
@@ -388,15 +394,21 @@ function yourTurn(g) {
 // { kind: 'two', names: ['Black', 'Red'] } is Two players: Classic, two people at one phone, counting nowhere, Black first
 // unless it says first: 'them' (Play again lets the other player start). { kind: 'back', seed } is the back room, at
 // table BACK against the Dealer, on the two twists that seed draws (see backCard()): won, it adds to a run of wins, and lost
-// or given up it ends it.
+// or given up it ends it. A friend's table with `twist` has that week's twist on it, as the game the link came from had.
+// A game of the tour has this week's twist on it, and belongs to this week's lap (js/week.js): `lap` says which, `twist`
+// the week's twist, whether or not it changed the table. If the week has turned since its card opened, the card opens
+// again instead, with the new week on it.
 function start(table, opp = table, at = table ?? 0, spec = {}) {
-  const seed = spec.seed ?? ((Math.random() * 2 ** 31) | 0);
-  const board = boardFor(at, seed);
+  const tour = table !== null && !spec.kind;
+  if (tour && newWeek()) { showCard(table); return; }
   if (game && !game.over) concede(true);
+  const seed = spec.seed ?? ((Math.random() * 2 ** 31) | 0);
+  const board = tour ? weekBoard(at, seed, progress.week.twist) : boardOf(at, seed, spec.kind === 'friend' && spec.twist);
   if (spec.kind === 'back') progress.back.next = null; // that draw is used: the next card draws afresh
   token++;
   game = {
     table, opp, seed, board,
+    ...(tour && { lap: progress.week.n, twist: progress.week.twist }),
     ...(spec.kind === 'friend' && { kind: 'friend', score: spec.score ?? null }),
     ...(spec.kind === 'day' && { kind: 'day', day: spec.day }),
     ...(spec.kind === 'back' && { kind: 'back' }),
@@ -431,18 +443,21 @@ function finish(lead = '') {
   const you = totals(b, g.you).total, them = totals(b, g.them).total, name = who(g).name;
   const won = you > them, tie = you === them;
   if (two(g)) { finishTwo(g, lead, you, them); return; }
-  let before = false, best = ''; // you'd beaten this table already; a new best there, over one you had
+  let best = ''; // a new best at this table, over one you had
+  let lap = null; // at a table of the tour, what the game did for its lap of the week (js/week.js, credit())
   let counted = false; // the day's first game, at today's table
   let run = null; // in the back room, the run of wins before this game and after it, and the best run before it
   if (g.kind === 'day') counted = countDay(g, you, them);
   else if (g.kind === 'back') run = countBack(won, tie);
   else if (g.kind) { /* a friend's table counts nowhere */ } else if (g.table !== null) {
     const i = g.table, was = progress.best[i] || 0;
-    before = !!progress.beaten[i];
     if (was && you > was) best = `Your best here: ${you} (was ${was}).`;
     progress.played[i] = (progress.played[i] || 0) + 1;
     if (won) { progress.won[i] = (progress.won[i] || 0) + 1; progress.beaten[i] = true; }
     progress.best[i] = Math.max(progress.best[i] || 0, you);
+    lap = credit(progress, g, won);
+    // A lap in fewer games than the best before it.
+    if (lap.done && lap.games !== null && lap.best !== null && lap.games < lap.best) best = `${best ? `${best} ` : ''}Your best lap: ${lap.games} games (was\u00a0${lap.best}).`;
   } else {
     progress.quick.played++;
     if (won) progress.quick.won++;
@@ -459,23 +474,30 @@ function finish(lead = '') {
 
   $('result-title').textContent = won ? `You beat ${mid(name)}` : tie ? 'A tie' : `${name} wins`;
   const last = g.table === TABLES.length - 1;
-  // Beating the Dealer at the last table finishes the tour, and the result says so above its title.
-  // A friend's table, and today's, say so there instead.
+  // Beating the Dealer at the last table finishes the tour, and the result says so above its title: after the first
+  // time, with the lap it was. A friend's table, and today's, say so there instead.
   const friend = g.kind === 'friend', day = g.kind === 'day';
   $('result-n').textContent = friend ? 'The same dice your friend had' : day ? `Today’s table · ${dayName(g.day)}` : run ? 'The back room'
-    : won && last ? `Table ${TABLES.length} of ${TABLES.length} · the tour` : '';
+    : won && last ? `Table ${TABLES.length} of ${TABLES.length} · ${lap?.done && progress.laps.done > 1 ? `lap ${progress.laps.done}` : 'the tour'}` : '';
   $('result-n').hidden = !$('result-n').textContent;
   const why = whyLine(b, g.you, g.them, name);
-  const onward = won && g.table !== null && !last && !(before && progress.beaten[g.table + 1]); // a table to send you on to
+  // A table to send you on to: the next one this week, unless both were beaten this week already.
+  const onward = won && !!lap?.now && !last && !(lap.before && progress.week.beaten[g.table + 1]);
+  // Once the week's climb is finished, beating the Dealer offers to go round again.
+  const round = won && last && !!lap && finished();
+  // A game of the tour still going when the week turned counts for the week it was started in.
+  const lastWeek = lap?.last ? (last && lap.done ? 'That finishes last week’s climb.' : 'That counts for last week’s climb.') : '';
+  const lapDone = lap?.done && progress.laps.done > 1 ? `That’s the whole tour again${lap.games !== null ? `, in ${lap.games} games` : ''}.` : 'That’s the whole tour. Nobody at these tables has anything left to teach you.';
   $('result-line').textContent = friend ? friendLine(you, g.score, won, why)
     : day ? (counted ? 'That one counts for today. There’s a new table tomorrow.' : 'Just practice: your first game today is the one that counts.')
     : run && won ? (run.now === 1 ? 'That starts a run.' : `That’s ${run.now} in a row.`)
     : run && tie ? 'A tie neither adds to a run nor ends it.'
     : won
     ? g.table === null ? (progress.beaten[g.opp] ? 'A good game.' : `A good game. It doesn’t count on the tour: ${mid(name)} is waiting at table ${g.opp + 1}.`)
-      : last ? (before ? `You’ve beaten ${mid(name)} before. That’s still the whole tour.` : 'That’s the whole tour. Nobody at these tables has anything left to teach you.')
-      : before ? (onward ? `You’ve beaten ${mid(name)} before; table ${g.table + 2} is still open.` : `You’ve beaten ${mid(name)} before.`)
-      : `Table ${g.table + 2} is open: ${TABLES[g.table + 1].board.name}, against ${mid(TABLES[g.table + 1].who.name)}.`
+      : lastWeek || (!lap.now ? 'A good game.'
+      : last ? (lap.done ? lapDone : `You’ve beaten ${mid(name)} before. That’s still the whole tour.`)
+      : lap.before ? (onward ? `You’ve beaten ${mid(name)} before; table ${g.table + 2} is still open.` : `You’ve beaten ${mid(name)} before.`)
+      : `Table ${g.table + 2} is open: ${TABLES[g.table + 1].board.name}, against ${mid(TABLES[g.table + 1].who.name)}.`)
     : tie ? 'Play it again to settle it.' : why || 'The dice owe you one.';
   // Why it went that way, from the two cards, unless it was close: on a loss in place of the line above, on a win under it.
   // At a friend's table it goes under the line about your friend, win or lose, unless that line is the reason itself.
@@ -500,9 +522,10 @@ function finish(lead = '') {
   const next = $('b-next');
   // The back room's Play again opens the card for the next sitting, with the two twists it draws, as On to table 3 does.
   if (run) { next.textContent = 'Play again'; next.onclick = () => { backCard(); under = 'sheet-result'; }; }
+  else if (round) { next.textContent = 'Go round again'; next.onclick = roundAgain; }
   else if (onward) { next.textContent = `On to table ${g.table + 2}`; next.onclick = () => { intro(g.table + 1); under = 'sheet-result'; }; }
   else { next.textContent = g.kind ? 'Play the same dice again' : 'Play again'; next.onclick = () => again(g); }
-  $('b-again').hidden = !onward;
+  $('b-again').hidden = !onward && !round;
   $('b-share').hidden = false;
   shareSaid('Share');
   const t = token;
@@ -575,7 +598,7 @@ function shareText(g) {
     : g.kind === 'back' ? `the back room: ${b.name}` : g.table !== null ? `table ${g.table + 1}: ${b.name}` : `quick game: ${b.name}`;
   const result = you > them ? `I beat ${mid(name)}, ${you} to ${them}.` : them > you ? `${name} beat me, ${them} to ${you}.` : `${name} and I tied, ${you} all.`;
   const whole = you > them && g.table === TABLES.length - 1 ? ' That’s the whole tour.' : '';
-  return `Full House, ${at}. ${result}${whole} ${linkFor({ table: rulesOf(g), opp: g.opp, seed: g.seed, score: you }, TABLES.length)}`;
+  return `Full House, ${at}. ${result}${whole} ${linkFor({ table: rulesOf(g), opp: g.opp, seed: g.seed, score: you, twist: g.board.week }, TABLES.length)}`;
 }
 // The phone's share sheet where there is one, and otherwise a copy to paste, which the button says it's made.
 async function share() {
@@ -609,7 +632,15 @@ async function copy(text) {
 // The same again: another game at a table of the tour or a quick game, or the same dice again at a friend's table.
 // At Two players, another game between the same two, with new dice.
 // At Two players the other player starts it: Red after a game Black started, Black after one Red did.
-const again = g => start(g.table, g.opp, rulesOf(g), two(g) ? { kind: 'two', names: g.names, first: starter(g) === 'you' ? 'them' : 'you' } : g.kind ? { kind: g.kind, seed: g.seed, score: g.score, day: g.day } : {});
+const again = g => (isTour(g) && closed(g.table) ? showCard(g.table) : start(g.table, g.opp, rulesOf(g), two(g) ? { kind: 'two', names: g.names, first: starter(g) === 'you' ? 'them' : 'you' } : g.kind ? { kind: g.kind, seed: g.seed, score: g.score, day: g.day, twist: g.board.week } : {}));
+// A table of the tour the week has closed again (a Monday came round after the game began): Play again shows its card,
+// on the tour, rather than sitting down where the week's climb hasn't reached.
+const closed = table => newWeek() || (table > 0 && !progress.week.beaten[table - 1]);
+function showCard(table) {
+  closeSheets();
+  open('home', { focus: false });
+  intro(table);
+}
 
 // The result of the game that's just finished, as finish() wrote it. It can be closed, to look over the pad, and opened again.
 function showResult() {
@@ -627,7 +658,7 @@ function concede(quietly) {
     token++;
     if (g.kind === 'day') countDay(g, null, null); // at Two players, or a friend's table: nowhere
     else if (g.kind === 'back') countBack(false, false);
-    else if (g.kind) { /* counts nowhere */ } else if (g.table !== null) progress.played[g.table] = (progress.played[g.table] || 0) + 1;
+    else if (g.kind) { /* counts nowhere */ } else if (g.table !== null) { progress.played[g.table] = (progress.played[g.table] || 0) + 1; credit(progress, g, false); }
     else progress.quick.played++;
     g.over = true;
   }
@@ -791,35 +822,45 @@ function say(text) {
 }
 
 function renderHome() {
-  const list = $('tables'), done = finished();
+  newWeek();
+  const list = $('tables'), done = finished(), week = progress.week, laps = progress.laps;
   $('tour-h').textContent = done ? 'The tour · finished' : 'The tour';
+  // Under the heading, the week: how far this week's climb has got and its twist, and once a lap is done, the laps done
+  // and the fewest games one has taken.
+  const said = [`This week: ${beatenNow(progress)} of ${TABLES.length}`, `Twist of the week: ${TWISTS[week.twist].name}`,
+    laps.done && `${laps.done} lap${laps.done === 1 ? '' : 's'} done`, laps.best && `best lap ${laps.best} games`].filter(Boolean);
+  $('tour-week').innerHTML = said.map((t, i) => `<span>${t}${i < said.length - 1 ? '<i aria-hidden="true"> · </i>' : ''}</span>`).join('');
+  // Each table's line: whether it's beaten this week, or next up, or locked till the one before it is; and all the time,
+  // the games won and played there and your best.
   list.innerHTML = TABLES.map((t, i) => {
-    const beaten = !!progress.beaten[i], unlocked = i === 0 || !!progress.beaten[i - 1];
-    const state = unlocked ? [beaten ? 'Beaten' : 'Next up', record(i), progress.best[i] && `your best ${progress.best[i]}`].filter(Boolean).join(' · ') : 'Locked';
+    const beaten = !!week.beaten[i], unlocked = i === 0 || !!week.beaten[i - 1];
+    const state = [unlocked ? (beaten ? 'Beaten' : 'Next up') : 'Locked', record(i), progress.best[i] && `your best ${progress.best[i]}`].filter(Boolean).join(' · ');
     return `<li class="${beaten ? 'beaten' : unlocked ? 'next' : 'locked'}">
       <button type="button" data-table="${i}">
         <span class="n">${i + 1}${done && beaten ? TICK : ''}</span>
         <span class="txt"><b>${t.board.name}</b><span class="vs"><i class="dot" style="--c:${t.who.colour}"></i>${t.who.name}</span><small>${state}</small></span>
       </button></li>`;
   }).join('');
-  // Once the tour is finished, your best at each table added up: a number to beat on a second time round.
+  // Once the tour has been finished, your best at each table added up: a number to beat on the next time round.
   const sum = TABLES.reduce((a, t, i) => a + (progress.best[i] || 0), 0);
-  $('tour-sum').innerHTML = done ? `<span>Total<small>your best at each table, added up</small></span><b>${sum}</b>` : '';
-  $('tour-sum').hidden = !done;
-  // The back room, after the tour once it's finished: the Dealer at two twists at once, with a run of wins in place of Beaten.
+  $('tour-sum').innerHTML = ever() ? `<span>Total<small>your best at each table, added up</small></span><b>${sum}</b>` : '';
+  $('tour-sum').hidden = !ever();
+  // Once the week's climb is finished, it can start again from table 1.
+  $('tour-again').hidden = !done;
+  // The back room, after the tour once it's been finished: the Dealer at two twists at once, with a run of wins in place of Beaten.
   const back = progress.back, d = TABLES[BACK - 1].who;
   const ran = back.played ? [back.run ? `run of ${back.run}` : 'no run going', back.best && `best run ${back.best}`, `won ${back.won} of ${back.played}`].filter(Boolean).join(' · ') : 'Two of the tour’s twists at once, drawn as you sit down';
-  $('back-row').hidden = !done;
-  $('back-row').innerHTML = done ? `<div class="next"><button type="button" data-back>
+  $('back-row').hidden = !ever();
+  $('back-row').innerHTML = ever() ? `<div class="next"><button type="button" data-back>
       <span class="n">${BACK + 1}</span>
       <span class="txt"><b>The back room</b><span class="vs"><i class="dot" style="--c:${d.colour}"></i>${d.name}</span><small>${ran[0].toUpperCase()}${ran.slice(1)}</small></span>
     </button></div>` : '';
   // Today's table: open to all, whatever's beaten, and unlocking nothing.
   const day = today(new Date(), TABLES.length), sat = TABLES[day.table], dayIn = dayDone(day.day), days = progress.days;
-  const said = [dayIn ? `Today: ${dayScore(dayIn, sat.who.name)}` : 'The same dice for everyone today', days.played && `won ${days.won} of ${days.played} day${days.played === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
+  const daySaid = [dayIn ? `Today: ${dayScore(dayIn, sat.who.name)}` : 'The same dice for everyone today', days.played && `won ${days.won} of ${days.played} day${days.played === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
   $('today-row').innerHTML = `<div class="${dayIn ? 'beaten' : 'next'}"><button type="button" data-day="${day.day}">
       <span class="n">${Number(day.day.slice(8))}</span>
-      <span class="txt"><b>${sat.board.name}</b><span class="vs"><i class="dot" style="--c:${sat.who.colour}"></i>${sat.who.name}</span><small>${said}</small></span>
+      <span class="txt"><b>${sat.board.name}</b><span class="vs"><i class="dot" style="--c:${sat.who.colour}"></i>${sat.who.name}</span><small>${daySaid}</small></span>
     </button></div>`;
   // Extra rolls in the pocket, quietly beside the tour's heading, once there are any.
   $('pocket').textContent = progress.pocket ? `Extra rolls: ${progress.pocket}` : '';
@@ -880,8 +921,25 @@ $('b-two-sit').addEventListener('click', () => {
 // Enter in a name sits you down, as on a form.
 for (const id of ['two-a', 'two-b']) $(id).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('b-two-sit').click(); } });
 
-// The tour is finished once the Dealer, at the last table, is beaten.
-const finished = () => !!progress.beaten[TABLES.length - 1];
+// This week's climb is finished once the Dealer, at the last table, is beaten in it. The back room stays open, and the
+// total of your bests shows, once he's been beaten ever.
+const finished = () => !!progress.week.beaten[TABLES.length - 1];
+const ever = () => !!progress.beaten[TABLES.length - 1];
+// A new lap, if the week has turned since the last (js/week.js): saved at once, so the reset is never undone.
+function newWeek() {
+  if (!turnOver(progress, new Date(), game)) return false;
+  save();
+  return true;
+}
+// Go round again, once this week's climb is finished: the tour from table 1 again, the same twist, back on the tour.
+function roundAgain() {
+  if (!goAgain(progress)) return;
+  closeSheets();
+  if (game?.over) game = null;
+  save();
+  open('home');
+  say(`The tour starts again at table 1, with ${TWISTS[progress.week.twist].name} on every table.`);
+}
 // A tick pencilled on a beaten table's number, a little out of true, once the tour is finished.
 const TICK = '<svg class="tick" viewBox="0 0 30 26" aria-hidden="true" focusable="false"><path class="halo" d="M4 14.5C6.5 16 8.5 18.5 10.5 22C14 13.5 19.5 7 27 2.5"/><path d="M4 14.5C6.5 16 8.5 18.5 10.5 22C14 13.5 19.5 7 27 2.5"/></svg>';
 
@@ -920,9 +978,14 @@ function open(screen, { focus = true } = {}) {
 // A table not yet open shows its card too, its twist and its opponent, with what it takes to sit there in place of Sit down.
 // With `spec` (see start()), a friend's table, by the rules of table `spec.at`: open to all, whatever's beaten, and with its
 // dice settled by the link, a Hot Boxes table says which boxes are hot.
+// A table of the tour shows the week's twist on it, or says it leaves the table as it is.
 function intro(table, opp = table, spec = {}) {
-  const at = spec.at ?? table ?? quickAt(), t = TABLES[opp], board = spec.kind ? boardFor(at, spec.seed) : TABLES[at].board;
-  const locked = table !== null && table > 0 && !progress.beaten[table - 1];
+  const tour = table !== null && !spec.kind;
+  if (tour && newWeek()) renderHome();
+  const twist = tour ? progress.week.twist : null;
+  const at = spec.at ?? table ?? quickAt(), t = TABLES[opp];
+  const board = spec.kind ? boardOf(at, spec.seed, spec.kind === 'friend' && spec.twist) : tour ? weekBoard(at, 0, twist) : TABLES[at].board;
+  const locked = tour && table > 0 && !progress.week.beaten[table - 1];
   $('intro-n').textContent = spec.kind === 'friend' ? 'The same dice your friend had' : spec.kind === 'day' ? `Today’s table · ${dayName(spec.day)}`
     : spec.kind === 'back' ? 'The back room · after the tour' : table === null ? 'Quick game' : `Table ${table + 1} of ${TABLES.length}`;
   $('intro-title').textContent = board.name;
@@ -930,6 +993,7 @@ function intro(table, opp = table, spec = {}) {
   const note = spec.kind === 'friend' ? `${spec.score !== null ? `Score to beat: ${spec.score}. ` : ''}It doesn’t count on the tour.`
     : spec.kind === 'day' ? (dayDone(spec.day) ? `Today’s game is in: ${dayScore(dayDone(spec.day), t.who.name)}. Another go is just practice.` : 'Everyone has the same dice today. Your first game is the one that counts, here and not on the tour.')
     : spec.kind === 'back' ? (progress.back.run ? `You’re on a run of ${progress.back.run}. Win to add to it; a loss, or giving up, ends\u00a0it.` : 'Two of the tour’s twists at once, new each time you sit down. Win to start a run.')
+    : tour ? (changes(at, twist) ? `${TWISTS[twist].name} is the week’s twist, on every table.` : `The week’s twist, ${TWISTS[twist].name}, doesn’t change this table.`)
     : '';
   $('intro-note').textContent = note;
   $('intro-note').hidden = !note;
@@ -966,13 +1030,15 @@ function showRules(board, here, g = null) {
   const adders = board.boxes.filter(b => b.kind === 'evens' || b.kind === 'odds'); // Evens, and in the back room Odds
   const added = adders.length ? ` (or what the ${adders.map(b => (b.kind === 'evens' ? 'even' : 'odd')).join(' or ')} dice add up to, in ${adders.map(boxLabel).join(' or ')})` : '';
   const items = [
-    here && `<b>At this table:</b> ${escape(board.blurb)}${hotNames(board) ? ` This time it’s ${hotNames(board)}.` : ''}`,
+    here && `<b>At this table:</b> ${escape(board.blurb)}${hotNames(board) ? ` This time it’s ${hotNames(board)}.` : ''}${weekNote(g)}`,
     `On your turn, roll all five dice. Tap any dice you want to hold, then roll the rest. You get ${COUNT[board.rolls]} rolls.`,
     'After any roll you can stop and score: tap a box on the pad, then tap it again to write the score in. Every turn fills one box, even if it scores nothing.',
     `<b>Top section:</b> add up the dice showing that number. Reach ${board.bonus.at} across the six boxes for a ${board.bonus.worth}-point bonus${threeEach ? ' (three of each number gets you there)' : ''}.`,
     lower.map(b => box[b.kind](b)).filter(Boolean).join(' '),
     `Once the Five of a kind box is filled, another five of a kind has to go in its own number’s box if that’s open. If not, it goes in any open box in the bottom section, where ${of('pairs') ? 'a full house, a straight or two pairs' : 'a full house or a straight'} counts in full. If the bottom is full too, it scores 0 in a top box${added}. It also earns ${board.extra} extra, unless the Five of a kind box holds a 0.`,
     'You and your opponent take turns until every box is filled. The higher total wins.',
+    // The week's climb (js/week.js), from the tour and from a game of it.
+    (!here || (g && isTour(g))) && `<b>The tour:</b> beat a table’s opponent to open the next. Every Monday it starts again from table 1, with a twist of the week on every table, on top of the table’s own (this week, ${TWISTS[progress.week.twist].name}). Once you’ve beaten the Dealer that week, Go round again starts it over early. Your bests, your records and the back room stay.`,
     // Extra rolls (js/pocket.js), except at a friend's table or Two players, where they play no part.
     (!g || pocketHere(g)) && `<b>Extra rolls:</b> every game you win on the tour, in a quick game, in the back room or at today’s table (the day’s first game) puts an extra roll in your pocket, and they keep from game to game. Once a game, after your last roll, you can spend one to roll the dice you aren’t holding once more: hold Extra roll down for a second.${progress.pocket ? ` You have ${progress.pocket}.` : ''}`,
     KEYS,
@@ -1058,6 +1124,7 @@ function progressFrom(p) {
   out.back = { run: 0, best: 0, played: 0, won: 0, ...back, next: Number.isInteger(back.next) ? back.next : null };
   if (!(out.today && typeof out.today === 'object' && typeof out.today.day === 'string')) out.today = null;
   out.pocket = pocketFrom(out.pocket); // extra rolls: none in a save from before them
+  Object.assign(out, weekFrom(out)); // the week's lap and the laps done (js/week.js): a save from before them keeps its place
   return out;
 }
 // A saved game still being played, with every part the page reads there to pick it up again.
@@ -1127,6 +1194,12 @@ function carryOn() {
 $('b-continue').addEventListener('click', carryOn);
 $('today-row').addEventListener('click', e => { if (e.target.closest('[data-day]')) dayCard(); });
 $('back-row').addEventListener('click', e => { if (e.target.closest('[data-back]')) backCard(); });
+$('b-round').addEventListener('click', () => { roundAgain(); document.querySelector('#tables li.next button')?.focus({ preventScroll: true }); });
+// Monday can come round with the tour on the screen, or with the game out of sight: the tour catches up within a minute,
+// or as soon as it's looked at again.
+const weekWatch = () => { if (newWeek() && document.body.dataset.screen === 'home') renderHome(); };
+setInterval(weekWatch, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) weekWatch(); });
 $('tables').addEventListener('click', e => { const b = e.target.closest('[data-table]'); if (b) intro(+b.dataset.table); });
 // A quick game starts straight away, unless it would end the game you're in: then it asks first, as a table on the tour does.
 $('people').addEventListener('click', e => {
@@ -1137,7 +1210,7 @@ $('people').addEventListener('click', e => {
 });
 $('quick-at').addEventListener('change', e => { settings.quickAt = +e.target.value; save(); });
 $('b-tour').addEventListener('click', () => { closeSheets(); game = null; save(); open('home'); });
-$('b-again').addEventListener('click', () => start(game.table, game.opp, rulesOf(game)));
+$('b-again').addEventListener('click', () => (closed(game.table) ? showCard(game.table) : start(game.table, game.opp, rulesOf(game))));
 // The result put aside, to look over the finished pad under it: See the result, where the focus goes back to, opens it again.
 $('b-look').addEventListener('click', closeSheets);
 $('b-share').addEventListener('click', share);
@@ -1148,7 +1221,7 @@ const showMenu = () => {
   if (!game) return;
   $('menu-title').textContent = where(game);
   $('menu-twist').textContent = two(game) ? `${game.board.blurb} ${me(game)} against ${who(game).name}, passing the phone between you. Nothing counts on the tour.`
-    : `${game.board.blurb}${hotNames(game.board) ? ` This time it’s ${hotNames(game.board)}.` : ''} Against ${mid(who(game).name)}. ${lineOf(game.opp)}`;
+    : `${game.board.blurb}${hotNames(game.board) ? ` This time it’s ${hotNames(game.board)}.` : ''}${weekNote(game)} Against ${mid(who(game).name)}. ${lineOf(game.opp)}`;
   openSheet('sheet-menu');
 };
 // Giving up takes two taps, as scoring a box does: the first asks, and closing the menu takes the question back.
@@ -1306,7 +1379,7 @@ function takeLink() {
   try { history.replaceState(history.state, '', location.pathname + location.search); } catch { /* it stays: harmless */ }
   return link;
 }
-const friendCard = link => intro(null, link.opp, { kind: 'friend', at: link.table, seed: link.seed, score: link.score });
+const friendCard = link => intro(null, link.opp, { kind: 'friend', at: link.table, seed: link.seed, score: link.score, twist: link.twist });
 // One opened in a tab the game is in already only changes what's after the #.
 addEventListener('hashchange', () => {
   const link = takeLink();
@@ -1316,6 +1389,9 @@ addEventListener('hashchange', () => {
   friendCard(link);
 });
 
+// A save from before the weekly climb is saved again at once with this week's lap in it, so its place on the tour is kept
+// for this week only, and next Monday starts the climb again.
+if (!saved.progress?.week) save();
 const link = takeLink();
 open('home', { focus: false });
 if (link) friendCard(link);

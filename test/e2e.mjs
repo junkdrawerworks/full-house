@@ -28,7 +28,10 @@ const only = process.argv.slice(2).join(' ');
 // Each step starts on a fresh page with nothing saved: a phone (upright unless it says otherwise), or a desktop with a mouse.
 // `at` is the page to open, the game from the test server unless it says otherwise. Anything the page asks for from
 // elsewhere, anything the server hasn't got (a 404) and any request of its own that fails is a problem.
-async function step(name, fn, { desktop = false, serviceWorkers = 'block', viewport = { width: 390, height: 844 }, at = base } = {}) {
+// The page's clock says WEEK unless the step says otherwise (`time`, or null for the real one), so the week's twist on the
+// tour's tables is the same every run: Wild Ones, which leaves every table's boxes and bonus where they are.
+const WEEK = new Date(2026, 11, 30, 12); // Wednesday 30 December 2026, in the week whose twist is Wild Ones
+async function step(name, fn, { desktop = false, serviceWorkers = 'block', viewport = { width: 390, height: 844 }, at = base, time = WEEK } = {}) {
   if (only && !name.includes(only)) return;
   const size = desktop ? { viewport: { width: 1280, height: 800 } } : { viewport, deviceScaleFactor: 2, hasTouch: true };
   const ctx = await browser.newContext({ ...size, serviceWorkers });
@@ -43,6 +46,7 @@ async function step(name, fn, { desktop = false, serviceWorkers = 'block', viewp
   const myTurn = () => page.waitForFunction(() => window.fullHouse.game?.turn === 'you' && !window.fullHouse.busy, null, { timeout: 30000 });
   const settled = () => page.waitForFunction(() => !window.fullHouse.busy, null, { timeout: 30000 });
   try {
+    if (time) await page.clock.setFixedTime(time);
     await page.goto(at);
     await page.evaluate(() => document.fonts.ready);
     await fn({ page, ctx, game, myTurn, settled });
@@ -274,9 +278,9 @@ try {
     assert.ok(await page.isVisible('#toast'));
     await page.click('#b-home');
     assert.ok(await page.isHidden('#toast'), 'the game’s message came onto the tour');
-    assert.equal(await banner(), 'Table 1: Classic, against Pip. Turn 1 of 13.');
+    assert.equal(await banner(), 'Table 1: Classic with Wild Ones, against Pip. Turn 1 of 13.');
     await myTurn();
-    assert.equal(await banner(), 'Table 1: Classic, against Pip. Turn 2 of 13.', 'Carry on kept the turn you left on');
+    assert.equal(await banner(), 'Table 1: Classic with Wild Ones, against Pip. Turn 2 of 13.', 'Carry on kept the turn you left on');
     // Their last turn, ending the game behind the tour: Carry on goes, and the result comes up over the tour.
     await page.click('#b-continue');
     await page.evaluate(() => {
@@ -365,7 +369,7 @@ try {
     await page.click('[data-table="2"]');
     await page.waitForSelector('#sheet-intro:not([hidden])');
     assert.equal(await page.textContent('#intro-n'), 'Table 3 of 8');
-    assert.equal(await page.textContent('#intro-title'), 'Triple Sixes');
+    assert.equal(await page.textContent('#intro-title'), 'Triple Sixes with Wild Ones');
     assert.match(await page.textContent('#intro-blurb'), /^Sixes score three times over/);
     assert.equal(await page.textContent('#intro-who span'), 'Patient. Waits for the big numbers.');
     assert.equal(await page.textContent('#intro-locked'), 'Beat Maud to sit here');
@@ -548,6 +552,7 @@ try {
       const g = structuredClone(window.fullHouse.game);
       g.seed = seed;
       g.board = boardFor(5, seed);
+      delete g.twist; // Hot Boxes as it is, not the week's twist on it
       if (hot) g.board.boxes.forEach(b => { b.mult = hot.includes(b.id) ? 3 : 1; });
       window.fullHouse.set(g);
     }, [seed, hot]);
@@ -619,6 +624,7 @@ try {
     await myTurn();
   });
 
+  // (In a week of Triple Sixes: at Wild Ones, a 1's tag fades in as its die lands, which would count as a die still moving.)
   await step('the dice have landed by the time their scores show, at every pace', async ({ page, myTurn }) => {
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
@@ -676,7 +682,7 @@ try {
     await page.click('#b-roll');
     await page.waitForTimeout(200);
     assert.equal(await moving('true'), 0, 'the dice tumble though less motion was asked for');
-  });
+  }, { time: new Date(2026, 10, 25, 12) });
 
   await step('at Just their score the opponent’s dice show where they ended up and the score goes in in about a second, the same turn as at any pace', async ({ page, myTurn }) => {
     // An old save's Quick opponents switch, on, comes up as Quick.
@@ -902,7 +908,7 @@ try {
     assert.match(await page.textContent('#menu-twist'), / Against the Dealer\. Hasn’t lost a game in years\.$/);
     await page.keyboard.press('Escape');
     await page.click('#b-home');
-    assert.equal(await page.textContent('#b-continue span'), 'Table 8: High Stakes, against the Dealer. Turn 1 of 13.');
+    assert.equal(await page.textContent('#b-continue span'), 'Table 8: High Stakes with Wild Ones, against the Dealer. Turn 1 of 13.');
     assert.match(await page.textContent('#tables li:nth-child(8)'), /The Dealer/);
     // Not finished yet: no ticks, no total, and the heading says only The tour.
     assert.equal(await page.textContent('#tour-h'), 'The tour');
@@ -1190,18 +1196,19 @@ try {
     assert.equal(close.line, close.why || 'The dice owe you one.');
     assert.equal(close.best, `Your best here: ${close.you} (was 3).`);
     assert.equal((await page.evaluate(() => window.fullHouse.progress)).best[0], close.you);
-    // The last table, beaten a second time.
-    await page.evaluate(() => { for (let i = 0; i < 8; i++) window.fullHouse.progress.beaten[i] = true; });
+    // The last table, beaten a second time this week: Go round again, or this table again.
+    await page.evaluate(() => { for (let i = 0; i < 8; i++) window.fullHouse.progress.beaten[i] = window.fullHouse.progress.week.beaten[i] = true; });
     const dealer = await play(7, 20);
     assert.equal(dealer.line, 'You’ve beaten the Dealer before. That’s still the whole tour.');
-    assert.equal(dealer.next, 'Play again');
+    assert.equal(dealer.next, 'Go round again');
+    assert.ok(await page.isVisible('#b-again'));
     // Table 1 again, with table 2 beaten too: nothing to send you on to, so the button plays it again.
     const again = await play(0, 20);
     assert.equal(again.line, 'You’ve beaten Pip before.');
     assert.equal(again.next, 'Play again');
     assert.ok(await page.isHidden('#b-again'), 'Play this table again offered beside Play again');
     await page.click('#b-next');
-    assert.equal(await page.textContent('#g-table'), 'Table 1: Classic');
+    assert.equal(await page.textContent('#g-table'), 'Table 1: Classic with Wild Ones');
     assert.equal((await page.evaluate(() => window.fullHouse.game)).number, 1);
   });
 
@@ -1590,7 +1597,8 @@ try {
     const [you, them] = [await total('you'), await total('them')];
     await page.click('#b-share');
     await page.waitForFunction(() => window.shared);
-    assert.deepEqual(await page.evaluate(() => window.shared), { text: `Full House, table 1: Classic. I beat Pip, ${you} to ${them}. https://full-house.junkdrawer.works/#table=1&dice=${g.seed.toString(36)}&score=${you}` });
+    // The week's twist on the table goes in the link too, so it opens the same board.
+    assert.deepEqual(await page.evaluate(() => window.shared), { text: `Full House, table 1: Classic with Wild Ones. I beat Pip, ${you} to ${them}. https://full-house.junkdrawer.works/#table=1&dice=${g.seed.toString(36)}&twist=wild&score=${you}` });
     assert.equal(await page.textContent('#b-share'), 'Share', 'the share sheet says it all itself');
 
     // Closed without sending: nothing more. Where there's no share sheet: a copy, and the button says so.
@@ -1601,7 +1609,7 @@ try {
     await page.evaluate(() => { delete navigator.share; Object.defineProperty(navigator, 'share', { value: undefined, configurable: true, writable: true }); });
     await page.click('#b-share');
     await page.waitForFunction(() => document.getElementById('b-share').textContent === 'Copied.');
-    assert.match(await page.evaluate(() => navigator.clipboard.readText()), /^Full House, table 1: Classic\. I beat Pip, \d+ to \d+\. https:\/\/full-house\.junkdrawer\.works\/#table=1&dice=/);
+    assert.match(await page.evaluate(() => navigator.clipboard.readText()), /^Full House, table 1: Classic with Wild Ones\. I beat Pip, \d+ to \d+\. https:\/\/full-house\.junkdrawer\.works\/#table=1&dice=/);
     await page.waitForFunction(() => document.getElementById('b-share').textContent === 'Share', null, { timeout: 5000 });
 
     // A loss, the Dealer at the last table, and a quick game against someone from another table.
@@ -1626,9 +1634,11 @@ try {
     };
     await page.evaluate(() => { window.fullHouse.settings.pace = 'score'; });
     await finishAs(1, 1, 1, 0, 20);
-    assert.match(await shareFrom(), /^Full House, table 2: Evens\. Maud beat me, 2\d\d to 9\. https:\/\/full-house\.junkdrawer\.works\/#table=2&dice=[0-9a-z]+&score=9$/);
+    // (With the week's Wild Ones on the table, the two 1s in Chance count as 6s.)
+    assert.match(await shareFrom(), /^Full House, table 2: Evens with Wild Ones\. Maud beat me, 2\d\d to 19\. https:\/\/full-house\.junkdrawer\.works\/#table=2&dice=[0-9a-z]+&twist=wild&score=19$/);
     await finishAs(7, 7, 7, 30, 0);
-    assert.match(await shareFrom(), /^Full House, table 8: High Stakes\. I beat the Dealer, \d+ to 0\. That’s the whole tour\. https:\/\/full-house\.junkdrawer\.works\/#table=8&dice=[0-9a-z]+&score=\d+$/);
+    assert.match(await shareFrom(), /^Full House, table 8: High Stakes with Wild Ones\. I beat the Dealer, \d+ to 0\. That’s the whole tour\. https:\/\/full-house\.junkdrawer\.works\/#table=8&dice=[0-9a-z]+&twist=wild&score=\d+$/);
+    // A quick game has no week's twist, nor its link.
     await finishAs(null, 2, 0, 30, 0);
     assert.match(await shareFrom(), /^Full House, quick game: Classic\. I beat Bea, \d+ to 0\. https:\/\/full-house\.junkdrawer\.works\/#table=1&dice=[0-9a-z]+&vs=3&score=\d+$/);
   });
@@ -1696,6 +1706,349 @@ try {
     assert.deepEqual([p.today, p.days], [{ day: d.day, you: null, them: null }, { played: 2, won: 1 }]);
     await page.reload();
     assert.equal(await page.textContent('#today-row small'), 'Today: given up · won 1 of 2 days');
+  });
+
+  // ---- the week's climb ----
+
+  // Weeks by their Mondays, with the twist each draws: 7 December 2026 Evens, 21 December Odds, 28 December Wild Ones
+  // (the steps' usual week), 4 January 2027 Two Rolls, 11 January Hot Boxes.
+  const saveProgress = (page, p) => page.evaluate(p => localStorage.setItem('full-house.v1', JSON.stringify({ progress: p })), p);
+  const heading = page => page.textContent('#tour-week');
+  const lines = page => page.$$eval('#tables small', s => s.map(e => e.textContent));
+  // Sit down at table `i` from the tour and win it from the last box (whatever the week has made that box).
+  async function winAt(t, i) {
+    const { page } = t;
+    await page.click(`[data-table="${i}"]`);
+    await page.click('#b-sit');
+    await page.evaluate(() => {
+      const g = structuredClone(window.fullHouse.game), last = g.board.boxes.at(-1).id;
+      for (const b of g.board.boxes) { g.you[b.id] = b.id === last ? null : 20; g.them[b.id] = b.id === last ? null : b.id === 'five' ? 0 : 5; }
+      Object.assign(g, { number: 13, rolls: 0, turn: 'you' });
+      window.fullHouse.settings.pace = 'score';
+      window.fullHouse.set(g);
+    });
+    await t.myTurn();
+    await page.click('#b-roll');
+    await t.settled();
+    await page.locator('tr.can').first().click();
+    await page.locator('tr.can').first().click();
+    await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
+  }
+
+  await step('the tour starts again at local midnight starting each Monday, keeping everything but the week’s climb, and once only, whatever the clock does', async t => {
+    const { page } = t;
+    // Sunday 27 December, a minute to midnight, on a tour three tables up, saved before the weekly climb: nothing resets.
+    await page.clock.install({ time: new Date(2026, 11, 27, 23, 59, 0) });
+    await saveProgress(page, { beaten: [true, true, true], best: [231, 247, 260], played: [2, 3, 1], won: [1, 1, 1], quick: { played: 2, won: 1 }, pocket: 2, days: { played: 1, won: 1 } });
+    await page.reload();
+    assert.equal(await heading(page), 'This week: 3 of 8 · Twist of the week: Odds');
+    assert.deepEqual((await lines(page)).slice(0, 5), ['Beaten · won 1 of 2 · your best 231', 'Beaten · won 1 of 3 · your best 247', 'Beaten · won 1 of 1 · your best 260', 'Next up', 'Locked']);
+    // Midnight: Monday. The tour catches up while it's on the screen, within a minute.
+    await page.clock.runFor(61000);
+    assert.equal(await heading(page), 'This week: 0 of 8 · Twist of the week: Wild Ones');
+    assert.deepEqual((await lines(page)).slice(0, 5), ['Next up · won 1 of 2 · your best 231', 'Locked · won 1 of 3 · your best 247', 'Locked · won 1 of 1 · your best 260', 'Locked', 'Locked']);
+    assert.equal(await page.getAttribute('#tables li:nth-child(1)', 'class'), 'next');
+    assert.equal(await page.getAttribute('#tables li:nth-child(2)', 'class'), 'locked');
+    // What's kept: every table ever beaten (quick games by their rules), bests, records, the pocket, today's table.
+    let p = await page.evaluate(() => structuredClone(window.fullHouse.progress));
+    assert.deepEqual([p.beaten, p.best, p.played, p.won, p.quick, p.pocket, p.days], [[true, true, true], [231, 247, 260], [2, 3, 1], [1, 1, 1], { played: 2, won: 1 }, 2, { played: 1, won: 1 }]);
+    assert.deepEqual([p.week.start, p.week.twist, p.week.beaten, p.week.games], ['2026-12-28', 'wild', [], 0]);
+    assert.ok(await page.isVisible('#quick'));
+    assert.equal(await page.locator('#quick-at input').count(), 3, 'quick games by the rules of every table ever beaten');
+    assert.equal(await page.locator('#people button').count(), 4, 'and against everyone met');
+    // Table 2's card: locked again this week, Pip to beat first.
+    await page.click('[data-table="1"]');
+    assert.equal(await page.textContent('#intro-locked'), 'Beat Pip to sit here');
+    await page.click('#sheet-intro .plain');
+    // A reload later in the week: no second reset.
+    await saveProgress(page, { ...p, week: { ...p.week, beaten: [true], games: 2 } });
+    await page.clock.setFixedTime(new Date(2027, 0, 3, 23, 0));
+    await page.reload();
+    assert.equal(await heading(page), 'This week: 1 of 8 · Twist of the week: Wild Ones');
+    // The clock put back into last week (a flight west across Monday's midnight): nothing changes, then or after.
+    await page.clock.setFixedTime(new Date(2026, 11, 27, 22, 0));
+    await page.reload();
+    assert.equal(await heading(page), 'This week: 1 of 8 · Twist of the week: Wild Ones');
+    await page.clock.setFixedTime(new Date(2026, 11, 28, 0, 30));
+    await page.reload();
+    assert.equal(await heading(page), 'This week: 1 of 8 · Twist of the week: Wild Ones');
+    // Away for two weeks and back: one new lap, for the week it is now.
+    await page.clock.setFixedTime(new Date(2027, 0, 13, 9));
+    await page.reload();
+    assert.equal(await heading(page), 'This week: 0 of 8 · Twist of the week: Hot Boxes');
+    p = await page.evaluate(() => structuredClone(window.fullHouse.progress));
+    assert.deepEqual([p.week.start, p.week.n, p.best], ['2027-01-11', 3, [231, 247, 260]]);
+    // Coming back to the tab after Monday has come round catches up too.
+    await page.clock.setFixedTime(new Date(2027, 0, 18, 7));
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    assert.equal((await page.evaluate(() => window.fullHouse.progress.week.start)), '2027-01-18');
+    // The heading keeps to the width of the narrowest phone, breaking between its parts.
+    await saveProgress(page, { ...p, week: { ...p.week, start: '2027-01-18', twist: 'pairs' }, laps: { done: 12, best: 10 } });
+    await page.reload();
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 700 });
+      const fit = await page.evaluate(() => {
+        const el = document.getElementById('tour-week'), r = el.getBoundingClientRect();
+        // A part broken over two lines, when it would have fitted on a line of its own.
+        const split = [...el.querySelectorAll('span')].filter(s => s.getBoundingClientRect().height > 25 && s.scrollWidth < r.width - 30).map(s => s.textContent);
+        return { right: r.right, width: innerWidth, split, page: document.documentElement.scrollWidth };
+      });
+      assert.ok(fit.right <= fit.width - 15 && fit.page <= fit.width, `at ${width} the week’s line runs off the page`);
+      assert.deepEqual(fit.split, [], `at ${width} a part of the week’s line breaks in two`);
+    }
+    assert.equal(await heading(page), 'This week: 0 of 8 · Twist of the week: Pairs and the Low Road · 12 laps done · best lap 10 games');
+  }, { time: null });
+
+  await step('a finished tour from before the weekly climb stays finished till Monday, and the back room stays open after it', async ({ page }) => {
+    // The save as it was: every table beaten, no week in it.
+    await saveProgress(page, { beaten: Array(8).fill(true), best: [231, 247, 260, 240, 250, 255, 238, 480], played: [3, 4, 2, 5, 6, 3, 4, 7], won: [1, 1, 1, 1, 1, 1, 1, 1], back: { run: 1, best: 2, played: 3, won: 2 }, pocket: 3 });
+    await page.reload();
+    assert.equal(await page.textContent('#tour-h'), 'The tour · finished');
+    assert.equal(await heading(page), 'This week: 8 of 8 · Twist of the week: Wild Ones · 1 lap done');
+    assert.equal(await page.locator('#tables .tick').count(), 8);
+    assert.equal(await page.textContent('#tour-sum b'), '2201');
+    assert.ok(await page.isVisible('#b-round'), 'Go round again, on a finished week');
+    assert.equal(await page.textContent('#back-row small'), 'Run of 1 · best run 2 · won 2 of 3');
+    await page.reload();
+    assert.equal(await heading(page), 'This week: 8 of 8 · Twist of the week: Wild Ones · 1 lap done', 'nothing reset on a reload');
+    // Monday: the climb starts again; the back room, the total of the bests, quick games and the Dealer's line stay.
+    await page.clock.setFixedTime(new Date(2027, 0, 4, 0, 0));
+    await page.reload();
+    assert.equal(await page.textContent('#tour-h'), 'The tour');
+    assert.equal(await heading(page), 'This week: 0 of 8 · Twist of the week: Two Rolls · 1 lap done');
+    assert.equal(await page.locator('#tables .tick').count(), 0);
+    assert.ok(await page.isHidden('#b-round'));
+    assert.ok(await page.isVisible('#back-row [data-back]'), 'the back room closed with the week');
+    assert.equal(await page.textContent('#back-row small'), 'Run of 1 · best run 2 · won 2 of 3');
+    assert.equal(await page.textContent('#tour-sum b'), '2201');
+    assert.equal(await page.locator('#quick-at input').count(), 8);
+    await page.click('[data-table="7"]');
+    assert.match(await page.textContent('#intro-who'), /Hadn’t lost a game in years\./);
+    assert.equal(await page.textContent('#intro-locked'), 'Beat Wren to sit here');
+    await page.click('#sheet-intro .plain');
+    await page.click('#back-row [data-back]');
+    assert.ok(await page.isVisible('#b-sit'), 'the back room can be sat at');
+  });
+
+  await step('beating the Dealer finishes the week’s lap and offers Go round again, the same week and twist, counting laps and the best lap', async t => {
+    const { page } = t;
+    assert.ok(await page.isHidden('#b-round'));
+    // A loss at table 1, then a win at every table: nine games.
+    await page.click('[data-table="0"]');
+    await page.click('#b-sit');
+    await page.click('#b-menu');
+    await page.click('#b-concede');
+    await page.click('#b-concede');
+    for (let i = 0; i < 7; i++) {
+      await winAt(t, i);
+      await page.click('#b-tour');
+    }
+    assert.equal(await heading(page), 'This week: 7 of 8 · Twist of the week: Wild Ones');
+    assert.ok(await page.isHidden('#b-round'), 'Go round again before the Dealer is beaten this week');
+    await winAt(t, 7);
+    assert.equal(await page.textContent('#result-n'), 'Table 8 of 8 · the tour');
+    assert.equal(await page.textContent('#result-line'), 'That’s the whole tour. Nobody at these tables has anything left to teach you.');
+    assert.equal(await page.textContent('#b-next'), 'Go round again');
+    assert.ok(await page.isVisible('#b-again'), 'Play this table again beside it');
+    await page.click('#b-tour');
+    assert.equal(await page.textContent('#tour-h'), 'The tour · finished');
+    assert.equal(await heading(page), 'This week: 8 of 8 · Twist of the week: Wild Ones · 1 lap done · best lap 9 games');
+    // Go round again on the card: table 1 next up again, the same twist, the records kept.
+    await page.click('#b-round');
+    assert.equal(await page.textContent('#tour-h'), 'The tour');
+    assert.equal(await heading(page), 'This week: 0 of 8 · Twist of the week: Wild Ones · 1 lap done · best lap 9 games');
+    assert.equal(await page.evaluate(() => document.activeElement.closest('li')?.className), 'next');
+    assert.match((await lines(page))[0], /^Next up · won 1 of 2 · your best \d+$/);
+    let p = await page.evaluate(() => structuredClone(window.fullHouse.progress));
+    assert.deepEqual([p.week.start, p.week.twist, p.week.beaten, p.week.games, p.laps, p.beaten.length], ['2026-12-28', 'wild', [], 0, { done: 1, best: 9 }, 8]);
+    // A quicker lap: eight games. The result says it's the tour again, the lap and its games, and the best lap.
+    for (let i = 0; i < 7; i++) {
+      await winAt(t, i);
+      await page.click('#b-tour');
+    }
+    await winAt(t, 7);
+    assert.equal(await page.textContent('#result-n'), 'Table 8 of 8 · lap 2');
+    assert.equal(await page.textContent('#result-line'), 'That’s the whole tour again, in 8 games.');
+    assert.match(await page.textContent('#result-best'), /Your best lap: 8 games \(was\u00a09\)\.$/);
+    // Go round again from the result: back on the tour, table 1 next up.
+    await page.click('#b-next');
+    assert.equal(await page.evaluate(() => document.body.dataset.screen), 'home');
+    assert.ok(await page.isHidden('#sheet-result'));
+    assert.equal(await heading(page), 'This week: 0 of 8 · Twist of the week: Wild Ones · 2 laps done · best lap 8 games');
+    // A slower lap isn't the best, and the line says so without a best.
+    await page.reload();
+    p = await page.evaluate(() => structuredClone(window.fullHouse.progress));
+    assert.deepEqual([p.week.n, p.laps], [3, { done: 2, best: 8 }]);
+  });
+
+  await step('the week’s twist goes on every table of the tour, on its card, its game, the pad and How to play, and nowhere else', async t => {
+    const { page } = t;
+    await saveProgress(page, { beaten: [true, true, true, true, true, true, true, true] });
+    await page.clock.setFixedTime(new Date(2026, 11, 23, 12)); // the week of Odds
+    await page.reload();
+    // Classic with Odds: Odds in place of Twos, the bonus three of each number and Odds' 9 make.
+    await page.click('[data-table="0"]');
+    assert.equal(await page.textContent('#intro-title'), 'Classic with Odds');
+    assert.equal(await page.textContent('#intro-note'), 'Odds is the week’s twist, on every table.');
+    assert.equal(await page.textContent('#intro-blurb'), 'There’s no Twos box: Odds takes its place and adds up every odd die. The top-section bonus needs 66.');
+    await page.click('#b-sit');
+    let g = await t.game();
+    assert.deepEqual([g.board.name, g.board.of, g.board.week, g.twist, g.lap, g.board.bonus.at], ['Classic with Odds', 0, 'odds', 'odds', 1, 66]);
+    assert.equal(await page.textContent('#g-table'), 'Table 1: Classic with Odds');
+    assert.equal(await page.textContent('tr[data-box="odds"] th b'), 'Odds');
+    assert.equal(await page.locator('tr[data-box="f2"]').count(), 0);
+    assert.equal(await page.textContent('#pad tr.sub small'), '66 or more on top: 35');
+    await page.click('#b-menu');
+    await page.click('#b-menu-rules');
+    assert.equal(await page.textContent('#rules-list li'), `At this table: ${g.board.blurb}`);
+    assert.match(await page.textContent('#rules-list'), /on top of the table’s own \(this week, Odds\)/);
+    await page.click('#sheet-rules .close');
+    // Two Rolls with Odds: two rolls, the bonus cut as Two Rolls cuts it.
+    await page.click('#b-home');
+    await page.click('[data-table="3"]');
+    assert.equal(await page.textContent('#intro-title'), 'Two Rolls with Odds');
+    assert.match(await page.textContent('#intro-blurb'), /^Only two rolls a turn instead of three\. There’s no Twos box: Odds takes its place and adds up every odd die\. The top-section bonus needs 54\.$/);
+    await page.click('#b-sit');
+    g = await t.game();
+    assert.deepEqual([g.board.rolls, g.board.bonus.at, await page.locator('#rolls i').count()], [2, 54, 2]);
+    // The week of Evens: Evens' own table plays as it always does, and says so; the others take it on.
+    await page.clock.setFixedTime(new Date(2026, 11, 9, 12));
+    await saveProgress(page, { beaten: Array(8).fill(true) });
+    await page.reload();
+    await page.click('[data-table="1"]');
+    assert.equal(await page.textContent('#intro-title'), 'Evens');
+    assert.equal(await page.textContent('#intro-note'), 'The week’s twist, Evens, doesn’t change this table.');
+    await page.click('#b-sit');
+    g = await t.game();
+    assert.deepEqual([g.board.id, g.board.week, g.twist], ['evens', undefined, 'evens']);
+    await page.click('#b-menu');
+    assert.match(await page.textContent('#menu-twist'), /The week’s twist, Evens, doesn’t change this table\. Against Maud\./);
+    await page.click('#b-menu-rules');
+    assert.match(await page.textContent('#rules-list li'), /The week’s twist, Evens, doesn’t change this table\.$/);
+    await page.click('#sheet-rules .close');
+    // Hot Boxes with Evens: Evens can be one of the hot boxes, drawn from the seed; Triple Sixes with Evens.
+    await page.click('#b-home');
+    await page.click('[data-table="5"]');
+    assert.equal(await page.textContent('#intro-title'), 'Hot Boxes with Evens');
+    await page.click('#sheet-intro .plain');
+    await page.click('[data-table="2"]');
+    assert.equal(await page.textContent('#intro-title'), 'Triple Sixes with Evens');
+    await page.click('#sheet-intro .plain');
+    // Not quick games, today's table, the back room, or Two players.
+    await page.click('#quick-at input[value="1"]');
+    await page.click('#people button >> nth=2');
+    await page.click('#b-sit'); // it ends the game at Evens
+    g = await t.game();
+    assert.deepEqual([g.board.id, g.board.week, g.twist, g.lap, await page.textContent('#g-table')], ['evens', undefined, undefined, undefined, 'Quick game: Evens']);
+    await page.click('#b-home');
+    await page.click('#today-row [data-day]');
+    await page.click('#b-sit');
+    g = await t.game();
+    assert.ok(!g.board.week && !g.twist && !g.board.id.startsWith('week:'), 'today’s table took the week’s twist');
+    await page.click('#b-home');
+    await page.click('#back-row [data-back]');
+    await page.click('#b-sit');
+    g = await t.game();
+    assert.ok(!g.board.week && !g.twist && g.board.twists.length === 2, 'the back room took the week’s twist');
+    await page.click('#b-home');
+    await page.click('#b-two');
+    await page.click('#b-two-sit');
+    g = await t.game();
+    assert.deepEqual([g.board.id, g.board.week, g.twist], ['classic', undefined, undefined]);
+  });
+
+  await step('a friend’s link to a table with the week’s twist on it opens the same board, in any week, and counts nowhere', async t => {
+    const { page } = t;
+    // Evens with Odds, from a week of Odds, opened in a week of Wild Ones.
+    await page.goto(`${base}#table=2&dice=z&twist=odds&score=250`);
+    await page.waitForSelector('#sheet-intro:not([hidden])');
+    const want = await page.evaluate(async () => (await import('./js/tour.js')).weekBoard(1, 35, 'odds'));
+    assert.equal(await page.textContent('#intro-n'), 'The same dice your friend had');
+    assert.equal(await page.textContent('#intro-title'), 'Evens with Odds');
+    assert.equal(await page.textContent('#intro-note'), 'Score to beat: 250. It doesn’t count on the tour.');
+    await page.click('#b-sit');
+    let g = await t.game();
+    assert.deepEqual([g.kind, g.seed, g.board, g.lap, g.twist], ['friend', 35, want, undefined, undefined]);
+    assert.equal(await page.textContent('#g-table'), 'A friend’s table: Evens with Odds');
+    const before = await page.evaluate(() => structuredClone(window.fullHouse.progress));
+    await win(t);
+    assert.deepEqual(await page.evaluate(() => structuredClone(window.fullHouse.progress)), before, 'a friend’s table counted');
+    // Shared on, the same link; played again, the same board.
+    await page.evaluate(() => { navigator.share = async data => { window.shared = data; }; });
+    await page.click('#b-share');
+    await page.waitForFunction(() => window.shared);
+    const you = await page.textContent('#pad tfoot td.you');
+    assert.match((await page.evaluate(() => window.shared)).text, new RegExp(`https://full-house\\.junkdrawer\\.works/#table=2&dice=z&twist=odds&score=${you}$`));
+    await page.click('#b-next');
+    g = await t.game();
+    assert.deepEqual([g.kind, g.board], ['friend', want]);
+    // A twist that doesn't change its table, or none, opens the table as it is; one the game doesn't know opens nothing.
+    await page.goto(`${base}#table=2&dice=z&twist=evens`);
+    await page.waitForSelector('#sheet-intro:not([hidden])');
+    assert.equal(await page.textContent('#intro-title'), 'Evens');
+    await page.goto('about:blank');
+    await page.goto(`${base}#table=2&dice=z&twist=jokers`);
+    assert.ok(await page.isHidden('#sheet-intro'), 'a link with a twist the game doesn’t know opened a table');
+  });
+
+  await step('a game of the tour still going when Monday comes plays out and counts for the week it began in; Play again then shows the table’s card', async t => {
+    const { page } = t;
+    // Sunday evening, six tables up this week, at table 7.
+    await page.clock.setFixedTime(new Date(2027, 0, 3, 23, 50));
+    await page.reload();
+    await page.evaluate(() => { const p = window.fullHouse.progress; p.beaten = Array(7).fill(true); p.week.beaten = Array(7).fill(true); p.week.games = 9; });
+    await page.click('[data-table="7"]'); // a reload of the tour would show it; a tap reads the progress as it is
+    await page.click('#sheet-intro .plain');
+    await page.evaluate(() => window.fullHouse.start(7));
+    const g0 = await t.game();
+    assert.deepEqual([g0.board.name, g0.lap], ['High Stakes with Wild Ones', 1]);
+    // Midnight comes, with the game going: the tour shows the new week; the game carries on with the board it had.
+    await page.clock.setFixedTime(new Date(2027, 0, 4, 0, 5));
+    await page.click('#b-home');
+    assert.equal(await heading(page), 'This week: 0 of 8 · Twist of the week: Two Rolls');
+    assert.match(await page.textContent('#b-continue span'), /^Table 8: High Stakes with Wild Ones, against the Dealer\./);
+    await page.reload();
+    assert.deepEqual((await t.game()).board, g0.board, 'the game in progress came back with another board');
+    assert.equal(await page.textContent('#g-table'), 'Table 8: High Stakes with Wild Ones');
+    await page.evaluate(() => {
+      const g = structuredClone(window.fullHouse.game);
+      for (const b of g.board.boxes) { g.you[b.id] = b.id === 'chance' ? null : 20; g.them[b.id] = b.id === 'chance' ? null : b.id === 'five' ? 0 : 5; }
+      Object.assign(g, { number: 13, rolls: 0, turn: 'you' });
+      window.fullHouse.settings.pace = 'score';
+      window.fullHouse.set(g);
+    });
+    await t.myTurn();
+    await page.click('#b-roll');
+    await t.settled();
+    await page.locator('tr.can').first().click();
+    await page.locator('tr.can').first().click();
+    await page.waitForSelector('#sheet-result:not([hidden])', { timeout: 30000 });
+    // Won: last week's lap is finished, and this week's untouched.
+    assert.equal(await page.textContent('#result-line'), 'That finishes last week’s climb.');
+    assert.equal(await page.textContent('#b-next'), 'Play again');
+    let p = await page.evaluate(() => structuredClone(window.fullHouse.progress));
+    assert.deepEqual([p.laps, p.week.beaten, p.week.games, p.week.prev, p.beaten[7]], [{ done: 1, best: 10 }, [], 0, null, true]);
+    // Play again: table 8 is closed this week, so its card shows, on the tour.
+    await page.click('#b-next');
+    assert.equal(await page.evaluate(() => document.body.dataset.screen), 'home');
+    assert.equal(await page.textContent('#intro-title'), 'High Stakes');
+    assert.equal(await page.textContent('#intro-locked'), 'Beat Wren to sit here');
+    assert.equal((await t.game())?.over ?? true, true, 'a game started at a closed table');
+    // Given up instead, a game from last week is a loss there, and this week's lap doesn't count it.
+    await page.click('#sheet-intro .plain');
+    await page.clock.setFixedTime(new Date(2027, 0, 10, 23, 50));
+    await page.evaluate(() => { const p = window.fullHouse.progress; p.week.beaten = [true]; });
+    await page.evaluate(() => window.fullHouse.start(1));
+    await page.clock.setFixedTime(new Date(2027, 0, 11, 0, 5));
+    await page.click('#b-home');
+    p = await page.evaluate(() => structuredClone(window.fullHouse.progress));
+    assert.deepEqual([p.week.beaten, p.week.prev?.beaten], [[], [true]]);
+    await page.click('#b-continue');
+    await page.click('#b-menu');
+    await page.click('#b-concede');
+    await page.click('#b-concede');
+    p = await page.evaluate(() => structuredClone(window.fullHouse.progress));
+    assert.deepEqual([p.week.beaten, p.week.games, p.week.prev], [[], 0, null]);
   });
 
   await step('the back room opens once the Dealer is beaten: two twists drawn from the seed, a run of wins that a loss or giving up ends, and links that open the same table', async t => {
@@ -2874,7 +3227,7 @@ try {
     const describedBy = await page.getAttribute('#sheet-intro [role="dialog"]', 'aria-describedby');
     assert.deepEqual(describedBy.split(' '), ['intro-blurb', 'intro-who', 'intro-note', 'intro-locked']);
     await page.click('#b-sit');
-    assert.equal(await page.title(), 'Table 1: Classic · Full House');
+    assert.equal(await page.title(), 'Table 1: Classic with Wild Ones · Full House');
     assert.ok(await page.isVisible('main #tray[role="group"][aria-label="Dice"]'));
     assert.deepEqual(await labels(), [1, 2, 3, 4, 5].map(n => `Die ${n}, not rolled`), 'dice not yet rolled are read as numbers');
     await page.evaluate(() => { window.fullHouse.settings.pace = 'quick'; });
@@ -2882,11 +3235,11 @@ try {
     await settled();
     await page.click('.die >> nth=1');
     const dice = (await page.evaluate(() => window.fullHouse.game.dice));
-    assert.deepEqual(await labels(), dice.map((v, i) => `Die ${i + 1}: ${v}${i === 1 ? ', held' : ''}`));
+    assert.deepEqual(await labels(), dice.map((v, i) => `Die ${i + 1}: ${v}${v === 1 ? ', wild' : ''}${i === 1 ? ', held' : ''}`)); // the week's Wild Ones
     await page.locator('tr.can').first().click();
     await page.locator('tr.can').first().click();
     await page.waitForFunction(() => document.getElementById('tray').classList.contains('theirs'), null, { timeout: 30000 });
-    assert.match((await labels())[0], /^Pip’s die: [1-6](, held)?$/);
+    assert.match((await labels())[0], /^Pip’s die: [1-6](, wild)?(, held)?$/);
     await page.click('#tray');
     await myTurn();
     // The bar's buttons open sheets, and the settings are switches named by their bold words.
@@ -3375,8 +3728,15 @@ try {
       el.remove();
     });
     assert.deepEqual(await page.evaluate(() => window.labels), ['Jules’s die: 2', 'Jules’s die: 1, wild, held', 'Jules’s die: 3', 'Jules’s die: 1, wild', 'Jules’s die: 5']);
-    // No other table has wild 1s.
+    // In a week of Wild Ones, every table of the tour has them: Classic too.
     await deal(0, { rolls: 1, dice: [1, 6, 1, 4, 6] });
+    await page.waitForTimeout(300);
+    assert.deepEqual((await dice()).map(d => d.wild), [true, false, true, false, false], 'the week’s Wild Ones at Classic');
+    // No other table has wild 1s: Classic in a quick game, which never has the week's twist.
+    await page.evaluate(() => {
+      window.fullHouse.start(null, 0, 0);
+      window.fullHouse.set({ ...structuredClone(window.fullHouse.game), rolls: 1, dice: [1, 6, 1, 4, 6] });
+    });
     await page.waitForTimeout(300);
     assert.deepEqual((await dice()).map(d => d.wild), [false, false, false, false, false], 'a 1 at Classic is tagged wild');
     assert.equal((await dice())[0].label, 'Die 1: 1');
@@ -3700,6 +4060,8 @@ try {
     assert.match(text.join(' '), /Reach 63 across the six boxes for a 35-point bonus \(three of each number gets you there\)/);
     assert.match(text.join(' '), /You get three rolls\./);
     assert.equal(text.at(-1), 'Some tables change these; each says how when you sit down.');
+    // The week's climb, and this week's twist.
+    assert.ok(text.includes('The tour: beat a table’s opponent to open the next. Every Monday it starts again from table 1, with a twist of the week on every table, on top of the table’s own (this week, Wild Ones). Once you’ve beaten the Dealer that week, Go round again starts it over early. Your bests, your records and the back room stay.'), text.join('\n'));
     assert.ok(!text.some(t => t.startsWith('At this table')));
     // The joker rules as options() plays them, the cases a zeroed box or a full bottom section leave included.
     assert.ok(text.includes('Once the Five of a kind box is filled, another five of a kind has to go in its own number’s box if that’s open. If not, it goes in any open box in the bottom section, where a full house or a straight counts in full. If the bottom is full too, it scores 0 in a top box. It also earns 100 extra, unless the Five of a kind box holds a 0.'), text.join('\n'));
@@ -3715,7 +4077,7 @@ try {
     text = (await fromGame(7)).join(' ');
     assert.match(text, /You get four rolls\./);
     assert.match(text, /Full house, three of one number and two of another: 50\. Small straight, four in a row: 60\. Large straight, five in a row: 80\. Five of a kind: 100\./);
-    assert.match(text, /the total of all five dice, doubled/);
+    assert.match(text, /the total of all five dice, 1s wild, doubled/); // with the week's Wild Ones on it
     // Hot Boxes: which two boxes are hot this time, and the bonus they make.
     text = await fromGame(5);
     const hot = await page.evaluate(() => window.fullHouse.game.board);
@@ -4254,6 +4616,8 @@ try {
       want.played[table] = (want.played[table] || 0) + 1;
       if (won) { want.won[table] = (want.won[table] || 0) + 1; want.beaten[table] = true; want.pocket++; } // and an extra roll
       want.best[table] = Math.max(want.best[table] || 0, r.result[0]);
+      want.week.games++; // one more game in the week's lap, and a win ticks its table off there too
+      if (won) want.week.beaten[table] = true;
       assert.deepEqual(await progress(), want, 'the progress moved by more than this game');
     };
 
@@ -4265,7 +4629,7 @@ try {
 
     // 1. Lost at Classic, scoring as little as it can, then Play again.
     let before = await progress();
-    await opensClean('Pip', 'Table 1: Classic');
+    await opensClean('Pip', 'Table 1: Classic with Wild Ones');
     while (!(await game()).over) await turn(true);
     await endsClean(before, 0, false);
     assert.equal(await page.textContent('#b-next'), 'Play again');
@@ -4273,13 +4637,14 @@ try {
 
     // 2. Given up part way: one game played, nothing more.
     before = await progress();
-    await opensClean('Pip', 'Table 1: Classic');
+    await opensClean('Pip', 'Table 1: Classic with Wild Ones');
     await turn();
     await page.click('#b-menu');
     await page.click('#b-concede');
     await page.click('#b-concede');
     const want = structuredClone(before);
     want.played[0] = (want.played[0] || 0) + 1;
+    want.week.games++;
     assert.deepEqual(await progress(), want, 'giving up moved the progress by more than one game played');
     assert.ok(await page.isVisible('#toast'), 'the tour says nothing about giving up');
 
@@ -4287,7 +4652,7 @@ try {
     before = await progress();
     await page.click('[data-table="0"]');
     await page.click('#b-sit');
-    await opensClean('Pip', 'Table 1: Classic');
+    await opensClean('Pip', 'Table 1: Classic with Wild Ones');
     await page.evaluate(() => {
       const g = structuredClone(window.fullHouse.game);
       for (const b of g.board.boxes) { g.you[b.id] = b.id === 'chance' ? null : 20; g.them[b.id] = b.id === 'chance' ? null : b.id === 'five' ? 0 : 5; }
@@ -4299,7 +4664,7 @@ try {
     await endsClean(before, 0, true);
     await page.click('#b-next');
     await page.click('#b-sit');
-    await opensClean('Maud', 'Table 2: Evens');
+    await opensClean('Maud', 'Table 2: Evens with Wild Ones');
   });
 
   await step('the back button closes a sheet, or goes from a game to the tour, and leaves from the tour', async t => {

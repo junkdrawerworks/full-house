@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { score, options, jokerState, blankCard, mark, totals, filled, fiveOf, boxHint } from '../js/rules.js';
 import { TABLES, CLASSIC, boardFor, BACK, PAIRS, TWISTS, backBoard, backRoom, backBonus, weekBoard, changes } from '../js/tour.js';
+import { monday, weekTwist, weekFrom, turnOver, goAgain, credit, beatenNow } from '../js/week.js';
 import { Opponent, playTurn, SLIP } from '../js/ai.js';
 import { mulberry32, rollFor } from '../js/rng.js';
 import { whyLine } from '../js/why.js';
@@ -626,20 +627,29 @@ test('your dice come from the game’s seed, the turn and the roll: the same for
 test('a friend’s link carries the table, the opponent when not the table’s own, the dice and the score, and reads back the same', () => {
   assert.equal(linkFor({ table: 5, seed: 1234567, score: 288 }), 'https://full-house.junkdrawer.works/#table=6&dice=qglj&score=288');
   assert.equal(linkFor({ table: 0, opp: 7, seed: 1 }), 'https://full-house.junkdrawer.works/#table=1&dice=1&vs=8');
-  for (const want of [{ table: 5, opp: 5, seed: 1234567, score: 288 }, { table: 0, opp: 7, seed: 2 ** 31 - 1, score: null }, { table: 7, opp: 0, seed: 0, score: 0 }]) {
+  for (const want of [{ table: 5, opp: 5, seed: 1234567, score: 288, twist: null }, { table: 0, opp: 7, seed: 2 ** 31 - 1, score: null, twist: null }, { table: 7, opp: 0, seed: 0, score: 0, twist: null }]) {
     assert.deepEqual(readLink(new URL(linkFor(want)).hash), want);
   }
   // As the README promises: these keep opening.
-  assert.deepEqual(readLink('#table=6&dice=k3j2h1&score=288'), { table: 5, opp: 5, seed: parseInt('k3j2h1', 36), score: 288 });
-  assert.deepEqual(readLink('table=3&dice=1&vs=1&other=x'), { table: 2, opp: 0, seed: 1, score: null });
+  assert.deepEqual(readLink('#table=6&dice=k3j2h1&score=288'), { table: 5, opp: 5, seed: parseInt('k3j2h1', 36), score: 288, twist: null });
+  assert.deepEqual(readLink('table=3&dice=1&vs=1&other=x'), { table: 2, opp: 0, seed: 1, score: null, twist: null });
   // Table 9 is the back room, against the Dealer from table 8 unless it says otherwise.
   assert.equal(linkFor({ table: 8, opp: 7, seed: 35, score: 300 }, 8), 'https://full-house.junkdrawer.works/#table=9&dice=z&score=300');
-  assert.deepEqual(readLink('#table=9&dice=z&score=300'), { table: 8, opp: 7, seed: 35, score: 300 });
-  assert.deepEqual(readLink('#table=9&dice=z&vs=1'), { table: 8, opp: 0, seed: 35, score: null });
+  assert.deepEqual(readLink('#table=9&dice=z&score=300'), { table: 8, opp: 7, seed: 35, score: 300, twist: null });
+  assert.deepEqual(readLink('#table=9&dice=z&vs=1'), { table: 8, opp: 0, seed: 35, score: null, twist: null });
   for (const bad of ['', '#', '#table=10&dice=1', '#table=9&dice=1&vs=9', '#table=0&dice=1', '#table=2', '#table=2&dice=Z', '#table=2&dice=zzzzzzzz', '#table=2&dice=1&vs=9', '#table=1.5&dice=1', '#table=-1&dice=1']) {
     assert.equal(readLink(bad), null, bad);
   }
   assert.equal(readLink('#table=2&dice=1&score=lots').score, null, 'a score that isn’t one is left out');
+  // A game of the tour with the week's twist on it carries the twist, and reads back the same.
+  assert.equal(linkFor({ table: 1, seed: 35, score: 250, twist: 'wild' }), 'https://full-house.junkdrawer.works/#table=2&dice=z&twist=wild&score=250');
+  for (const want of [{ table: 1, opp: 1, seed: 35, score: 250, twist: 'wild' }, { table: 0, opp: 0, seed: 7, score: null, twist: 'odds' }, { table: 5, opp: 5, seed: 99, score: 1, twist: 'two-rolls' }]) {
+    assert.deepEqual(readLink(new URL(linkFor(want)).hash), want);
+  }
+  assert.equal(linkFor({ table: 8, opp: 7, seed: 35, twist: 'wild' }), 'https://full-house.junkdrawer.works/#table=9&dice=z', 'not on the back room');
+  for (const bad of ['#table=2&dice=1&twist=', '#table=2&dice=1&twist=Wild', '#table=2&dice=1&twist=toString', '#table=2&dice=1&twist=jokers', '#table=9&dice=1&twist=wild']) {
+    assert.equal(readLink(bad), null, bad);
+  }
 });
 
 test('the week’s twist on the tour: on top of each table’s own, as the back room puts two together, or no change where it’s the table’s own or clashes', () => {
@@ -696,6 +706,142 @@ test('the week’s twist on the tour: on top of each table’s own, as the back 
     while (!filled(board, card)) { card = mark(card, playTurn(opp, board, card, rand).option); turns++; }
     assert.equal(turns, 13, `table ${t + 1}, ${key}`);
   }
+});
+
+test('the week turns at local midnight starting Monday, and its twist is the same all week and new the next', () => {
+  assert.equal(monday(new Date(2026, 10, 29, 23, 59)), '2026-11-23', 'Sunday 23:59 is still the week of Monday the 23rd');
+  assert.equal(monday(new Date(2026, 10, 30, 0, 0)), '2026-11-30', 'Monday 00:00 starts the next');
+  assert.equal(monday(new Date(2026, 10, 23, 0, 0)), '2026-11-23');
+  assert.equal(monday(new Date(2027, 0, 2, 12)), '2026-12-28', 'across the new year');
+  assert.equal(monday(new Date(2026, 2, 1, 9)), '2026-02-23', 'across the end of a month');
+  // The same twist all week, from the Monday's date alone, and never the same two weeks running.
+  for (let d = 23; d <= 29; d++) assert.equal(weekTwist(monday(new Date(2026, 10, d, 15))), weekTwist('2026-11-23'));
+  let last = null;
+  const all = Object.keys(TWISTS), seen = [];
+  for (let w = 0; w < 600; w++) {
+    const key = weekTwist(monday(new Date(2026, 0, 5 + 7 * w)));
+    assert.ok(TWISTS[key], key);
+    assert.notEqual(key, last, `week ${w}`);
+    last = key;
+    seen.push(key);
+  }
+  // Every twist comes round: each of them in every fifteen weeks running.
+  for (let w = 0; w + 15 <= seen.length; w++) assert.deepEqual(new Set(seen.slice(w, w + 15)).size, all.length, `weeks ${w} to ${w + 14}`);
+});
+
+// Progress as js/app.js reads it from a save, with a week of the tour (js/week.js) read on `now`.
+const progressAt = (p, now) => {
+  const out = { beaten: [], best: [], played: [], won: [], ...p };
+  return Object.assign(out, weekFrom(out, now));
+};
+const SUN = new Date(2026, 10, 29, 23, 59), MON = new Date(2026, 10, 30, 0, 0), all8 = Array(8).fill(true);
+// A game of the tour at table `table` in lap `lap`.
+const tourGame = (table, lap, extra = {}) => ({ table, opp: table, lap, over: false, ...extra });
+
+test('the week’s lap: a save from before keeps its place till Monday, which starts a new lap; a week skipped, or the clock put back', () => {
+  // A finished tour from before laps: this week's lap, finished, one lap done, its games not known. Nothing resets on opening.
+  let p = progressAt({ beaten: all8, played: [3, 4, 2, 5, 6, 3, 4, 7], best: [231] }, SUN);
+  assert.deepEqual(p.week, { start: '2026-11-23', twist: weekTwist('2026-11-23'), n: 1, beaten: all8, games: null, prev: null });
+  assert.deepEqual(p.laps, { done: 1, best: null });
+  assert.equal(beatenNow(p), 8);
+  assert.equal(turnOver(p, SUN), false, 'no reset on the first open');
+  assert.equal(p.week.beaten.length, 8);
+  // Monday at midnight: a new lap, with the new week's twist. Everything else stays.
+  assert.equal(turnOver(p, MON), true);
+  assert.deepEqual(p.week, { start: '2026-11-30', twist: weekTwist('2026-11-30'), n: 2, beaten: [], games: 0, prev: null });
+  assert.notEqual(p.week.twist, weekTwist('2026-11-23'));
+  assert.deepEqual([p.beaten, p.best, p.played, p.laps], [all8, [231], [3, 4, 2, 5, 6, 3, 4, 7], { done: 1, best: null }]);
+  assert.equal(turnOver(p, new Date(2026, 11, 6, 23, 59)), false, 'the rest of the week');
+  // A fresh save starts its lap at nothing, with its games counted from the first.
+  const fresh = progressAt({}, SUN);
+  assert.deepEqual([fresh.week.beaten, fresh.week.games, fresh.laps], [[], 0, { done: 0, best: null }]);
+  // Part way up, with games played before laps were counted: the lap carries on, its games unknown.
+  assert.deepEqual(progressAt({ beaten: [true, true], played: [2, 3] }, SUN).week.games, null);
+  // A week or more skipped: one new lap, for the week it is now.
+  p.week.beaten = [true, true, true];
+  assert.equal(turnOver(p, new Date(2026, 11, 23, 10)), true);
+  assert.deepEqual([p.week.start, p.week.n, p.week.beaten, p.week.twist], ['2026-12-21', 3, [], weekTwist('2026-12-21')]);
+  // The clock put back into the week before (a flight west across Monday's midnight): the lap stays as it is.
+  p.week.beaten = [true];
+  assert.equal(turnOver(p, new Date(2026, 11, 20, 23, 0)), false);
+  assert.equal(turnOver(p, new Date(2026, 11, 14, 9, 0)), false, 'a week back');
+  assert.deepEqual([p.week.start, p.week.beaten], ['2026-12-21', [true]]);
+  // ...and forward again to where it was: still nothing.
+  assert.equal(turnOver(p, new Date(2026, 11, 21, 0, 5)), false);
+  // Put back further than a week, it's taken at its word, so a clock once set wrong ahead doesn't hold the tour up for weeks.
+  assert.equal(turnOver(p, new Date(2026, 11, 2, 9, 0)), true);
+  assert.deepEqual([p.week.start, p.week.beaten], ['2026-11-30', []]);
+  // A damaged week is read afresh, keeping the tables beaten; damaged laps keep what they can.
+  const damaged = progressAt({ beaten: [true], week: { start: 'monday', twist: 'wild' }, laps: { done: 'x', best: -2 } }, SUN);
+  assert.deepEqual([damaged.week.beaten, damaged.week.start, damaged.laps], [[true], '2026-11-23', { done: 0, best: null }]);
+  const kept = progressAt({ week: { start: '2026-11-23', twist: 'wild', n: 4, beaten: [true, 1, 0], games: 3, prev: { n: 3, beaten: [true], games: 'x' } }, laps: { done: 2, best: 17 } }, SUN);
+  assert.deepEqual([kept.week, kept.laps], [{ start: '2026-11-23', twist: 'wild', n: 4, beaten: [true, true, false], games: 3, prev: { n: 3, beaten: [true], games: null } }, { done: 2, best: 17 }]);
+});
+
+test('the week’s lap: every game counts, a win ticks off its table, the Dealer finishes the lap, and Go round again only then', () => {
+  const p = progressAt({}, SUN), n = p.week.n;
+  // A loss at table 1, a win, then table 2 given up and won: four games, two tables.
+  assert.deepEqual(credit(p, tourGame(0, n), false), { now: true, last: false, before: false, done: false, games: 1, best: null });
+  assert.equal(credit(p, tourGame(0, n), true).before, false);
+  assert.equal(credit(p, tourGame(0, n), true).before, true, 'beaten this lap already');
+  credit(p, tourGame(1, n), false);
+  credit(p, tourGame(1, n), true);
+  assert.deepEqual([p.week.beaten, p.week.games], [[true, true], 5]);
+  // A win at a table whose table before isn't beaten this lap ticks nothing off.
+  credit(p, tourGame(4, n), true);
+  assert.deepEqual([p.week.beaten[4], p.week.games], [undefined, 6]);
+  // No going round again before the Dealer is beaten.
+  assert.equal(goAgain(p), false);
+  assert.equal(p.week.n, n);
+  for (let t = 2; t < 7; t++) credit(p, tourGame(t, n), true);
+  let r = credit(p, tourGame(7, n), true);
+  assert.deepEqual(r, { now: true, last: false, before: false, done: true, games: 12, best: null });
+  assert.deepEqual(p.laps, { done: 1, best: 12 });
+  // Games after the lap is finished don't add to it.
+  credit(p, tourGame(3, n), false);
+  r = credit(p, tourGame(7, n), true);
+  assert.deepEqual([r.done, r.games, p.week.games, p.laps], [false, 12, 12, { done: 1, best: 12 }]);
+  // Go round again: the same week and twist, nothing beaten, a new lap number, the laps and everything else kept.
+  const { start, twist } = p.week;
+  assert.equal(goAgain(p), true);
+  assert.deepEqual(p.week, { start, twist, n: n + 1, beaten: [], games: 0, prev: null });
+  // A game left over from the lap before counts for none: the new lap's start is clean.
+  assert.deepEqual(credit(p, tourGame(7, n), true), { now: false, last: false, before: false, done: false });
+  assert.deepEqual([p.week.beaten, p.week.games], [[], 0]);
+  // A slower lap isn't the best; a quicker one is.
+  for (let t = 0; t < 8; t++) { credit(p, tourGame(t, n + 1), false); credit(p, tourGame(t, n + 1), true); }
+  assert.deepEqual(p.laps, { done: 2, best: 12 });
+  goAgain(p);
+  for (let t = 0; t < 8; t++) credit(p, tourGame(t, n + 2), true);
+  assert.deepEqual(p.laps, { done: 3, best: 8 });
+  // A game saved before laps were counted belongs to this week's lap.
+  goAgain(p);
+  credit(p, { table: 0, opp: 0, over: false }, true);
+  assert.deepEqual(p.week.beaten, [true]);
+});
+
+test('the week’s lap: a game of the tour still going when Monday comes counts for the week it was started in', () => {
+  const p = progressAt({}, SUN), n = p.week.n;
+  for (let t = 0; t < 7; t++) credit(p, tourGame(t, n), true);
+  const dealer = tourGame(7, n);
+  // Monday comes mid-game: a new lap starts, and the old one is kept beside the game.
+  assert.equal(turnOver(p, MON, dealer), true);
+  assert.deepEqual([p.week.n, p.week.beaten, p.week.prev], [n + 1, [], { n, beaten: Array(7).fill(true), games: 7 }]);
+  // It ends in a win: the old lap is finished, with its games, and let go; this week's lap is untouched.
+  const r = credit(p, dealer, true);
+  assert.deepEqual(r, { now: false, last: true, before: false, done: true, games: 8, best: null });
+  assert.deepEqual([p.laps, p.week.prev, p.week.beaten, p.week.games], [{ done: 1, best: 8 }, null, [], 0]);
+  // Not kept for a game that isn't the tour's, nor for one whose lap was finished already.
+  turnOver(p, new Date(2026, 11, 7), { table: null, opp: 2, over: false });
+  assert.equal(p.week.prev, null);
+  turnOver(p, new Date(2026, 11, 14), { table: 2, opp: 2, kind: 'day', over: false });
+  assert.equal(p.week.prev, null);
+  // Given up after the turn: a loss for the old lap.
+  credit(p, tourGame(0, p.week.n), true);
+  const g = tourGame(1, p.week.n);
+  turnOver(p, new Date(2026, 11, 21), g);
+  credit(p, g, false);
+  assert.deepEqual([p.week.prev, p.week.games, p.week.beaten], [null, 0, []]);
 });
 
 test('today’s table comes from the date: the same all day for everyone, a different table and dice from day to day', () => {
