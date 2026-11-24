@@ -30,11 +30,15 @@ async function save(shot, path) {
   await writeFile(path, Buffer.from(UPNG.encode(UPNG.toRGBA8(img), img.width, img.height, 256)));
 }
 
+// The page's date: Wednesday 13 January 2027, in a week whose twist is Hot Boxes, which leaves Triple Sixes, the table
+// pictured, as it is. So the tour's week and today's table come out the same every time.
+const DATE = new Date(2027, 0, 13, 12);
 // `clock`: the page's timers wait to be moved on by hand (page.clock), so a turn can be stopped at a chosen moment.
 async function open(viewport, deviceScaleFactor, { clock = false } = {}) {
   const ctx = await browser.newContext({ viewport, deviceScaleFactor, hasTouch: true, serviceWorkers: 'block', colorScheme: 'light' });
   const page = await ctx.newPage();
-  if (clock) await page.clock.install();
+  if (clock) await page.clock.install({ time: DATE });
+  else await page.clock.setFixedTime(DATE);
   await page.addInitScript(() => {
     let a = 9; // mulberry32
     Math.random = () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
