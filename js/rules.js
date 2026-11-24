@@ -9,15 +9,18 @@
 
 export const FACE = ['', 'Ones', 'Twos', 'Threes', 'Fours', 'Fives', 'Sixes'];
 
-// A box's hint says what it pays on this board: a fixed score with its multiplier in, ones wild where they are.
+// A box's hint says what it pays on this board: a fixed score with its multiplier in, ones wild where they are. Each fits
+// on one line of the pad on the narrowest phone, beside the Dealer's wider columns too: a box that adds up the dice with
+// ones wild leaves its doubled or tripled to the ×2 or ×3 by its name, Evens' or Odds' says "The even dice, tripled", and
+// Two pairs' "Both pairs, doubled".
 const TIMES = { 2: 'Twice', 3: 'Three times' }, OVER = { 2: ', doubled', 3: ', tripled' };
-const over = b => OVER[b.mult] || '';
+const over = (b, board) => (board?.wild ? '' : OVER[b.mult] || '');
 const pays = (n, b) => n * (b.mult || 1);
-const totalHint = (b, board) => `Total of all dice${board?.wild ? ', 1s wild' : ''}${over(b)}`;
+const totalHint = (b, board) => `Total of all dice${board?.wild ? ', 1s wild' : ''}${over(b, board)}`;
 const KINDS = {
   face: { upper: true, label: b => FACE[b.face], hint: b => (TIMES[b.mult] ? `${TIMES[b.mult]} the ${FACE[b.face].toLowerCase()}` : '') }, // otherwise the name says it all
-  evens: { upper: true, label: () => 'Evens', hint: b => `Add up the even dice${over(b)}` },
-  odds: { upper: true, label: () => 'Odds', hint: b => `Add up the odd dice${over(b)}` },
+  evens: { upper: true, label: () => 'Evens', hint: b => (OVER[b.mult] ? `The even dice${OVER[b.mult]}` : 'Add up the even dice') },
+  odds: { upper: true, label: () => 'Odds', hint: b => (OVER[b.mult] ? `The odd dice${OVER[b.mult]}` : 'Add up the odd dice') },
   three: { label: () => 'Three of a kind', hint: totalHint },
   four: { label: () => 'Four of a kind', hint: totalHint },
   full: { label: () => 'Full house', hint: b => `Three and a pair: ${pays(25, b)}` },
@@ -25,7 +28,7 @@ const KINDS = {
   large: { label: () => 'Large straight', hint: b => `Five in a row: ${pays(40, b)}` },
   five: { label: () => 'Five of a kind', hint: b => `All five the same: ${pays(50, b)}` },
   chance: { label: () => 'Chance', hint: totalHint },
-  pairs: { label: () => 'Two pairs', hint: (b, board) => `Total of the four paired dice${board?.wild ? ', 1s wild' : ''}${over(b)}` }, // wild only in the back room
+  pairs: { label: () => 'Two pairs', hint: (b, board) => (board?.wild || OVER[b.mult] ? `Both pairs${board?.wild ? ', 1s wild' : ''}${over(b, board)}` : 'Total of both pairs') }, // wild in the back room, and with the week's Wild Ones
   low: { label: () => 'Low road', hint: b => `Total of 12 or less: ${pays(30, b)}` },
 };
 

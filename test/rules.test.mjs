@@ -321,9 +321,11 @@ test('a box’s hint on the pad says what it pays at that table', () => {
         const other = b.face === 6 ? 5 : 6;
         assert.equal(score(board, b, [b.face, b.face, b.face, other, other]), 3 * b.face * m, where);
       } else {
-        assert.match(hint, /^(Total of all dice|Total of the four paired dice|Add up the even dice|Add up the odd dice)/, where);
-        assert.equal(hint.endsWith(', tripled'), m === 3, where);
-        assert.equal(hint.endsWith(', doubled'), m === 2, where);
+        assert.match(hint, /^(Total of all dice|Total of both pairs|Both pairs|Add up the even dice|Add up the odd dice|The even dice|The odd dice)/, where);
+        // With ones wild, a box that adds up the dice leaves its doubled or tripled to the ×2 or ×3 by its name, to fit its line.
+        const said = !(board.wild && !['evens', 'odds'].includes(b.kind));
+        assert.equal(hint.endsWith(', tripled'), m === 3 && said, where);
+        assert.equal(hint.endsWith(', doubled'), m === 2 && said, where);
         assert.equal(hint.includes('1s wild'), !!board.wild && !['evens', 'odds'].includes(b.kind), where); // wild only in the bottom section
       }
     }
