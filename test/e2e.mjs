@@ -3225,7 +3225,9 @@ try {
     g = await game();
     const [id, score] = Object.entries(g.them).find(([k, v]) => k !== 'extras' && v !== null);
     const you = Object.entries(g.you).filter(([k, v]) => k !== 'extras' && v !== null)[0][1];
-    assert.equal(await said(), `Pip scored ${score} in ${await page.textContent(`tr[data-box="${id}"] th b`)}. You ${you}, Pip ${score}. Your turn.`);
+    // (A five of a kind is said first, as its message shows: with the week's Wild Ones on Classic, now and then.)
+    const five = id === 'five' && score ? 'Pip rolls five of a kind. ' : '';
+    assert.equal(await said(), `${five}Pip scored ${score} in ${await page.textContent(`tr[data-box="${id}"] th b`)}. You ${you}, Pip ${score}. Your turn.`);
     // The last turn: what they scored, then who won and by how much, and the extra roll a win earns.
     await win(t);
     const [mine, theirs] = await page.$$eval('#pad tfoot td', tds => tds.map(td => +td.textContent));
