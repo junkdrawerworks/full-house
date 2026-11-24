@@ -2035,7 +2035,7 @@ try {
     assert.equal(await page.evaluate(() => document.body.dataset.screen), 'home');
     assert.equal(await page.textContent('#intro-title'), 'High Stakes');
     assert.equal(await page.textContent('#intro-locked'), 'Beat Wren to sit here');
-    assert.equal((await t.game())?.over ?? true, true, 'a game started at a closed table');
+    assert.ok(!(await t.game()) || (await t.game()).over, 'a game started at a closed table');
     // Given up instead, a game from last week is a loss there, and this week's lap doesn't count it.
     await page.click('#sheet-intro .plain');
     await page.clock.setFixedTime(new Date(2027, 0, 10, 23, 50));
@@ -2052,6 +2052,51 @@ try {
     p = await page.evaluate(() => structuredClone(window.fullHouse.progress));
     assert.deepEqual([p.week.beaten, p.week.games, p.week.prev], [[], 0, null]);
   });
+
+  await step('Monday coming round with the result or a table’s card open: Go round again and Sit down go by the new week', async t => {
+    const { page } = t;
+    // Sunday night, the week of Wild Ones, seven tables up this week: the Dealer beaten offers Go round again.
+    await page.clock.install({ time: new Date(2027, 0, 3, 23, 58) });
+    await saveProgress(page, { beaten: Array(8).fill(true), week: { start: '2026-12-28', twist: 'wild', n: 1, beaten: Array(7).fill(true), games: 7, prev: null }, laps: { done: 0, best: null } });
+    await page.reload();
+    await winAt(t, 7);
+    assert.equal(await page.textContent('#b-next'), 'Go round again');
+    // Midnight, with the result still up: the tour turns over within the minute. Go round again then takes you to the
+    // new week's climb, rather than doing nothing.
+    await page.clock.runFor(3 * 60000);
+    assert.equal(await page.evaluate(() => window.fullHouse.progress.week.start), '2027-01-04');
+    await page.click('#b-next');
+    assert.equal(await page.evaluate(() => document.body.dataset.screen), 'home');
+    assert.ok(await page.isHidden('#sheet-result'));
+    assert.equal(await heading(page), 'This week: 0 of 8 · Twist of the week: Two Rolls · 1 lap done · best lap 8 games');
+    // A table's card open when the week turns: Sit down shows the card as the new week has it, here locked again, and
+    // doesn't sit you at a table the week has closed, nor with last week's twist.
+    await page.evaluate(() => { window.fullHouse.progress.week.beaten = [true, true]; });
+    await page.click('[data-table="2"]');
+    assert.equal(await page.textContent('#intro-title'), 'Triple Sixes with Two Rolls');
+    assert.ok(await page.isVisible('#b-sit'));
+    await page.clock.setSystemTime(new Date(2027, 0, 11, 0, 0, 30));
+    await page.clock.runFor(61000);
+    assert.equal(await page.evaluate(() => window.fullHouse.progress.week.start), '2027-01-11');
+    await page.click('#b-sit');
+    assert.ok(!(await t.game()) || (await t.game()).over, 'sat down at a table the new week has closed');
+    assert.ok(await page.isVisible('#sheet-intro'));
+    assert.equal(await page.textContent('#intro-title'), 'Triple Sixes'); // Hot Boxes, the new week's twist, doesn't change it
+    assert.equal(await page.textContent('#intro-locked'), 'Beat Maud to sit here');
+    // At table 1, open in any week, the card comes again with the new week's twist before you sit down.
+    await page.click('#sheet-intro .plain');
+    await page.click('[data-table="0"]');
+    assert.equal(await page.textContent('#intro-title'), 'Classic with Hot Boxes');
+    await page.clock.setSystemTime(new Date(2027, 0, 18, 0, 0, 30));
+    await page.clock.runFor(61000);
+    await page.click('#b-sit');
+    assert.ok(!(await t.game()) || (await t.game()).over, 'sat down with last week’s card');
+    assert.match(await page.textContent('#intro-title'), /^Classic( with |$)/);
+    assert.notEqual(await page.textContent('#intro-title'), 'Classic with Hot Boxes');
+    await page.click('#b-sit');
+    const g = await t.game();
+    assert.deepEqual([g.table, g.twist, g.lap], [0, await page.evaluate(() => window.fullHouse.progress.week.twist), await page.evaluate(() => window.fullHouse.progress.week.n)]);
+  }, { time: null });
 
   await step('the back room opens once the Dealer is beaten: two twists drawn from the seed, a run of wins that a loss or giving up ends, and links that open the same table', async t => {
     const { page, game } = t;

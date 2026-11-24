@@ -396,11 +396,11 @@ function yourTurn(g) {
 // table BACK against the Dealer, on the two twists that seed draws (see backCard()): won, it adds to a run of wins, and lost
 // or given up it ends it. A friend's table with `twist` has that week's twist on it, as the game the link came from had.
 // A game of the tour has this week's twist on it, and belongs to this week's lap (js/week.js): `lap` says which, `twist`
-// the week's twist, whether or not it changed the table. If the week has turned since its card opened, the card opens
-// again instead, with the new week on it.
+// the week's twist, whether or not it changed the table. If the week has turned since its card opened (its `lap`, from
+// intro(), isn't this week's), the card opens again instead, with the new week on it.
 function start(table, opp = table, at = table ?? 0, spec = {}) {
   const tour = table !== null && !spec.kind;
-  if (tour && newWeek()) { showCard(table); return; }
+  if (tour && (newWeek() || (spec.lap !== undefined && spec.lap !== progress.week.n))) { showCard(table); return; }
   if (game && !game.over) concede(true);
   const seed = spec.seed ?? ((Math.random() * 2 ** 31) | 0);
   const board = tour ? weekBoard(at, seed, progress.week.twist) : boardOf(at, seed, spec.kind === 'friend' && spec.twist);
@@ -931,14 +931,16 @@ function newWeek() {
   save();
   return true;
 }
-// Go round again, once this week's climb is finished: the tour from table 1 again, the same twist, back on the tour.
+// Go round again, once this week's climb is finished: the tour from table 1 again, the same twist, back on the tour. If a
+// Monday has come round since it was offered (the result left up overnight), the new week's climb has started it already.
 function roundAgain() {
-  if (!goAgain(progress)) return;
+  newWeek();
+  goAgain(progress);
   closeSheets();
   if (game?.over) game = null;
   save();
   open('home');
-  say(`The tour starts again at table 1, with ${TWISTS[progress.week.twist].name} on every table.`);
+  if (!beatenNow(progress)) say(`The tour starts again at table 1, with ${TWISTS[progress.week.twist].name} on every table.`);
 }
 // A tick pencilled on a beaten table's number, a little out of true, once the tour is finished.
 const TICK = '<svg class="tick" viewBox="0 0 30 26" aria-hidden="true" focusable="false"><path class="halo" d="M4 14.5C6.5 16 8.5 18.5 10.5 22C14 13.5 19.5 7 27 2.5"/><path d="M4 14.5C6.5 16 8.5 18.5 10.5 22C14 13.5 19.5 7 27 2.5"/></svg>';
@@ -1001,7 +1003,8 @@ function intro(table, opp = table, spec = {}) {
   $('intro-locked').textContent = locked ? `Beat ${mid(TABLES[table - 1].who.name)} to sit here` : '';
   $('intro-locked').hidden = !locked;
   $('b-sit').hidden = locked;
-  $('b-sit').onclick = locked ? null : () => start(table, opp, at, spec);
+  const lap = progress.week.n; // the week's lap the card shows
+  $('b-sit').onclick = locked ? null : () => start(table, opp, at, tour ? { lap } : spec);
   openSheet('sheet-intro');
 }
 
