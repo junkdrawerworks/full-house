@@ -1,7 +1,7 @@
 // Full House: the tour, a game in progress, and the opponent's turns played out on the table.
 
 import { blankCard, options, jokerState, mark, totals, filled, turnsLeft, boxLabel, isUpper } from './rules.js';
-import { TABLES, TWISTS, boardFor, weekBoard, changes, CLASSIC, BACK } from './tour.js';
+import { TABLES, TWISTS, boardFor, weekBoard, weekCard, changes, CLASSIC, BACK } from './tour.js';
 import { Opponent } from './ai.js';
 import { Tray } from './dice.js';
 import { Pad, ring } from './pad.js';
@@ -984,7 +984,7 @@ function intro(table, opp = table, spec = {}) {
   if (tour && newWeek()) renderHome();
   const twist = tour ? progress.week.twist : null;
   const at = spec.at ?? table ?? quickAt(), t = TABLES[opp];
-  const board = spec.kind ? boardOf(at, spec.seed, spec.kind === 'friend' && spec.twist) : tour ? weekBoard(at, 0, twist) : TABLES[at].board;
+  const board = spec.kind ? boardOf(at, spec.seed, spec.kind === 'friend' && spec.twist) : tour ? weekCard(at, twist) : TABLES[at].board;
   const locked = tour && table > 0 && !progress.week.beaten[table - 1];
   $('intro-n').textContent = spec.kind === 'friend' ? 'The same dice your friend had' : spec.kind === 'day' ? `Today’s table · ${dayName(spec.day)}`
     : spec.kind === 'back' ? 'The back room · after the tour' : table === null ? 'Quick game' : `Table ${table + 1} of ${TABLES.length}`;

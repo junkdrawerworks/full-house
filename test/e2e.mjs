@@ -1930,6 +1930,8 @@ try {
     await page.click('#b-home');
     await page.click('[data-table="5"]');
     assert.equal(await page.textContent('#intro-title'), 'Hot Boxes with Evens');
+    // Which boxes are hot isn't drawn till you sit down, so the card gives the bonus with none hot, and says it rises.
+    assert.equal(await page.textContent('#intro-blurb'), 'Two boxes, picked at random, score three times over. There’s no Ones box: Evens takes its place and adds up every even die. The top-section bonus needs 72, or more when a number box is hot.');
     await page.click('#sheet-intro .plain');
     await page.click('[data-table="2"]');
     assert.equal(await page.textContent('#intro-title'), 'Triple Sixes with Evens');

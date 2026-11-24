@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { score, options, jokerState, blankCard, mark, totals, filled, fiveOf, boxHint } from '../js/rules.js';
-import { TABLES, CLASSIC, boardFor, BACK, PAIRS, TWISTS, backBoard, backRoom, backBonus, weekBoard, changes } from '../js/tour.js';
+import { TABLES, CLASSIC, boardFor, BACK, PAIRS, TWISTS, backBoard, backRoom, backBonus, weekBoard, weekCard, changes } from '../js/tour.js';
 import { monday, weekTwist, weekFrom, turnOver, goAgain, credit, beatenNow } from '../js/week.js';
 import { Opponent, playTurn, SLIP } from '../js/ai.js';
 import { mulberry32, rollFor } from '../js/rng.js';
@@ -698,6 +698,19 @@ test('the week’s twist on the tour: on top of each table’s own, as the back 
   assert.ok(new Set(Array.from({ length: 20 }, (_, n) => weekBoard(5, n, 'evens').boxes.filter(x => x.mult === 3).map(x => x.id).join())).size > 5);
   // No twist: the table as it is.
   assert.deepEqual(weekBoard(2, 9, null), boardFor(2, 9));
+  // The card, shown before the seed is drawn: where Hot Boxes is in it, which boxes are hot isn't known yet, so it says the
+  // bonus with none hot and that it rises when one is a number box, true of every game it can open on.
+  for (let t = 0; t < TABLES.length; t++) for (const key of Object.keys(TWISTS)) {
+    const card = weekCard(t, key), boards = Array.from({ length: 60 }, (_, n) => weekBoard(t, n, key));
+    assert.equal(card.name, boards[0].name);
+    if (!boards[0].hot) { assert.equal(card.blurb, boards[0].blurb, `table ${t + 1}, ${key}`); continue; }
+    const low = Math.min(...boards.map(b => b.bonus.at));
+    if (!boards[0].week) { assert.doesNotMatch(card.blurb, /needs \d/, `table ${t + 1}, ${key}`); continue; } // Hot Boxes' own card
+    assert.ok(card.blurb.endsWith(` The top-section bonus needs ${low}, or more when a number box is hot.`), `table ${t + 1}, ${key}: ${card.blurb}`);
+    assert.ok(boards.some(b => b.bonus.at === low) && boards.some(b => b.bonus.at > low), `table ${t + 1}, ${key}`);
+  }
+  assert.equal(weekCard(0, 'hot').blurb, 'Two boxes, picked at random, score three times over. The top-section bonus needs 63, or more when a number box is hot.');
+  assert.equal(weekCard(3, 'hot').blurb, 'Only two rolls a turn instead of three. Two boxes, picked at random, score three times over. The top-section bonus needs 52, or more when a number box is hot.');
   // Every combined board plays through to a full card with the table's own opponent.
   const rand = mulberry32(4);
   for (let t = 0; t < TABLES.length; t++) for (const key of Object.keys(TWISTS)) {

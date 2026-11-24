@@ -231,3 +231,12 @@ export function weekBoard(table, seed, key) {
     name: `${TABLES[table].board.name} with ${TWISTS[key].name}`, of: table, week: key,
   };
 }
+
+// The same, as table `table`'s card shows it before you sit down, when no seed has drawn Hot Boxes' boxes yet: where Hot
+// Boxes is one of the two twists, the bonus with no box hot, which rises when a number box is.
+export function weekCard(table, key) {
+  const board = weekBoard(table, 0, key);
+  if (!board.week || !board.hot) return board;
+  const keys = (TABLES[table].twist ? [TABLES[table].twist, key] : [key]), at = twisted(keys.filter(k => k !== 'hot')).bonus.at;
+  return { ...board, blurb: `${keys.map(k => TWISTS[k].says).join(' ')} The top-section bonus needs ${at}, or more when a number box is hot.` };
+}
